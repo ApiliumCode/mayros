@@ -1,0 +1,14 @@
+// Copy to LocalSigning.xcconfig for personal local signing overrides.
+// This file is only an example and should stay committed.
+
+MAYROS_CODE_SIGN_STYLE = Automatic
+MAYROS_DEVELOPMENT_TEAM = P5Z8X89DJL
+
+MAYROS_APP_BUNDLE_ID = ai.mayros.ios.test.mariano
+MAYROS_SHARE_BUNDLE_ID = ai.mayros.ios.test.mariano.share
+MAYROS_WATCH_APP_BUNDLE_ID = ai.mayros.ios.test.mariano.watchkitapp
+MAYROS_WATCH_EXTENSION_BUNDLE_ID = ai.mayros.ios.test.mariano.watchkitapp.extension
+
+// Leave empty with automatic signing.
+MAYROS_APP_PROFILE =
+MAYROS_SHARE_PROFILE =

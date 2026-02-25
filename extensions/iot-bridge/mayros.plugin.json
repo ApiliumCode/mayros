@@ -1,0 +1,19 @@
+{
+  "id": "iot-bridge",
+  "kind": "iot",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "nodes": {
+        "type": "array",
+        "items": { "type": "object" },
+        "default": []
+      },
+      "pollIntervalMs": { "type": "integer", "default": 30000 },
+      "resilience": { "type": "object" },
+      "fleetPersistPath": { "type": "string" },
+      "injectContext": { "type": "boolean", "default": true },
+      "maxNodes": { "type": "integer", "default": 50 }
+    }
+  }
+}

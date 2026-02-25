@@ -1,0 +1,15 @@
+{
+  "name": "@apilium/mayros-whatsapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mayros WhatsApp channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

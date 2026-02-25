@@ -1,0 +1,79 @@
+{
+  "id": "semantic-observability",
+  "kind": "observability",
+  "uiHints": {
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "placeholder": "Bearer ...",
+      "help": "Optional authentication token for Cortex API (or use ${CORTEX_AUTH_TOKEN})"
+    },
+    "agentNamespace": {
+      "label": "Agent Namespace",
+      "placeholder": "mayros",
+      "advanced": true,
+      "help": "RDF namespace prefix for observability data"
+    },
+    "tracing.enabled": {
+      "label": "Tracing Enabled",
+      "help": "Enable or disable trace event collection"
+    },
+    "tracing.captureToolCalls": {
+      "label": "Capture Tool Calls",
+      "help": "Record tool invocation events"
+    },
+    "tracing.captureLLMCalls": {
+      "label": "Capture LLM Calls",
+      "help": "Record LLM request/response events"
+    },
+    "tracing.captureDelegations": {
+      "label": "Capture Delegations",
+      "help": "Record subagent delegation events"
+    },
+    "tracing.flushIntervalMs": {
+      "label": "Flush Interval (ms)",
+      "placeholder": "5000",
+      "advanced": true,
+      "help": "How often buffered trace events are flushed to Cortex (milliseconds)"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number", "minimum": 1, "maximum": 65535 },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string" },
+      "tracing": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "captureToolCalls": { "type": "boolean" },
+          "captureLLMCalls": { "type": "boolean" },
+          "captureDelegations": { "type": "boolean" },
+          "flushIntervalMs": { "type": "number" }
+        }
+      }
+    }
+  }
+}

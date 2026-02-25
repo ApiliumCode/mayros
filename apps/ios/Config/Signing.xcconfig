@@ -1,0 +1,18 @@
+// Shared iOS signing defaults for local development + CI.
+MAYROS_IOS_DEFAULT_TEAM = Y5PE65HELJ
+MAYROS_IOS_SELECTED_TEAM = $(MAYROS_IOS_DEFAULT_TEAM)
+MAYROS_APP_BUNDLE_ID = ai.mayros.ios
+MAYROS_WATCH_APP_BUNDLE_ID = ai.mayros.ios.watchkitapp
+MAYROS_WATCH_EXTENSION_BUNDLE_ID = ai.mayros.ios.watchkitapp.extension
+
+// Local contributors can override this by running scripts/ios-configure-signing.sh.
+// Keep include after defaults: xcconfig is evaluated top-to-bottom.
+#include? "../.local-signing.xcconfig"
+#include? "../LocalSigning.xcconfig"
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = $(MAYROS_IOS_SELECTED_TEAM)
+
+// Let Xcode manage provisioning for the selected local team.
+PROVISIONING_PROFILE_SPECIFIER =

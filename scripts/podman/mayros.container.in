@@ -1,0 +1,26 @@
+# Mayros gateway — Podman Quadlet (rootless)
+# Installed by setup-podman.sh into mayros's ~/.config/containers/systemd/
+# {{MAYROS_HOME}} is replaced at install time.
+
+[Unit]
+Description=Mayros gateway (rootless Podman)
+
+[Container]
+Image=mayros:local
+ContainerName=mayros
+UserNS=keep-id
+Volume={{MAYROS_HOME}}/.mayros:/home/node/.mayros
+EnvironmentFile={{MAYROS_HOME}}/.mayros/.env
+Environment=HOME=/home/node
+Environment=TERM=xterm-256color
+PublishPort=18789:18789
+PublishPort=18790:18790
+Pull=never
+Exec=node dist/index.js gateway --bind lan --port 18789
+
+[Service]
+TimeoutStartSec=300
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

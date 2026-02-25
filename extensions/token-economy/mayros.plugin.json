@@ -1,0 +1,22 @@
+{
+  "id": "token-economy",
+  "kind": "economy",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "sessionLimitUsd": { "type": "number" },
+      "dailyLimitUsd": { "type": "number" },
+      "monthlyLimitUsd": { "type": "number" },
+      "warnThreshold": { "type": "number", "default": 0.8 },
+      "persistPath": { "type": "string" },
+      "cache": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "maxEntries": { "type": "integer", "default": 256 },
+          "ttlMs": { "type": "integer", "default": 300000 }
+        }
+      }
+    }
+  }
+}

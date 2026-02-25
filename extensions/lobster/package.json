@@ -1,0 +1,11 @@
+{
+  "name": "@apilium/mayros-lobster",
+  "version": "0.1.0",
+  "description": "Lobster workflow tool plugin (typed pipelines + resumable approvals)",
+  "type": "module",
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

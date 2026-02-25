@@ -1,0 +1,68 @@
+{
+  "id": "memory-semantic",
+  "kind": "memory",
+  "uiHints": {
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.binaryPath": {
+      "label": "Cortex Binary Path",
+      "placeholder": "/usr/local/bin/aingle-cortex",
+      "advanced": true,
+      "help": "Path to the aingle-cortex executable (required when autoStart is true)"
+    },
+    "cortex.autoStart": {
+      "label": "Auto-Start Cortex",
+      "help": "Automatically start the Cortex sidecar process"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "placeholder": "Bearer ...",
+      "help": "Optional authentication token for Cortex API (or use ${CORTEX_AUTH_TOKEN})"
+    },
+    "agentNamespace": {
+      "label": "Agent Namespace",
+      "placeholder": "mayros",
+      "advanced": true,
+      "help": "RDF namespace prefix for agent data"
+    },
+    "fallbackToMarkdown": {
+      "label": "Fallback to Markdown",
+      "help": "Use markdown memory files when Cortex is unavailable"
+    },
+    "autoConsolidate": {
+      "label": "Auto-Consolidate",
+      "help": "Automatically consolidate short-term memory to long-term on compaction"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number", "minimum": 1, "maximum": 65535 },
+          "binaryPath": { "type": "string" },
+          "autoStart": { "type": "boolean" },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string" },
+      "fallbackToMarkdown": { "type": "boolean" },
+      "autoConsolidate": { "type": "boolean" }
+    }
+  }
+}

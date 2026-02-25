@@ -1,0 +1,47 @@
+name: Detect docs-only changes
+description: >
+  Outputs docs_only=true when all changed files are under docs/ or are
+  markdown (.md/.mdx). Fail-safe: if detection fails, outputs false.
+
+outputs:
+  docs_only:
+    description: "'true' if all changes are docs/markdown, 'false' otherwise"
+    value: ${{ steps.check.outputs.docs_only }}
+  docs_changed:
+    description: "'true' if any changed file is under docs/ or is markdown"
+    value: ${{ steps.check.outputs.docs_changed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect docs-only changes
+      id: check
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" = "push" ]; then
+          BASE="${{ github.event.before }}"
+        else
+          BASE="${{ github.event.pull_request.base.sha }}"
+        fi
+
+        CHANGED=$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "UNKNOWN")
+        if [ "$CHANGED" = "UNKNOWN" ] || [ -z "$CHANGED" ]; then
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          echo "docs_changed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        DOCS=$(echo "$CHANGED" | grep -E '^docs/|\.md$|\.mdx$' || true)
+        if [ -n "$DOCS" ]; then
+          echo "docs_changed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "docs_changed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        NON_DOCS=$(echo "$CHANGED" | grep -vE '^docs/|\.md$|\.mdx$' || true)
+        if [ -z "$NON_DOCS" ]; then
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          echo "Docs-only change detected — skipping heavy jobs"
+        else
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+        fi

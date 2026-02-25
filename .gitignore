@@ -1,0 +1,120 @@
+node_modules
+**/node_modules/
+dist
+coverage
+__pycache__/
+*.pyc
+.tsbuildinfo
+.pnpm-store
+.DS_Store
+**/.DS_Store
+
+# Lockfiles
+bun.lock
+bun.lockb
+package-lock.json
+
+# Environment files (keep .env.example)
+.env
+.env.*
+!.env.example
+apps/ios/fastlane/.env
+
+# Logs and temp files
+*.log
+npm-debug.log*
+tmp/
+.tmp/
+
+# Docker
+docker-compose.extra.yml
+
+# Mise configuration files
+mise.toml
+
+# IDE
+.idea
+
+# Test artifacts
+ui/src/ui/__screenshots__/
+ui/playwright-report/
+ui/test-results/
+
+# Android build artifacts
+apps/android/.gradle/
+apps/android/app/build/
+apps/android/.cxx/
+
+# Swift / macOS / iOS build artifacts
+*.bun-build
+apps/macos/.build/
+apps/macos/.build-local/
+apps/macos/.swiftpm/
+apps/shared/MayrosKit/.build/
+apps/shared/MayrosKit/.swiftpm/
+apps/shared/MayrosKit/Package.resolved
+Swabble/.build/
+Swabble/.swiftpm/
+**/ModuleCache/
+Core/
+apps/ios/*.xcodeproj/
+apps/ios/*.xcworkspace/
+apps/ios/.swiftpm/
+apps/ios/.derivedData/
+apps/ios/.local-signing.xcconfig
+apps/ios/Mayros.xcodeproj/
+apps/ios/Mayros.xcodeproj/**
+apps/ios/*.xcfilelist
+
+# Binaries
+bin/
+bin/mayros-mac
+bin/docs-list
+
+# Vendor
+vendor/
+
+# Vendor build artifacts
+vendor/a2ui/renderers/lit/dist/
+src/canvas-host/a2ui/*.bundle.js
+src/canvas-host/a2ui/*.map
+.bundle.hash
+
+# fastlane (iOS)
+apps/ios/fastlane/README.md
+apps/ios/fastlane/report.xml
+apps/ios/fastlane/Preview.html
+apps/ios/fastlane/screenshots/
+apps/ios/fastlane/test_output/
+apps/ios/fastlane/logs/
+
+# fastlane build artifacts (local)
+apps/ios/*.ipa
+apps/ios/*.dSYM.zip
+
+# provisioning profiles (local)
+apps/ios/*.mobileprovision
+
+# Local iOS signing overrides
+apps/ios/LocalSigning.xcconfig
+
+# Local untracked files
+.local/
+docs/.local/
+IDENTITY.md
+USER.md
+*.tgz
+.worktrees/
+
+# local tooling
+.serena/
+
+# Agent credentials and memory (NEVER COMMIT)
+/memory/
+.agent/*.json
+!.agent/workflows/
+/local/
+.claude/settings.local.json
+.agents/
+.agents
+.agent/

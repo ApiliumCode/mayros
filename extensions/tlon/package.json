@@ -1,0 +1,33 @@
+{
+  "name": "@apilium/mayros-tlon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mayros Tlon/Urbit channel plugin",
+  "type": "module",
+  "dependencies": {
+    "@urbit/aura": "^3.0.0"
+  },
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "tlon",
+      "label": "Tlon",
+      "selectionLabel": "Tlon (Urbit)",
+      "docsPath": "/channels/tlon",
+      "docsLabel": "tlon",
+      "blurb": "decentralized messaging on Urbit; install the plugin to enable.",
+      "order": 90,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "@apilium/mayros-tlon",
+      "localPath": "extensions/tlon",
+      "defaultChoice": "npm"
+    }
+  }
+}

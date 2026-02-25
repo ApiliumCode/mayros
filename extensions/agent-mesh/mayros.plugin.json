@@ -1,0 +1,71 @@
+{
+  "id": "agent-mesh",
+  "kind": "coordination",
+  "uiHints": {
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "placeholder": "Bearer ...",
+      "help": "Optional authentication token for Cortex API (or use ${CORTEX_AUTH_TOKEN})"
+    },
+    "agentNamespace": {
+      "label": "Agent Namespace",
+      "placeholder": "mayros",
+      "advanced": true,
+      "help": "RDF namespace prefix for agent data"
+    },
+    "mesh.maxSharedNamespaces": {
+      "label": "Max Shared Namespaces",
+      "placeholder": "50",
+      "advanced": true,
+      "help": "Maximum number of shared namespaces per mesh"
+    },
+    "mesh.delegationTimeout": {
+      "label": "Delegation Timeout",
+      "placeholder": "300",
+      "advanced": true,
+      "help": "Timeout in seconds for delegated tasks"
+    },
+    "mesh.autoMerge": {
+      "label": "Auto-Merge",
+      "help": "Automatically merge child agent results back into parent namespace"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number", "minimum": 1, "maximum": 65535 },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string" },
+      "mesh": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxSharedNamespaces": { "type": "number" },
+          "delegationTimeout": { "type": "number" },
+          "autoMerge": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+MAYROS Agent Framework
+Copyright 2026 Apilium Technologies
+
+This project is a fork of OpenClaw (https://github.com/openclaw/openclaw)
+Original work Copyright OpenClaw Contributors
+Licensed under the MIT License
+
+MAYROS adds the AIngle Semantic Layer, Proof-of-Logic verification,
+Zero-Knowledge Proofs, and Claude-native optimization to the original
+OpenClaw agent framework.

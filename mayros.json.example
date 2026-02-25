@@ -1,0 +1,60 @@
+{
+  // ─── Mayros Reference Configuration ───
+  // Copy this file to mayros.json and adjust to your needs.
+  // See docs/setup/anthropic-api-key.md for API key setup.
+
+  "agents": {
+    "defaults": {
+      "model": {
+        // Primary model for all agent sessions
+        "primary": "anthropic/claude-opus-4-6",
+        // Fallback when primary is unavailable or rate-limited
+        "fallbacks": ["anthropic/claude-sonnet-4-6"]
+      },
+
+      // Default thinking level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+      "thinkingDefault": "low",
+
+      // Per-model parameters
+      "models": {
+        "anthropic/claude-opus-4-6": {
+          "alias": "opus",
+          "params": {
+            "cacheRetention": "short",
+            "temperature": 0.7
+          }
+        },
+        "anthropic/claude-sonnet-4-6": {
+          "alias": "sonnet",
+          "params": {
+            "cacheRetention": "short",
+            "temperature": 0.3
+          }
+        },
+        "anthropic/claude-haiku-4-5": {
+          "alias": "haiku",
+          "params": {
+            "cacheRetention": "short",
+            "temperature": 0.2
+          }
+        }
+      },
+
+      // Subagent defaults (heartbeat, quick tasks)
+      "subagents": {
+        "model": "anthropic/claude-sonnet-4-6"
+      },
+
+      // Heartbeat interval
+      "heartbeat": {
+        "every": "30m"
+      },
+
+      // Context pruning
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "1h"
+      }
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "id": "semantic-skills",
+  "kind": "skills",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string", "default": "127.0.0.1" },
+          "port": { "type": "integer", "default": 8080 },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string", "default": "mayros" },
+      "skillSandbox": {
+        "type": "object",
+        "properties": {
+          "maxGraphQueries": { "type": "integer", "default": 50 },
+          "maxAssertions": { "type": "integer", "default": 20 },
+          "proofTimeoutMs": { "type": "integer", "default": 5000 },
+          "allowZkProofs": { "type": "boolean", "default": true }
+        }
+      },
+      "verification": {
+        "type": "object",
+        "properties": {
+          "requireSignature": { "type": "boolean", "default": false },
+          "polValidation": { "type": "boolean", "default": true },
+          "autoScan": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "placeholder": "Bearer ...",
+      "help": "Optional authentication token for Cortex API (or use ${CORTEX_AUTH_TOKEN})"
+    },
+    "agentNamespace": {
+      "label": "Agent Namespace",
+      "placeholder": "mayros",
+      "advanced": true,
+      "help": "RDF namespace prefix for skill data"
+    },
+    "skillSandbox.maxGraphQueries": {
+      "label": "Max Graph Queries",
+      "advanced": true,
+      "help": "Maximum graph queries per skill invocation"
+    },
+    "skillSandbox.maxAssertions": {
+      "label": "Max Assertions",
+      "advanced": true,
+      "help": "Maximum assertions per skill invocation"
+    },
+    "skillSandbox.proofTimeoutMs": {
+      "label": "Proof Timeout (ms)",
+      "advanced": true,
+      "help": "Timeout for proof operations"
+    },
+    "skillSandbox.allowZkProofs": {
+      "label": "Allow ZK Proofs",
+      "help": "Enable zero-knowledge proof operations in skills"
+    },
+    "verification.requireSignature": {
+      "label": "Require Signature",
+      "help": "Require Ed25519 signatures for Hub-published skills"
+    },
+    "verification.polValidation": {
+      "label": "PoL Validation",
+      "help": "Validate assertion proofs against Cortex logic rules"
+    },
+    "verification.autoScan": {
+      "label": "Auto-Scan",
+      "help": "Automatically scan semantic skills for security issues on load"
+    }
+  }
+}

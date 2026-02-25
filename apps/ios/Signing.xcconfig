@@ -1,0 +1,17 @@
+// Default signing values for shared/repo builds.
+// Auto-selected local team overrides live in .local-signing.xcconfig (git-ignored).
+// Manual local overrides can go in LocalSigning.xcconfig (git-ignored).
+
+MAYROS_CODE_SIGN_STYLE = Manual
+MAYROS_DEVELOPMENT_TEAM = Y5PE65HELJ
+
+MAYROS_APP_BUNDLE_ID = ai.mayros.ios
+MAYROS_SHARE_BUNDLE_ID = ai.mayros.ios.share
+
+MAYROS_APP_PROFILE = ai.mayros.ios Development
+MAYROS_SHARE_PROFILE = ai.mayros.ios.share Development
+
+// Keep local includes after defaults: xcconfig is evaluated top-to-bottom,
+// so later assignments in local files override the defaults above.
+#include? ".local-signing.xcconfig"
+#include? "LocalSigning.xcconfig"

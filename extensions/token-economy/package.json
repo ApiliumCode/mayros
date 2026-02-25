@@ -1,0 +1,18 @@
+{
+  "name": "@apilium/mayros-token-economy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mayros token economy plugin — per-session cost tracking, configurable budgets with soft-stop, and prompt-level memoization",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

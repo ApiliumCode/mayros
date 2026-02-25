@@ -1,0 +1,70 @@
+{
+  "id": "skill-hub",
+  "kind": "marketplace",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "hubUrl": { "type": "string", "default": "https://hub.apilium.com" },
+      "cortex": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string", "default": "127.0.0.1" },
+          "port": { "type": "integer", "default": 8080 },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string", "default": "mayros" },
+      "keysDir": { "type": "string", "default": "~/.mayros/keys" },
+      "verification": {
+        "type": "object",
+        "properties": {
+          "requireSignature": { "type": "boolean", "default": true },
+          "polValidation": { "type": "boolean", "default": true },
+          "sandboxTest": { "type": "boolean", "default": true },
+          "sandboxTtlSeconds": { "type": "integer", "default": 60 }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "hubUrl": {
+      "label": "Hub URL",
+      "placeholder": "https://hub.apilium.com",
+      "help": "Base URL for the Apilium Hub marketplace"
+    },
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "help": "Optional authentication token for Cortex API"
+    },
+    "keysDir": {
+      "label": "Keys Directory",
+      "advanced": true,
+      "help": "Directory for Ed25519 keypair storage"
+    },
+    "verification.requireSignature": {
+      "label": "Require Signature",
+      "help": "Require Ed25519 signatures for Hub skills"
+    },
+    "verification.polValidation": {
+      "label": "PoL Validation",
+      "help": "Validate assertion proofs against Cortex logic rules"
+    },
+    "verification.sandboxTest": {
+      "label": "Sandbox Test",
+      "help": "Run skill in temporary sandbox namespace during verification"
+    }
+  }
+}

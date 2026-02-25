@@ -1,0 +1,18 @@
+{
+  "name": "@apilium/mayros-memory-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mayros core memory search plugin",
+  "type": "module",
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "peerDependencies": {
+    "@apilium/mayros": ">=2026.1.26"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

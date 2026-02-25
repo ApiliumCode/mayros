@@ -1,0 +1,14 @@
+{
+  "name": "@apilium/mayros-irc",
+  "version": "0.1.0",
+  "description": "Mayros IRC channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
