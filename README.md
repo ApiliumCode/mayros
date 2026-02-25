@@ -5,10 +5,6 @@
 </p>
 
 <p align="center">
-  <strong>EXFOLIATE! EXFOLIATE!</strong>
-</p>
-
-<p align="center">
   <a href="https://github.com/ApiliumCode/mayros/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/ApiliumCode/mayros/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
   <a href="https://github.com/ApiliumCode/mayros/releases"><img src="https://img.shields.io/github/v/release/ApiliumCode/mayros?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
   <a href="https://discord.com/channels/1476351587105636404"><img src="https://img.shields.io/discord/1476351587105636404?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>

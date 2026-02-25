@@ -29,8 +29,6 @@ x-i18n:
     />
 </p>
 
-> _「EXFOLIATE! EXFOLIATE!」_ — たぶん宇宙ロブスター
-
 <p align="center">
   <strong>WhatsApp、Telegram、Discord、iMessageなどに対応した、あらゆるOS向けのAIエージェントgateway。</strong><br />
   メッセージを送信すれば、ポケットからエージェントの応答を受け取れます。プラグインでMattermostなどを追加できます。

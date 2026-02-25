@@ -22,8 +22,6 @@ title: "Mayros"
     />
 </p>
 
-> _"EXFOLIATE! EXFOLIATE!"_ — Atlas, probably
-
 <p align="center">
   <strong>Any OS gateway for AI agents across WhatsApp, Telegram, Discord, iMessage, and more.</strong><br />
   Send a message, get an agent response from your pocket. Plugins add Mattermost and more.
