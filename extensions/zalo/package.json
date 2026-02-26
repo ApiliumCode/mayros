@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-zalo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mayros Zalo channel plugin",
   "type": "module",
   "dependencies": {

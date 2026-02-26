@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-zalouser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mayros Zalo Personal Account plugin via zca-cli",
   "type": "module",
   "dependencies": {

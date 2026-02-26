@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Changes
+
+- Version alignment with core Mayros release numbers.
+
 ## 2026.1.26
 
 ### Changes

@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-voice-call",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Mayros voice-call plugin",
   "type": "module",
   "dependencies": {
