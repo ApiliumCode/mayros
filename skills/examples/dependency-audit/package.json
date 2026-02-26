@@ -1,0 +1,16 @@
+{
+  "name": "@apilium/dependency-audit",
+  "version": "1.0.0",
+  "description": "Audit project dependencies with verifiable security assertions",
+  "keywords": [
+    "dependency-audit",
+    "mayros",
+    "security",
+    "semantic",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "skill.ts"
+}

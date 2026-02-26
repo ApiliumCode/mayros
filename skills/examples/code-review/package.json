@@ -1,0 +1,16 @@
+{
+  "name": "@apilium/code-review",
+  "version": "1.0.0",
+  "description": "Semantic code review with provable assertions about code quality",
+  "keywords": [
+    "code-review",
+    "mayros",
+    "quality",
+    "semantic",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "skill.ts"
+}

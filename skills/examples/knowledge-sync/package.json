@@ -1,0 +1,16 @@
+{
+  "name": "@apilium/knowledge-sync",
+  "version": "1.0.0",
+  "description": "Synchronize and verify knowledge across agent namespaces",
+  "keywords": [
+    "coordination",
+    "knowledge-sync",
+    "mayros",
+    "semantic",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "skill.ts"
+}

@@ -37,6 +37,7 @@ export default defineConfig({
       "src/**/*.test.ts",
       "extensions/**/*.test.ts",
       "test/**/*.test.ts",
+      "skills/**/*.test.ts",
       "ui/src/ui/views/usage-render-details.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
