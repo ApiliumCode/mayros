@@ -1,0 +1,15 @@
+{
+  "name": "@apilium/changelog-tracker",
+  "version": "1.0.0",
+  "description": "Monitors version changes with semantic versioning analysis",
+  "keywords": [
+    "mayros",
+    "semantic",
+    "semver",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "skill.ts"
+}

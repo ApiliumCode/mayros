@@ -1,0 +1,15 @@
+{
+  "name": "@apilium/prompt-guard",
+  "version": "1.0.0",
+  "description": "Detects prompt injection patterns with risk classification",
+  "keywords": [
+    "mayros",
+    "prompt-injection",
+    "semantic",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "skill.ts"
+}
