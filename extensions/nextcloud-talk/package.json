@@ -2,9 +2,16 @@
   "name": "@apilium/mayros-nextcloud-talk",
   "version": "0.1.1",
   "description": "Mayros Nextcloud Talk channel plugin",
+  "license": "MIT",
   "type": "module",
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

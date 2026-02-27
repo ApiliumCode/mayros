@@ -1,8 +1,4 @@
-import type {
-  AnyAgentTool,
-  MayrosPluginApi,
-  MayrosPluginToolFactory,
-} from "../../src/plugins/types.js";
+import type { AnyAgentTool, MayrosPluginApi, MayrosPluginToolFactory } from "mayros/plugin-sdk";
 import { createLobsterTool } from "./src/lobster-tool.js";
 
 export default function register(api: MayrosPluginApi) {

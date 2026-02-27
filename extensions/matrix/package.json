@@ -2,7 +2,11 @@
   "name": "@apilium/mayros-matrix",
   "version": "0.1.1",
   "description": "Mayros Matrix channel plugin",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@matrix-org/matrix-sdk-crypto-nodejs": "^0.4.0",
     "@vector-im/matrix-bot-sdk": "0.8.0-element.3",
@@ -10,8 +14,8 @@
     "music-metadata": "^11.12.1",
     "zod": "^4.3.6"
   },
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

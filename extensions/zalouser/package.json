@@ -2,12 +2,16 @@
   "name": "@apilium/mayros-zalouser",
   "version": "0.1.1",
   "description": "Mayros Zalo Personal Account plugin via zca-cli",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@sinclair/typebox": "0.34.48"
   },
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

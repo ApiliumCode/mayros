@@ -2,7 +2,17 @@
   "name": "@apilium/mayros-lobster",
   "version": "0.1.1",
   "description": "Lobster workflow tool plugin (typed pipelines + resumable approvals)",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
+  },
   "mayros": {
     "extensions": [
       "./index.ts"
