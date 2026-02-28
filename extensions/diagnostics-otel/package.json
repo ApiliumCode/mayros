@@ -2,7 +2,11 @@
   "name": "@apilium/mayros-diagnostics-otel",
   "version": "0.1.1",
   "description": "Mayros diagnostics OpenTelemetry exporter",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/api-logs": "^0.212.0",
@@ -16,8 +20,8 @@
     "@opentelemetry/sdk-trace-base": "^2.5.1",
     "@opentelemetry/semantic-conventions": "^1.39.0"
   },
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

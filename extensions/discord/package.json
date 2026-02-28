@@ -2,9 +2,13 @@
   "name": "@apilium/mayros-discord",
   "version": "0.1.1",
   "description": "Mayros Discord channel plugin",
+  "license": "MIT",
   "type": "module",
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [
