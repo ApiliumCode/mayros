@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { Type } from "@sinclair/typebox";
-import type { MayrosPluginApi } from "../../../src/plugins/types.js";
+import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { resolveWindowsLobsterSpawn } from "./windows-spawn.js";
 
 type LobsterEnvelope =

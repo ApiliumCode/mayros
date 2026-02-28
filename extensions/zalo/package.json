@@ -2,12 +2,16 @@
   "name": "@apilium/mayros-zalo",
   "version": "0.1.1",
   "description": "Mayros Zalo channel plugin",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "undici": "7.22.0"
   },
-  "devDependencies": {
-    "@apilium/mayros": "workspace:*"
+  "peerDependencies": {
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

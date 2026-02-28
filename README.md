@@ -16,17 +16,17 @@ It answers you on the channels you already use (WhatsApp, Telegram, Slack, Disco
 
 If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
 
-[Product](https://apilium.com/us/products/maryos) · [Download](https://maryos.apilium.com) · [Docs](https://apilium.com/us/doc/maryos) · [Vision](VISION.md) · [Getting Started](https://apilium.com/us/doc/maryos/start/getting-started) · [Updating](https://apilium.com/us/doc/maryos/install/updating) · [FAQ](https://apilium.com/us/doc/maryos/start/faq) · [Docker](https://apilium.com/us/doc/maryos/install/docker)
+[Product](https://apilium.com/en/products/maryos) · [Download](https://maryos.apilium.com) · [Docs](https://apilium.com/en/doc/maryos) · [Vision](VISION.md) · [Getting Started](https://apilium.com/en/doc/maryos/start/getting-started) · [Updating](https://apilium.com/en/doc/maryos/install/updating) · [Docker](https://apilium.com/en/doc/maryos/install/docker)
 
 Preferred setup: run the onboarding wizard (`mayros onboard`) in your terminal.
 The wizard guides you step by step through setting up the gateway, workspace, channels, and skills. The CLI wizard is the recommended path and works on **macOS, Linux, and Windows (via WSL2; strongly recommended)**.
 Works with npm, pnpm, or bun.
-New install? Start here: [Getting started](https://apilium.com/us/doc/maryos/start/getting-started)
+New install? Start here: [Getting started](https://apilium.com/en/doc/maryos/start/getting-started)
 
 ## Models (selection + auth)
 
-- Models config + CLI: [Models](https://apilium.com/us/doc/maryos/concepts/models)
-- Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://apilium.com/us/doc/maryos/concepts/model-failover)
+- Models config + CLI: [Models](https://apilium.com/en/doc/maryos/concepts/models)
+- Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://apilium.com/en/doc/maryos/concepts/model-failover)
 
 ## Install (recommended)
 
@@ -45,7 +45,7 @@ The wizard installs the Gateway daemon (launchd/systemd user service) so it stay
 
 Runtime: **Node ≥22**.
 
-Full beginner guide (auth, pairing, channels): [Getting started](https://apilium.com/us/doc/maryos/start/getting-started)
+Full beginner guide (auth, pairing, channels): [Getting started](https://apilium.com/en/doc/maryos/start/getting-started)
 
 ```bash
 mayros onboard --install-daemon
@@ -59,7 +59,7 @@ mayros message send --to +1234567890 --message "Hello from Mayros"
 mayros agent --message "Ship checklist" --thinking high
 ```
 
-Upgrading? [Updating guide](https://apilium.com/us/doc/maryos/install/updating) (and run `mayros doctor`).
+Upgrading? [Updating guide](https://apilium.com/en/doc/maryos/install/updating) (and run `mayros doctor`).
 
 ## Development channels
 
@@ -68,7 +68,7 @@ Upgrading? [Updating guide](https://apilium.com/us/doc/maryos/install/updating) 
 - **dev**: moving head of `main`, npm dist-tag `dev` (when published).
 
 Switch channels (git + npm): `mayros update --channel stable|beta|dev`.
-Details: [Development channels](https://apilium.com/us/doc/maryos/install/development-channels).
+Details: [Development channels](https://apilium.com/en/doc/maryos/install/development-channels).
 
 ## From source (development)
 
@@ -94,7 +94,7 @@ Note: `pnpm mayros ...` runs TypeScript directly (via `tsx`). `pnpm build` produ
 
 Mayros connects to real messaging surfaces. Treat inbound DMs as **untrusted input**.
 
-Full security guide: [Security](https://apilium.com/us/doc/maryos/gateway/security)
+Full security guide: [Security](https://apilium.com/en/doc/maryos/gateway/security)
 
 Default behavior on Telegram/WhatsApp/Signal/iMessage/Microsoft Teams/Discord/Google Chat/Slack:
 
@@ -106,14 +106,14 @@ Run `mayros doctor` to surface risky/misconfigured DM policies.
 
 ## Highlights
 
-- **[Local-first Gateway](https://apilium.com/us/doc/maryos/gateway)** — single control plane for sessions, channels, tools, and events.
-- **[Multi-channel inbox](https://apilium.com/us/doc/maryos/channels)** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, BlueBubbles (iMessage), iMessage (legacy), Microsoft Teams, Matrix, Zalo, Zalo Personal, WebChat, macOS, iOS/Android.
-- **[Multi-agent routing](https://apilium.com/us/doc/maryos/gateway/configuration)** — route inbound channels/accounts/peers to isolated agents (workspaces + per-agent sessions).
-- **[Voice Wake](https://apilium.com/us/doc/maryos/nodes/voicewake) + [Talk Mode](https://apilium.com/us/doc/maryos/nodes/talk)** — always-on speech for macOS/iOS/Android with ElevenLabs.
-- **[Live Canvas](https://apilium.com/us/doc/maryos/platforms/mac/canvas)** — agent-driven visual workspace with [A2UI](https://apilium.com/us/doc/maryos/platforms/mac/canvas#canvas-a2ui).
-- **[First-class tools](https://apilium.com/us/doc/maryos/tools)** — browser, canvas, nodes, cron, sessions, and Discord/Slack actions.
-- **[Companion apps](https://apilium.com/us/doc/maryos/platforms/macos)** — macOS menu bar app + iOS/Android [nodes](https://apilium.com/us/doc/maryos/nodes).
-- **[Onboarding](https://apilium.com/us/doc/maryos/start/wizard) + [skills](https://apilium.com/us/doc/maryos/tools/skills)** — wizard-driven setup with bundled/managed/workspace skills.
+- **[Local-first Gateway](https://apilium.com/en/doc/maryos/gateway)** — single control plane for sessions, channels, tools, and events.
+- **[Multi-channel inbox](https://apilium.com/en/doc/maryos/channels)** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, BlueBubbles (iMessage), iMessage (legacy), Microsoft Teams, Matrix, Zalo, Zalo Personal, WebChat, macOS, iOS/Android.
+- **[Multi-agent routing](https://apilium.com/en/doc/maryos/gateway/configuration)** — route inbound channels/accounts/peers to isolated agents (workspaces + per-agent sessions).
+- **[Voice Wake](https://apilium.com/en/doc/maryos/nodes/voicewake) + [Talk Mode](https://apilium.com/en/doc/maryos/nodes/talk)** — always-on speech for macOS/iOS/Android with ElevenLabs.
+- **[Live Canvas](https://apilium.com/en/doc/maryos/platforms/mac/canvas)** — agent-driven visual workspace with [A2UI](https://apilium.com/en/doc/maryos/platforms/mac/canvas#canvas-a2ui).
+- **[First-class tools](https://apilium.com/en/doc/maryos/tools)** — browser, canvas, nodes, cron, sessions, and Discord/Slack actions.
+- **[Companion apps](https://apilium.com/en/doc/maryos/platforms/macos)** — macOS menu bar app + iOS/Android [nodes](https://apilium.com/en/doc/maryos/nodes).
+- **[Onboarding](https://apilium.com/en/doc/maryos/start/wizard) + [skills](https://apilium.com/en/doc/maryos/tools/skills)** — wizard-driven setup with bundled/managed/workspace skills.
 
 ## Semantic Memory (AIngle Cortex)
 
@@ -136,45 +136,45 @@ Cortex version: **aingle_cortex 0.2.6** · AIngle crate: **0.0.101** · Zome typ
 
 ### Core platform
 
-- [Gateway WS control plane](https://apilium.com/us/doc/maryos/gateway) with sessions, presence, config, cron, webhooks, [Control UI](https://apilium.com/us/doc/maryos/web), and [Canvas host](https://apilium.com/us/doc/maryos/platforms/mac/canvas#canvas-a2ui).
-- [CLI surface](https://apilium.com/us/doc/maryos/tools/agent-send): gateway, agent, send, [wizard](https://apilium.com/us/doc/maryos/start/wizard), and [doctor](https://apilium.com/us/doc/maryos/gateway/doctor).
-- [Pi agent runtime](https://apilium.com/us/doc/maryos/concepts/agent) in RPC mode with tool streaming and block streaming.
-- [Session model](https://apilium.com/us/doc/maryos/concepts/session): `main` for direct chats, group isolation, activation modes, queue modes, reply-back. Group rules: [Groups](https://apilium.com/us/doc/maryos/concepts/groups).
-- [Media pipeline](https://apilium.com/us/doc/maryos/nodes/images): images/audio/video, transcription hooks, size caps, temp file lifecycle. Audio details: [Audio](https://apilium.com/us/doc/maryos/nodes/audio).
+- [Gateway WS control plane](https://apilium.com/en/doc/maryos/gateway) with sessions, presence, config, cron, webhooks, [Control UI](https://apilium.com/en/doc/maryos/web), and [Canvas host](https://apilium.com/en/doc/maryos/platforms/mac/canvas#canvas-a2ui).
+- [CLI surface](https://apilium.com/en/doc/maryos/tools/agent-send): gateway, agent, send, [wizard](https://apilium.com/en/doc/maryos/start/wizard), and [doctor](https://apilium.com/en/doc/maryos/gateway/doctor).
+- [Pi agent runtime](https://apilium.com/en/doc/maryos/concepts/agent) in RPC mode with tool streaming and block streaming.
+- [Session model](https://apilium.com/en/doc/maryos/concepts/session): `main` for direct chats, group isolation, activation modes, queue modes, reply-back..
+- [Media pipeline](https://apilium.com/en/doc/maryos/nodes/images): images/audio/video, transcription hooks, size caps, temp file lifecycle. Audio details: [Audio](https://apilium.com/en/doc/maryos/nodes/audio).
 
 ### Channels
 
-- [Channels](https://apilium.com/us/doc/maryos/channels): [WhatsApp](https://apilium.com/us/doc/maryos/channels/whatsapp) (Baileys), [Telegram](https://apilium.com/us/doc/maryos/channels/telegram) (grammY), [Slack](https://apilium.com/us/doc/maryos/channels/slack) (Bolt), [Discord](https://apilium.com/us/doc/maryos/channels/discord) (discord.js), [Google Chat](https://apilium.com/us/doc/maryos/channels/googlechat) (Chat API), [Signal](https://apilium.com/us/doc/maryos/channels/signal) (signal-cli), [BlueBubbles](https://apilium.com/us/doc/maryos/channels/bluebubbles) (iMessage, recommended), [iMessage](https://apilium.com/us/doc/maryos/channels/imessage) (legacy imsg), [Microsoft Teams](https://apilium.com/us/doc/maryos/channels/msteams) (extension), [Matrix](https://apilium.com/us/doc/maryos/channels/matrix) (extension), [Zalo](https://apilium.com/us/doc/maryos/channels/zalo) (extension), [Zalo Personal](https://apilium.com/us/doc/maryos/channels/zalouser) (extension), [WebChat](https://apilium.com/us/doc/maryos/web/webchat).
-- [Group routing](https://apilium.com/us/doc/maryos/concepts/group-messages): mention gating, reply tags, per-channel chunking and routing. Channel rules: [Channels](https://apilium.com/us/doc/maryos/channels).
+- [Channels](https://apilium.com/en/doc/maryos/channels): [WhatsApp](https://apilium.com/en/doc/maryos/channels/whatsapp) (Baileys), [Telegram](https://apilium.com/en/doc/maryos/channels/telegram) (grammY), [Slack](https://apilium.com/en/doc/maryos/channels/slack) (Bolt), [Discord](https://apilium.com/en/doc/maryos/channels/discord) (discord.js), [Google Chat](https://apilium.com/en/doc/maryos/channels/googlechat) (Chat API), [Signal](https://apilium.com/en/doc/maryos/channels/signal) (signal-cli), [BlueBubbles](https://apilium.com/en/doc/maryos/channels/bluebubbles) (iMessage, recommended), [iMessage](https://apilium.com/en/doc/maryos/channels/imessage) (legacy imsg), [Microsoft Teams](https://apilium.com/en/doc/maryos/channels/msteams) (extension), [Matrix](https://apilium.com/en/doc/maryos/channels/matrix) (extension), [Zalo](https://apilium.com/en/doc/maryos/channels/zalo) (extension), [Zalo Personal](https://apilium.com/en/doc/maryos/channels/zalouser) (extension), [WebChat](https://apilium.com/en/doc/maryos/web/webchat).
+- Mention gating, reply tags, per-channel chunking and routing. Channel rules: [Channels](https://apilium.com/en/doc/maryos/channels).
 
 ### Apps + nodes
 
-- [macOS app](https://apilium.com/us/doc/maryos/platforms/macos): menu bar control plane, [Voice Wake](https://apilium.com/us/doc/maryos/nodes/voicewake)/PTT, [Talk Mode](https://apilium.com/us/doc/maryos/nodes/talk) overlay, [WebChat](https://apilium.com/us/doc/maryos/web/webchat), debug tools, [remote gateway](https://apilium.com/us/doc/maryos/gateway/remote) control.
-- [iOS node](https://apilium.com/us/doc/maryos/platforms/ios): [Canvas](https://apilium.com/us/doc/maryos/platforms/mac/canvas), [Voice Wake](https://apilium.com/us/doc/maryos/nodes/voicewake), [Talk Mode](https://apilium.com/us/doc/maryos/nodes/talk), camera, screen recording, Bonjour pairing.
-- [Android node](https://apilium.com/us/doc/maryos/platforms/android): [Canvas](https://apilium.com/us/doc/maryos/platforms/mac/canvas), [Talk Mode](https://apilium.com/us/doc/maryos/nodes/talk), camera, screen recording, optional SMS.
-- [macOS node mode](https://apilium.com/us/doc/maryos/nodes): system.run/notify + canvas/camera exposure.
+- [macOS app](https://apilium.com/en/doc/maryos/platforms/macos): menu bar control plane, [Voice Wake](https://apilium.com/en/doc/maryos/nodes/voicewake)/PTT, [Talk Mode](https://apilium.com/en/doc/maryos/nodes/talk) overlay, [WebChat](https://apilium.com/en/doc/maryos/web/webchat), debug tools, [remote gateway](https://apilium.com/en/doc/maryos/gateway/remote) control.
+- [iOS node](https://apilium.com/en/doc/maryos/platforms/ios): [Canvas](https://apilium.com/en/doc/maryos/platforms/mac/canvas), [Voice Wake](https://apilium.com/en/doc/maryos/nodes/voicewake), [Talk Mode](https://apilium.com/en/doc/maryos/nodes/talk), camera, screen recording, Bonjour pairing.
+- [Android node](https://apilium.com/en/doc/maryos/platforms/android): [Canvas](https://apilium.com/en/doc/maryos/platforms/mac/canvas), [Talk Mode](https://apilium.com/en/doc/maryos/nodes/talk), camera, screen recording, optional SMS.
+- [macOS node mode](https://apilium.com/en/doc/maryos/nodes): system.run/notify + canvas/camera exposure.
 
 ### Tools + automation
 
-- [Browser control](https://apilium.com/us/doc/maryos/tools/browser): dedicated mayros Chrome/Chromium, snapshots, actions, uploads, profiles.
-- [Canvas](https://apilium.com/us/doc/maryos/platforms/mac/canvas): [A2UI](https://apilium.com/us/doc/maryos/platforms/mac/canvas#canvas-a2ui) push/reset, eval, snapshot.
-- [Nodes](https://apilium.com/us/doc/maryos/nodes): camera snap/clip, screen record, [location.get](https://apilium.com/us/doc/maryos/nodes/location-command), notifications.
-- [Cron + wakeups](https://apilium.com/us/doc/maryos/automation/cron-jobs); [webhooks](https://apilium.com/us/doc/maryos/automation/webhook); [Gmail Pub/Sub](https://apilium.com/us/doc/maryos/automation/gmail-pubsub).
-- [Skills platform](https://apilium.com/us/doc/maryos/tools/skills): bundled, managed, and workspace skills with install gating + UI.
+- [Browser control](https://apilium.com/en/doc/maryos/tools/browser): dedicated mayros Chrome/Chromium, snapshots, actions, uploads, profiles.
+- [Canvas](https://apilium.com/en/doc/maryos/platforms/mac/canvas): [A2UI](https://apilium.com/en/doc/maryos/platforms/mac/canvas#canvas-a2ui) push/reset, eval, snapshot.
+- [Nodes](https://apilium.com/en/doc/maryos/nodes): camera snap/clip, screen record, [location.get](https://apilium.com/en/doc/maryos/nodes/location-command), notifications.
+- [Cron + wakeups](https://apilium.com/en/doc/maryos/automation/cron-jobs); [webhooks](https://apilium.com/en/doc/maryos/automation/webhook); [Gmail Pub/Sub](https://apilium.com/en/doc/maryos/automation/gmail-pubsub).
+- [Skills platform](https://apilium.com/en/doc/maryos/tools/skills): bundled, managed, and workspace skills with install gating + UI.
 
 ### Runtime + safety
 
-- [Channel routing](https://apilium.com/us/doc/maryos/concepts/channel-routing), [retry policy](https://apilium.com/us/doc/maryos/concepts/retry), and [streaming/chunking](https://apilium.com/us/doc/maryos/concepts/streaming).
-- [Presence](https://apilium.com/us/doc/maryos/concepts/presence), [typing indicators](https://apilium.com/us/doc/maryos/concepts/typing-indicators), and [usage tracking](https://apilium.com/us/doc/maryos/concepts/usage-tracking).
-- [Models](https://apilium.com/us/doc/maryos/concepts/models), [model failover](https://apilium.com/us/doc/maryos/concepts/model-failover), and [session pruning](https://apilium.com/us/doc/maryos/concepts/session-pruning).
-- [Security](https://apilium.com/us/doc/maryos/gateway/security) and [troubleshooting](https://apilium.com/us/doc/maryos/channels/troubleshooting).
+- [Retry policy](https://apilium.com/en/doc/maryos/concepts/retry) and [streaming/chunking](https://apilium.com/en/doc/maryos/concepts/streaming).
+- [Presence](https://apilium.com/en/doc/maryos/concepts/presence), [typing indicators](https://apilium.com/en/doc/maryos/concepts/typing-indicators), and [usage tracking](https://apilium.com/en/doc/maryos/concepts/usage-tracking).
+- [Models](https://apilium.com/en/doc/maryos/concepts/models), [model failover](https://apilium.com/en/doc/maryos/concepts/model-failover), and [session pruning](https://apilium.com/en/doc/maryos/concepts/session-pruning).
+- [Security](https://apilium.com/en/doc/maryos/gateway/security) and [troubleshooting](https://apilium.com/en/doc/maryos/channels/troubleshooting).
 
 ### Ops + packaging
 
-- [Control UI](https://apilium.com/us/doc/maryos/web) + [WebChat](https://apilium.com/us/doc/maryos/web/webchat) served directly from the Gateway.
-- [Tailscale Serve/Funnel](https://apilium.com/us/doc/maryos/gateway/tailscale) or [SSH tunnels](https://apilium.com/us/doc/maryos/gateway/remote) with token/password auth.
-- [Docker](https://apilium.com/us/doc/maryos/install/docker)-based installs.
-- [Doctor](https://apilium.com/us/doc/maryos/gateway/doctor) migrations, [logging](https://apilium.com/us/doc/maryos/logging).
+- [Control UI](https://apilium.com/en/doc/maryos/web) + [WebChat](https://apilium.com/en/doc/maryos/web/webchat) served directly from the Gateway.
+- [Tailscale Serve/Funnel](https://apilium.com/en/doc/maryos/gateway/tailscale) or [SSH tunnels](https://apilium.com/en/doc/maryos/gateway/remote) with token/password auth.
+- [Docker](https://apilium.com/en/doc/maryos/install/docker)-based installs.
+- [Doctor](https://apilium.com/en/doc/maryos/gateway/doctor) migrations, [logging](https://apilium.com/en/doc/maryos/logging).
 
 ## How it works (short)
 
@@ -197,12 +197,12 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 
 ## Key subsystems
 
-- **[Gateway WebSocket network](https://apilium.com/us/doc/maryos/concepts/architecture)** — single WS control plane for clients, tools, and events (plus ops: [Gateway runbook](https://apilium.com/us/doc/maryos/gateway)).
-- **[Tailscale exposure](https://apilium.com/us/doc/maryos/gateway/tailscale)** — Serve/Funnel for the Gateway dashboard + WS (remote access: [Remote](https://apilium.com/us/doc/maryos/gateway/remote)).
-- **[Browser control](https://apilium.com/us/doc/maryos/tools/browser)** — mayros‑managed Chrome/Chromium with CDP control.
-- **[Canvas + A2UI](https://apilium.com/us/doc/maryos/platforms/mac/canvas)** — agent‑driven visual workspace (A2UI host: [Canvas/A2UI](https://apilium.com/us/doc/maryos/platforms/mac/canvas#canvas-a2ui)).
-- **[Voice Wake](https://apilium.com/us/doc/maryos/nodes/voicewake) + [Talk Mode](https://apilium.com/us/doc/maryos/nodes/talk)** — always‑on speech and continuous conversation.
-- **[Nodes](https://apilium.com/us/doc/maryos/nodes)** — Canvas, camera snap/clip, screen record, `location.get`, notifications, plus macOS‑only `system.run`/`system.notify`.
+- **[Gateway WebSocket network](https://apilium.com/en/doc/maryos/concepts/architecture)** — single WS control plane for clients, tools, and events (plus ops: [Gateway runbook](https://apilium.com/en/doc/maryos/gateway)).
+- **[Tailscale exposure](https://apilium.com/en/doc/maryos/gateway/tailscale)** — Serve/Funnel for the Gateway dashboard + WS (remote access: [Remote](https://apilium.com/en/doc/maryos/gateway/remote)).
+- **[Browser control](https://apilium.com/en/doc/maryos/tools/browser)** — mayros‑managed Chrome/Chromium with CDP control.
+- **[Canvas + A2UI](https://apilium.com/en/doc/maryos/platforms/mac/canvas)** — agent‑driven visual workspace (A2UI host: [Canvas/A2UI](https://apilium.com/en/doc/maryos/platforms/mac/canvas#canvas-a2ui)).
+- **[Voice Wake](https://apilium.com/en/doc/maryos/nodes/voicewake) + [Talk Mode](https://apilium.com/en/doc/maryos/nodes/talk)** — always‑on speech and continuous conversation.
+- **[Nodes](https://apilium.com/en/doc/maryos/nodes)** — Canvas, camera snap/clip, screen record, `location.get`, notifications, plus macOS‑only `system.run`/`system.notify`.
 
 ## Tailscale access (Gateway dashboard)
 
@@ -219,7 +219,7 @@ Notes:
 - Funnel refuses to start unless `gateway.auth.mode: "password"` is set.
 - Optional: `gateway.tailscale.resetOnExit` to undo Serve/Funnel on shutdown.
 
-Details: [Tailscale guide](https://apilium.com/us/doc/maryos/gateway/tailscale) · [Web surfaces](https://apilium.com/us/doc/maryos/web)
+Details: [Tailscale guide](https://apilium.com/en/doc/maryos/gateway/tailscale) · [Web surfaces](https://apilium.com/en/doc/maryos/web)
 
 ## Remote Gateway (Linux is great)
 
@@ -229,7 +229,7 @@ It’s perfectly fine to run the Gateway on a small Linux instance. Clients (mac
 - **Device nodes** run device‑local actions (`system.run`, camera, screen recording, notifications) via `node.invoke`.
   In short: exec runs where the Gateway lives; device actions run where the device lives.
 
-Details: [Remote access](https://apilium.com/us/doc/maryos/gateway/remote) · [Nodes](https://apilium.com/us/doc/maryos/nodes) · [Security](https://apilium.com/us/doc/maryos/gateway/security)
+Details: [Remote access](https://apilium.com/en/doc/maryos/gateway/remote) · [Nodes](https://apilium.com/en/doc/maryos/nodes) · [Security](https://apilium.com/en/doc/maryos/gateway/security)
 
 ## macOS permissions via the Gateway protocol
 
@@ -244,7 +244,7 @@ Elevated bash (host permissions) is separate from macOS TCC:
 - Use `/elevated on|off` to toggle per‑session elevated access when enabled + allowlisted.
 - Gateway persists the per‑session toggle via `sessions.patch` (WS method) alongside `thinkingLevel`, `verboseLevel`, `model`, `sendPolicy`, and `groupActivation`.
 
-Details: [Nodes](https://apilium.com/us/doc/maryos/nodes) · [macOS app](https://apilium.com/us/doc/maryos/platforms/macos) · [Gateway protocol](https://apilium.com/us/doc/maryos/concepts/architecture)
+Details: [Nodes](https://apilium.com/en/doc/maryos/nodes) · [macOS app](https://apilium.com/en/doc/maryos/platforms/macos) · [Gateway protocol](https://apilium.com/en/doc/maryos/concepts/architecture)
 
 ## Agent to Agent (sessions\_\* tools)
 
@@ -253,7 +253,7 @@ Details: [Nodes](https://apilium.com/us/doc/maryos/nodes) · [macOS app](https:/
 - `sessions_history` — fetch transcript logs for a session.
 - `sessions_send` — message another session; optional reply‑back ping‑pong + announce step (`REPLY_SKIP`, `ANNOUNCE_SKIP`).
 
-Details: [Session tools](https://apilium.com/us/doc/maryos/concepts/session-tool)
+Details: [Session tools](https://apilium.com/en/doc/maryos/concepts/session-tool)
 
 ## Skills registry (Skills Hub)
 
@@ -295,13 +295,13 @@ Note: signed builds required for macOS permissions to stick across rebuilds (see
 - Voice trigger forwarding + Canvas surface.
 - Controlled via `mayros nodes …`.
 
-Runbook: [iOS connect](https://apilium.com/us/doc/maryos/platforms/ios).
+Runbook: [iOS connect](https://apilium.com/en/doc/maryos/platforms/ios).
 
 ### Android node (optional)
 
 - Pairs via the same Bridge + pairing flow as iOS.
 - Exposes Canvas, Camera, and Screen capture commands.
-- Runbook: [Android connect](https://apilium.com/us/doc/maryos/platforms/android).
+- Runbook: [Android connect](https://apilium.com/en/doc/maryos/platforms/android).
 
 ## Agent workspace + skills
 
@@ -321,7 +321,7 @@ Minimal `~/.mayros/mayros.json` (model + defaults):
 }
 ```
 
-[Full configuration reference (all keys + examples).](https://apilium.com/us/doc/maryos/gateway/configuration)
+[Full configuration reference (all keys + examples).](https://apilium.com/en/doc/maryos/gateway/configuration)
 
 ## Security model (important)
 
@@ -329,15 +329,15 @@ Minimal `~/.mayros/mayros.json` (model + defaults):
 - **Group/channel safety:** set `agents.defaults.sandbox.mode: "non-main"` to run **non‑main sessions** (groups/channels) inside per‑session Docker sandboxes; bash then runs in Docker for those sessions.
 - **Sandbox defaults:** allowlist `bash`, `process`, `read`, `write`, `edit`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`; denylist `browser`, `canvas`, `nodes`, `cron`, `discord`, `gateway`.
 
-Details: [Security guide](https://apilium.com/us/doc/maryos/gateway/security) · [Docker + sandboxing](https://apilium.com/us/doc/maryos/install/docker) · [Sandbox config](https://apilium.com/us/doc/maryos/gateway/configuration)
+Details: [Security guide](https://apilium.com/en/doc/maryos/gateway/security) · [Docker + sandboxing](https://apilium.com/en/doc/maryos/install/docker) · [Sandbox config](https://apilium.com/en/doc/maryos/gateway/configuration)
 
-### [WhatsApp](https://apilium.com/us/doc/maryos/channels/whatsapp)
+### [WhatsApp](https://apilium.com/en/doc/maryos/channels/whatsapp)
 
 - Link the device: `pnpm mayros channels login` (stores creds in `~/.mayros/credentials`).
 - Allowlist who can talk to the assistant via `channels.whatsapp.allowFrom`.
 - If `channels.whatsapp.groups` is set, it becomes a group allowlist; include `"*"` to allow all.
 
-### [Telegram](https://apilium.com/us/doc/maryos/channels/telegram)
+### [Telegram](https://apilium.com/en/doc/maryos/channels/telegram)
 
 - Set `TELEGRAM_BOT_TOKEN` or `channels.telegram.botToken` (env wins).
 - Optional: set `channels.telegram.groups` (with `channels.telegram.groups."*".requireMention`); when set, it is a group allowlist (include `"*"` to allow all). Also `channels.telegram.allowFrom` or `channels.telegram.webhookUrl` + `channels.telegram.webhookSecret` as needed.
@@ -352,11 +352,11 @@ Details: [Security guide](https://apilium.com/us/doc/maryos/gateway/security) ·
 }
 ```
 
-### [Slack](https://apilium.com/us/doc/maryos/channels/slack)
+### [Slack](https://apilium.com/en/doc/maryos/channels/slack)
 
 - Set `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` (or `channels.slack.botToken` + `channels.slack.appToken`).
 
-### [Discord](https://apilium.com/us/doc/maryos/channels/discord)
+### [Discord](https://apilium.com/en/doc/maryos/channels/discord)
 
 - Set `DISCORD_BOT_TOKEN` or `channels.discord.token` (env wins).
 - Optional: set `commands.native`, `commands.text`, or `commands.useAccessGroups`, plus `channels.discord.allowFrom`, `channels.discord.guilds`, or `channels.discord.mediaMaxMb` as needed.
@@ -371,27 +371,27 @@ Details: [Security guide](https://apilium.com/us/doc/maryos/gateway/security) ·
 }
 ```
 
-### [Signal](https://apilium.com/us/doc/maryos/channels/signal)
+### [Signal](https://apilium.com/en/doc/maryos/channels/signal)
 
 - Requires `signal-cli` and a `channels.signal` config section.
 
-### [BlueBubbles (iMessage)](https://apilium.com/us/doc/maryos/channels/bluebubbles)
+### [BlueBubbles (iMessage)](https://apilium.com/en/doc/maryos/channels/bluebubbles)
 
 - **Recommended** iMessage integration.
 - Configure `channels.bluebubbles.serverUrl` + `channels.bluebubbles.password` and a webhook (`channels.bluebubbles.webhookPath`).
 - The BlueBubbles server runs on macOS; the Gateway can run on macOS or elsewhere.
 
-### [iMessage (legacy)](https://apilium.com/us/doc/maryos/channels/imessage)
+### [iMessage (legacy)](https://apilium.com/en/doc/maryos/channels/imessage)
 
 - Legacy macOS-only integration via `imsg` (Messages must be signed in).
 - If `channels.imessage.groups` is set, it becomes a group allowlist; include `"*"` to allow all.
 
-### [Microsoft Teams](https://apilium.com/us/doc/maryos/channels/msteams)
+### [Microsoft Teams](https://apilium.com/en/doc/maryos/channels/msteams)
 
 - Configure a Teams app + Bot Framework, then add a `msteams` config section.
 - Allowlist who can talk via `msteams.allowFrom`; group access via `msteams.groupAllowFrom` or `msteams.groupPolicy: "open"`.
 
-### [WebChat](https://apilium.com/us/doc/maryos/web/webchat)
+### [WebChat](https://apilium.com/en/doc/maryos/web/webchat)
 
 - Uses the Gateway WebSocket; no separate WebChat port/config.
 
@@ -410,69 +410,68 @@ Browser control (optional):
 
 Use these when you’re past the onboarding flow and want the deeper reference.
 
-- [Start with the docs index for navigation and “what’s where.”](https://apilium.com/us/doc/maryos)
-- [Read the architecture overview for the gateway + protocol model.](https://apilium.com/us/doc/maryos/concepts/architecture)
-- [Use the full configuration reference when you need every key and example.](https://apilium.com/us/doc/maryos/gateway/configuration)
-- [Run the Gateway by the book with the operational runbook.](https://apilium.com/us/doc/maryos/gateway)
-- [Learn how the Control UI/Web surfaces work and how to expose them safely.](https://apilium.com/us/doc/maryos/web)
-- [Understand remote access over SSH tunnels or tailnets.](https://apilium.com/us/doc/maryos/gateway/remote)
-- [Follow the onboarding wizard flow for a guided setup.](https://apilium.com/us/doc/maryos/start/wizard)
-- [Wire external triggers via the webhook surface.](https://apilium.com/us/doc/maryos/automation/webhook)
-- [Set up Gmail Pub/Sub triggers.](https://apilium.com/us/doc/maryos/automation/gmail-pubsub)
-- [Learn the macOS menu bar companion details.](https://apilium.com/us/doc/maryos/platforms/mac/menu-bar)
-- [Platform guides: Windows (WSL2)](https://apilium.com/us/doc/maryos/platforms/windows), [Linux](https://apilium.com/us/doc/maryos/platforms/linux), [macOS](https://apilium.com/us/doc/maryos/platforms/macos), [iOS](https://apilium.com/us/doc/maryos/platforms/ios), [Android](https://apilium.com/us/doc/maryos/platforms/android)
-- [Debug common failures with the troubleshooting guide.](https://apilium.com/us/doc/maryos/channels/troubleshooting)
-- [Review security guidance before exposing anything.](https://apilium.com/us/doc/maryos/gateway/security)
+- [Start with the docs index for navigation and “what’s where.”](https://apilium.com/en/doc/maryos)
+- [Read the architecture overview for the gateway + protocol model.](https://apilium.com/en/doc/maryos/concepts/architecture)
+- [Use the full configuration reference when you need every key and example.](https://apilium.com/en/doc/maryos/gateway/configuration)
+- [Run the Gateway by the book with the operational runbook.](https://apilium.com/en/doc/maryos/gateway)
+- [Learn how the Control UI/Web surfaces work and how to expose them safely.](https://apilium.com/en/doc/maryos/web)
+- [Understand remote access over SSH tunnels or tailnets.](https://apilium.com/en/doc/maryos/gateway/remote)
+- [Follow the onboarding wizard flow for a guided setup.](https://apilium.com/en/doc/maryos/start/wizard)
+- [Wire external triggers via the webhook surface.](https://apilium.com/en/doc/maryos/automation/webhook)
+- [Set up Gmail Pub/Sub triggers.](https://apilium.com/en/doc/maryos/automation/gmail-pubsub)
+- [Learn the macOS menu bar companion details.](https://apilium.com/en/doc/maryos/platforms/mac/menu-bar)
+- [Platform guides: Windows (WSL2)](https://apilium.com/en/doc/maryos/platforms/windows), [Linux](https://apilium.com/en/doc/maryos/platforms/linux), [macOS](https://apilium.com/en/doc/maryos/platforms/macos), [iOS](https://apilium.com/en/doc/maryos/platforms/ios), [Android](https://apilium.com/en/doc/maryos/platforms/android)
+- [Debug common failures with the troubleshooting guide.](https://apilium.com/en/doc/maryos/channels/troubleshooting)
+- [Review security guidance before exposing anything.](https://apilium.com/en/doc/maryos/gateway/security)
 
 ## Advanced docs (discovery + control)
 
-- [Discovery + transports](https://apilium.com/us/doc/maryos/gateway/discovery)
-- [Bonjour/mDNS](https://apilium.com/us/doc/maryos/gateway/bonjour)
-- [Gateway pairing](https://apilium.com/us/doc/maryos/gateway/pairing)
-- [Remote gateway README](https://apilium.com/us/doc/maryos/gateway/remote-gateway-readme)
-- [Control UI](https://apilium.com/us/doc/maryos/web/control-ui)
-- [Dashboard](https://apilium.com/us/doc/maryos/web/dashboard)
+- [Discovery + transports](https://apilium.com/en/doc/maryos/gateway/discovery)
+- [Bonjour/mDNS](https://apilium.com/en/doc/maryos/gateway/bonjour)
+- [Gateway pairing](https://apilium.com/en/doc/maryos/gateway/pairing)
+- [Remote gateway README](https://apilium.com/en/doc/maryos/gateway/remote-gateway-readme)
+- [Control UI](https://apilium.com/en/doc/maryos/web/control-ui)
+- [Dashboard](https://apilium.com/en/doc/maryos/web/dashboard)
 
 ## Operations & troubleshooting
 
-- [Health checks](https://apilium.com/us/doc/maryos/gateway/health)
-- [Gateway lock](https://apilium.com/us/doc/maryos/gateway/gateway-lock)
-- [Background process](https://apilium.com/us/doc/maryos/gateway/background-process)
-- [Browser troubleshooting (Linux)](https://apilium.com/us/doc/maryos/tools/browser-linux-troubleshooting)
-- [Logging](https://apilium.com/us/doc/maryos/logging)
+- [Health checks](https://apilium.com/en/doc/maryos/gateway/health)
+- [Gateway lock](https://apilium.com/en/doc/maryos/gateway/gateway-lock)
+- [Background process](https://apilium.com/en/doc/maryos/gateway/background-process)
+- [Browser troubleshooting (Linux)](https://apilium.com/en/doc/maryos/tools/browser-linux-troubleshooting)
+- [Logging](https://apilium.com/en/doc/maryos/logging)
 
 ## Deep dives
 
-- [Agent loop](https://apilium.com/us/doc/maryos/concepts/agent-loop)
-- [Presence](https://apilium.com/us/doc/maryos/concepts/presence)
-- [TypeBox schemas](https://apilium.com/us/doc/maryos/concepts/typebox)
-- [RPC adapters](https://apilium.com/us/doc/maryos/reference/rpc)
-- [Queue](https://apilium.com/us/doc/maryos/concepts/queue)
+- [Agent loop](https://apilium.com/en/doc/maryos/concepts/agent-loop)
+- [Presence](https://apilium.com/en/doc/maryos/concepts/presence)
+- [TypeBox schemas](https://apilium.com/en/doc/maryos/concepts/typebox)
+- [RPC adapters](https://apilium.com/en/doc/maryos/reference/rpc)
+- [Queue](https://apilium.com/en/doc/maryos/concepts/queue)
 
 ## Workspace & skills
 
-- [Skills config](https://apilium.com/us/doc/maryos/tools/skills-config)
-- [Default AGENTS](https://apilium.com/us/doc/maryos/reference/AGENTS.default)
-- [Templates: AGENTS](https://apilium.com/us/doc/maryos/reference/templates/AGENTS)
-- [Templates: BOOTSTRAP](https://apilium.com/us/doc/maryos/reference/templates/BOOTSTRAP)
-- [Templates: IDENTITY](https://apilium.com/us/doc/maryos/reference/templates/IDENTITY)
-- [Templates: SOUL](https://apilium.com/us/doc/maryos/reference/templates/SOUL)
-- [Templates: TOOLS](https://apilium.com/us/doc/maryos/reference/templates/TOOLS)
-- [Templates: USER](https://apilium.com/us/doc/maryos/reference/templates/USER)
+- [Skills config](https://apilium.com/en/doc/maryos/tools/skills-config)
+- [Default AGENTS](https://apilium.com/en/doc/maryos/reference/AGENTS.default)
+- [Templates: AGENTS](https://apilium.com/en/doc/maryos/reference/templates/AGENTS)
+- [Templates: BOOTSTRAP](https://apilium.com/en/doc/maryos/reference/templates/BOOTSTRAP)
+- [Templates: IDENTITY](https://apilium.com/en/doc/maryos/reference/templates/IDENTITY)
+- [Templates: TOOLS](https://apilium.com/en/doc/maryos/reference/templates/TOOLS)
+- [Templates: USER](https://apilium.com/en/doc/maryos/reference/templates/USER)
 
 ## Platform internals
 
-- [macOS dev setup](https://apilium.com/us/doc/maryos/platforms/mac/dev-setup)
-- [macOS menu bar](https://apilium.com/us/doc/maryos/platforms/mac/menu-bar)
-- [macOS voice wake](https://apilium.com/us/doc/maryos/platforms/mac/voicewake)
-- [iOS node](https://apilium.com/us/doc/maryos/platforms/ios)
-- [Android node](https://apilium.com/us/doc/maryos/platforms/android)
-- [Windows (WSL2)](https://apilium.com/us/doc/maryos/platforms/windows)
-- [Linux app](https://apilium.com/us/doc/maryos/platforms/linux)
+- [macOS dev setup](https://apilium.com/en/doc/maryos/platforms/mac/dev-setup)
+- [macOS menu bar](https://apilium.com/en/doc/maryos/platforms/mac/menu-bar)
+- [macOS voice wake](https://apilium.com/en/doc/maryos/platforms/mac/voicewake)
+- [iOS node](https://apilium.com/en/doc/maryos/platforms/ios)
+- [Android node](https://apilium.com/en/doc/maryos/platforms/android)
+- [Windows (WSL2)](https://apilium.com/en/doc/maryos/platforms/windows)
+- [Linux app](https://apilium.com/en/doc/maryos/platforms/linux)
 
 ## Email hooks (Gmail)
 
-- [apilium.com/us/doc/maryos/gmail-pubsub](https://apilium.com/us/doc/maryos/automation/gmail-pubsub)
+- [apilium.com/en/doc/maryos/gmail-pubsub](https://apilium.com/en/doc/maryos/automation/gmail-pubsub)
 
 ## Community
 
