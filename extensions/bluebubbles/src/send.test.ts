@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import "./test-mocks.js";
+import { probeMock } from "./test-mocks.js";
 import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import { sendMessageBlueBubbles, resolveChatGuidForTarget } from "./send.js";
 import { installBlueBubblesFetchTestHooks } from "./test-harness.js";
@@ -9,7 +9,7 @@ const mockFetch = vi.fn();
 
 installBlueBubblesFetchTestHooks({
   mockFetch,
-  privateApiStatusMock: vi.mocked(getCachedBlueBubblesPrivateApiStatus),
+  privateApiStatusMock: probeMock.getCachedBlueBubblesPrivateApiStatus,
 });
 
 function mockResolvedHandleTarget(

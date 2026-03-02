@@ -99,6 +99,7 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UIBackgroundModes:
           - audio
+          - location
           - remote-notification
         BGTaskSchedulerPermittedIdentifiers:
           - ai.mayros.ios.bgrefresh
@@ -112,6 +113,12 @@ targets:
         NSLocationAlwaysAndWhenInUseUsageDescription: Mayros can share your location in the background when you enable Always.
         NSMicrophoneUsageDescription: Mayros needs microphone access for voice wake.
         NSSpeechRecognitionUsageDescription: Mayros uses on-device speech recognition for voice wake.
+        NSContactsUsageDescription: Mayros accesses your contacts to share them with the gateway when you allow it.
+        NSPhotoLibraryUsageDescription: Mayros accesses your photo library to share images with the gateway.
+        NSPhotoLibraryAddUsageDescription: Mayros saves photos and videos to your library when requested.
+        NSCalendarsUsageDescription: Mayros accesses your calendar to read and create events when you allow it.
+        NSRemindersUsageDescription: Mayros accesses your reminders to read and create items when you allow it.
+        NSMotionUsageDescription: Mayros uses motion data to detect device activity and orientation.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

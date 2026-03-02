@@ -311,12 +311,12 @@ semantic:
 
 The `skills/examples/` directory contains 5 reference skills with near-platinum structure (9/10 files — only `SKILL.sig` is missing, generated at publish time):
 
-| Skill                                                       | Description                                      |
-| ----------------------------------------------------------- | ------------------------------------------------ |
-| [verify-kyc](../../skills/examples/verify-kyc/)             | KYC verification with semantic proofs            |
-| [code-review](../../skills/examples/code-review/)           | Severity classification for code review findings |
-| [dependency-audit](../../skills/examples/dependency-audit/) | Flag outdated and vulnerable dependencies        |
-| [knowledge-sync](../../skills/examples/knowledge-sync/)     | Cross-namespace knowledge synchronization        |
-| [api-monitor](../../skills/examples/api-monitor/)           | API health status monitoring                     |
+| Skill              | Description                                      |
+| ------------------ | ------------------------------------------------ |
+| `verify-kyc`       | KYC verification with semantic proofs            |
+| `code-review`      | Severity classification for code review findings |
+| `dependency-audit` | Flag outdated and vulnerable dependencies        |
+| `knowledge-sync`   | Cross-namespace knowledge synchronization        |
+| `api-monitor`      | API health status monitoring                     |
 
 For fully signed platinum skills, see `skills/official/`.

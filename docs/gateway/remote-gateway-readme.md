@@ -84,7 +84,7 @@ To have the SSH tunnel start automatically when you log in, create a Launch Agen
 
 ### Create the PLIST file
 
-Save this as `~/Library/LaunchAgents/bot.molt.ssh-tunnel.plist`:
+Save this as `~/Library/LaunchAgents/ai.mayros.ssh-tunnel.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -92,7 +92,7 @@ Save this as `~/Library/LaunchAgents/bot.molt.ssh-tunnel.plist`:
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>bot.molt.ssh-tunnel</string>
+    <string>ai.mayros.ssh-tunnel</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/ssh</string>
@@ -110,7 +110,7 @@ Save this as `~/Library/LaunchAgents/bot.molt.ssh-tunnel.plist`:
 ### Load the Launch Agent
 
 ```bash
-launchctl bootstrap gui/$UID ~/Library/LaunchAgents/bot.molt.ssh-tunnel.plist
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/ai.mayros.ssh-tunnel.plist
 ```
 
 The tunnel will now:
@@ -135,13 +135,13 @@ lsof -i :18789
 **Restart the tunnel:**
 
 ```bash
-launchctl kickstart -k gui/$UID/bot.molt.ssh-tunnel
+launchctl kickstart -k gui/$UID/ai.mayros.ssh-tunnel
 ```
 
 **Stop the tunnel:**
 
 ```bash
-launchctl bootout gui/$UID/bot.molt.ssh-tunnel
+launchctl bootout gui/$UID/ai.mayros.ssh-tunnel
 ```
 
 ---

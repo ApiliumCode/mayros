@@ -800,7 +800,12 @@ describe("Cron issue regressions", () => {
     });
 
     const timerPromise = onTimer(state);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Poll until both workers have started (real FS I/O in ensureLoaded may
+    // take more than a fixed 20 ms on slow CI runners).
+    const pollStart = Date.now();
+    while (peakActiveRuns < 2 && Date.now() - pollStart < 5_000) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
     expect(peakActiveRuns).toBe(2);
 

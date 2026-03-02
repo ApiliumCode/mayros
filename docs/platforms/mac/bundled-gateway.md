@@ -28,12 +28,12 @@ The macOS app’s **Install CLI** button runs the same flow via npm/pnpm (bun no
 
 Label:
 
-- `bot.molt.gateway` (or `bot.molt.<profile>`; legacy `com.mayros.*` may remain)
+- `ai.mayros.gateway` (or `ai.mayros.<profile>`; legacy `com.mayros.*` may remain)
 
 Plist location (per‑user):
 
-- `~/Library/LaunchAgents/bot.molt.gateway.plist`
-  (or `~/Library/LaunchAgents/bot.molt.<profile>.plist`)
+- `~/Library/LaunchAgents/ai.mayros.gateway.plist`
+  (or `~/Library/LaunchAgents/ai.mayros.<profile>.plist`)
 
 Manager:
 

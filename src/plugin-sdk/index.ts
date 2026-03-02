@@ -76,6 +76,7 @@ export type {
   MayrosPluginApi,
   MayrosPluginService,
   MayrosPluginServiceContext,
+  MayrosPluginToolFactory,
   ProviderAuthContext,
   ProviderAuthResult,
 } from "../plugins/types.js";

@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ZIP=${1:?"Usage: $0 Mayros-<ver>.zip"}
+# TODO: Review URL — uses mayros/mayros but public repo is ApiliumCode/mayros.
+# Do NOT change without updating existing users' Sparkle feed.
 FEED_URL=${2:-"https://raw.githubusercontent.com/mayros/mayros/main/appcast.xml"}
 PRIVATE_KEY_FILE=${SPARKLE_PRIVATE_KEY_FILE:-}
 if [[ -z "$PRIVATE_KEY_FILE" ]]; then

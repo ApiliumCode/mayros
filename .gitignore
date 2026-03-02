@@ -46,6 +46,11 @@ apps/android/.gradle/
 apps/android/app/build/
 apps/android/.cxx/
 
+# Android signing (NEVER COMMIT)
+apps/android/keystore.properties
+*.jks
+*.keystore
+
 # Swift / macOS / iOS build artifacts
 *.bun-build
 apps/macos/.build/
@@ -78,6 +83,7 @@ vendor/
 # Vendor build artifacts
 vendor/a2ui/renderers/lit/dist/
 src/canvas-host/a2ui/*.bundle.js
+!src/canvas-host/a2ui/a2ui.bundle.js
 src/canvas-host/a2ui/*.map
 .bundle.hash
 
@@ -104,7 +110,10 @@ apps/ios/LocalSigning.xcconfig
 docs/.local/
 IDENTITY.md
 USER.md
+!docs/reference/templates/IDENTITY.md
+!docs/reference/templates/USER.md
 *.tgz
+!test/fixtures/**/*.tgz
 .worktrees/
 
 # local tooling
@@ -119,3 +128,7 @@ USER.md
 .agents/
 .agents
 .agent/
+
+# Claude Code project instructions (local only)
+CLAUDE.md
+**/CLAUDE.md
