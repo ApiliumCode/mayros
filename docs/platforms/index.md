@@ -49,5 +49,5 @@ Use one of these (all supported):
 
 The service target depends on OS:
 
-- macOS: LaunchAgent (`bot.molt.gateway` or `bot.molt.<profile>`; legacy `com.mayros.*`)
+- macOS: LaunchAgent (`ai.mayros.gateway` or `ai.mayros.<profile>`; legacy `com.mayros.*`)
 - Linux/WSL2: systemd user service (`mayros-gateway[-<profile>].service`)

@@ -8,9 +8,51 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+// ---------- Hoisted state (accessible inside vi.mock factories) ----------
+
+const mockState = vi.hoisted(() => ({
+  fakeProc: null as unknown,
+  healthCallCount: 0,
+  healthReturnValues: [] as boolean[],
+  spawnFn: vi.fn(),
+  existsSyncFn: vi.fn(() => true),
+  locateCortexBinaryFn: vi.fn(async () => "/usr/bin/fake-cortex"),
+  getCortexBinaryVersionFn: vi.fn(() => "0.2.6"),
+}));
+
 // ---------- Mocks ----------
 
-// Fake ChildProcess
+vi.mock("node:child_process", () => ({
+  spawn: mockState.spawnFn,
+}));
+
+vi.mock("node:fs", () => ({
+  existsSync: mockState.existsSyncFn,
+}));
+
+vi.mock("../shared/cortex-binary-locator.js", () => ({
+  locateCortexBinary: mockState.locateCortexBinaryFn,
+  getCortexBinaryVersion: mockState.getCortexBinaryVersionFn,
+}));
+
+vi.mock("../shared/cortex-version.js", () => ({
+  REQUIRED_CORTEX_VERSION: "0.2.6",
+}));
+
+// Mock the CortexClient used internally by the sidecar
+vi.mock("./cortex-client.js", () => ({
+  CortexClient: class MockCortexClient {
+    async isHealthy() {
+      if (mockState.healthReturnValues.length > 0) {
+        return mockState.healthReturnValues.shift();
+      }
+      return mockState.healthCallCount++ > 0;
+    }
+  },
+}));
+
+// ---------- Fake ChildProcess (needs EventEmitter, so defined after imports) ----------
+
 class FakeChildProcess extends EventEmitter {
   pid = 12345;
   killed = false;
@@ -32,49 +74,30 @@ class FakeChildProcess extends EventEmitter {
   }
 }
 
-let fakeProc: FakeChildProcess;
-let healthCallCount: number;
-let healthReturnValues: boolean[];
-
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn(() => {
-    fakeProc = new FakeChildProcess();
-    return fakeProc;
-  }),
-}));
-
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(() => true),
-}));
-
-vi.mock("../shared/cortex-binary-locator.js", () => ({
-  locateCortexBinary: vi.fn(async () => "/usr/bin/fake-cortex"),
-  getCortexBinaryVersion: vi.fn(() => "0.2.6"),
-}));
-
-vi.mock("../shared/cortex-version.js", () => ({
-  REQUIRED_CORTEX_VERSION: "0.2.6",
-}));
-
-// Mock the CortexClient used internally by the sidecar
-vi.mock("./cortex-client.js", () => ({
-  CortexClient: class MockCortexClient {
-    async isHealthy() {
-      if (healthReturnValues.length > 0) {
-        return healthReturnValues.shift();
-      }
-      return healthCallCount++ > 0;
-    }
-  },
-}));
+// Wire the hoisted spawn mock to create FakeChildProcess instances
+mockState.spawnFn.mockImplementation(() => {
+  const proc = new FakeChildProcess();
+  mockState.fakeProc = proc;
+  return proc;
+});
 
 import { CortexSidecar } from "./cortex-sidecar.js";
 
 describe("CortexSidecar", () => {
   beforeEach(() => {
-    healthCallCount = 0;
-    healthReturnValues = [];
+    mockState.healthCallCount = 0;
+    mockState.healthReturnValues = [];
+    mockState.fakeProc = null;
     vi.clearAllMocks();
+    // Re-wire spawn implementation after clearAllMocks resets it
+    mockState.spawnFn.mockImplementation(() => {
+      const proc = new FakeChildProcess();
+      mockState.fakeProc = proc;
+      return proc;
+    });
+    mockState.existsSyncFn.mockReturnValue(true);
+    mockState.locateCortexBinaryFn.mockResolvedValue("/usr/bin/fake-cortex");
+    mockState.getCortexBinaryVersionFn.mockReturnValue("0.2.6");
   });
 
   afterEach(() => {
@@ -83,7 +106,7 @@ describe("CortexSidecar", () => {
 
   it("registers signal handlers after successful spawn", async () => {
     // First isHealthy=false (not running externally), then true (healthy after spawn)
-    healthReturnValues = [false, true];
+    mockState.healthReturnValues = [false, true];
 
     const onceSpy = vi.spyOn(process, "once");
 
@@ -112,7 +135,7 @@ describe("CortexSidecar", () => {
   });
 
   it("removes signal handlers after stop", async () => {
-    healthReturnValues = [false, true];
+    mockState.healthReturnValues = [false, true];
 
     const removeListenerSpy = vi.spyOn(process, "removeListener");
 
@@ -135,7 +158,7 @@ describe("CortexSidecar", () => {
   });
 
   it("drains stdout and stderr on spawn", async () => {
-    healthReturnValues = [false, true];
+    mockState.healthReturnValues = [false, true];
 
     const sidecar = new CortexSidecar({
       host: "127.0.0.1",
@@ -146,6 +169,8 @@ describe("CortexSidecar", () => {
 
     await sidecar.start();
 
+    const fakeProc = mockState.fakeProc as FakeChildProcess;
+    expect(fakeProc).not.toBeNull();
     expect(fakeProc.stdout.resume).toHaveBeenCalled();
     expect(fakeProc.stderr.resume).toHaveBeenCalled();
 
@@ -153,7 +178,7 @@ describe("CortexSidecar", () => {
   });
 
   it("does not spawn when autoStart is false", async () => {
-    healthReturnValues = [false]; // not running externally
+    mockState.healthReturnValues = [false]; // not running externally
 
     const sidecar = new CortexSidecar({
       host: "127.0.0.1",
@@ -167,7 +192,7 @@ describe("CortexSidecar", () => {
   });
 
   it("returns true without spawning if already running externally", async () => {
-    healthReturnValues = [true]; // already healthy
+    mockState.healthReturnValues = [true]; // already healthy
 
     const { spawn } = await import("node:child_process");
 
@@ -185,11 +210,10 @@ describe("CortexSidecar", () => {
   });
 
   it("strict version check blocks outdated binary", async () => {
-    healthReturnValues = [false]; // not running externally
+    mockState.healthReturnValues = [false]; // not running externally
 
     // Override getCortexBinaryVersion to return old version
-    const locator = await import("../shared/cortex-binary-locator.js");
-    vi.mocked(locator.getCortexBinaryVersion).mockReturnValue("0.1.0");
+    mockState.getCortexBinaryVersionFn.mockReturnValue("0.1.0");
 
     const sidecar = new CortexSidecar({
       host: "127.0.0.1",

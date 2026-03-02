@@ -15,10 +15,11 @@ export async function transpileSkillToJS(source: string, filename: string): Prom
   try {
     // esbuild is available as a transitive dependency (via tsdown)
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — esbuild is optional; dynamic import may fail at runtime
-    const esbuild: {
+    // @ts-expect-error — esbuild is optional; may not have type declarations installed
+    const esbuildModule = await import("esbuild");
+    const esbuild = esbuildModule as {
       transform: (s: string, opts: Record<string, string>) => Promise<{ code: string }>;
-    } = await import("esbuild");
+    };
     const result = await esbuild.transform(source, {
       loader: "ts",
       format: "esm",

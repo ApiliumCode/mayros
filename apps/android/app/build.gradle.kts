@@ -1,10 +1,16 @@
 import com.android.build.api.variant.impl.VariantOutputImpl
+import java.util.Properties
 
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.android")
   id("org.jetbrains.kotlin.plugin.compose")
   id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+val keystoreProperties = Properties().apply {
+  val f = rootProject.file("keystore.properties")
+  if (f.exists()) load(f.inputStream())
 }
 
 android {
@@ -29,14 +35,34 @@ android {
     }
   }
 
+  signingConfigs {
+    create("release") {
+      storeFile = file(System.getenv("KEYSTORE_FILE") ?: keystoreProperties.getProperty("storeFile", "release.keystore"))
+      storePassword = System.getenv("KEYSTORE_PASSWORD") ?: keystoreProperties.getProperty("storePassword", "")
+      keyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias", "")
+      keyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword", "")
+    }
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = true
       isShrinkResources = true
+      signingConfig = signingConfigs.getByName("release")
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
     debug {
       isMinifyEnabled = false
+    }
+  }
+
+  flavorDimensions += "distribution"
+  productFlavors {
+    create("playstore") {
+      dimension = "distribution"
+    }
+    create("sideload") {
+      dimension = "distribution"
     }
   }
 
@@ -84,7 +110,8 @@ androidComponents {
         val versionName = output.versionName.orNull ?: "0"
         val buildType = variant.buildType
 
-        val outputFileName = "mayros-${versionName}-${buildType}.apk"
+        val flavor = variant.flavorName ?: ""
+        val outputFileName = "mayros-${versionName}-${flavor}-${buildType}.apk"
         output.outputFileName = outputFileName
       }
   }

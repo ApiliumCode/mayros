@@ -9,7 +9,7 @@ x-i18n:
   model: claude-opus-4-5
   provider: pi
   source_hash: 719b219c3b326479658fe6101c80d5273fc56eb3baf50be8535e0d1d2bb7987f
-  source_path: refactor/clawnet.md
+  source_path: refactor/meshnet.md
   workflow: 15
 ---
 

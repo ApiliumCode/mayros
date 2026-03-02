@@ -158,7 +158,7 @@ describe("daemon-cli coverage", () => {
         MAYROS_CONFIG_PATH: "/tmp/mayros-daemon-state/mayros.json",
         MAYROS_GATEWAY_PORT: "19001",
       },
-      sourcePath: "/tmp/bot.molt.gateway.plist",
+      sourcePath: "/tmp/ai.mayros.gateway.plist",
     });
 
     await runDaemonCommand(["daemon", "status", "--json"]);
