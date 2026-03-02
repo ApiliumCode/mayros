@@ -119,3 +119,7 @@ USER.md
 .agents/
 .agents
 .agent/
+
+# Claude Code project instructions (local only)
+CLAUDE.md
+**/CLAUDE.md
