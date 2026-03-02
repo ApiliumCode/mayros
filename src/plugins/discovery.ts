@@ -239,10 +239,16 @@ function deriveIdHint(params: {
   }
 
   // Prefer the unscoped name so config keys stay stable even when the npm
-  // package is scoped (example: @apilium/mayros-voice-call -> mayros-voice-call).
-  const unscoped = rawPackageName.includes("/")
+  // package is scoped (example: @apilium/mayros-voice-call -> voice-call).
+  let unscoped = rawPackageName.includes("/")
     ? (rawPackageName.split("/").pop() ?? rawPackageName)
     : rawPackageName;
+
+  // Strip the "mayros-" prefix so the hint matches the short manifest id
+  // used in config keys (e.g. "mayros-bluebubbles" -> "bluebubbles").
+  if (unscoped.startsWith("mayros-")) {
+    unscoped = unscoped.slice("mayros-".length);
+  }
 
   if (!params.hasMultipleExtensions) {
     return unscoped;
