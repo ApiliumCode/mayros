@@ -494,9 +494,12 @@ const semanticObservabilityPlugin = {
     // ========================================================================
 
     if (cfg.metrics.enabled && api.registerHttpRoute) {
-      api.registerHttpRoute(cfg.metrics.path, (_req, res) => {
-        res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-        res.end(metrics.toPrometheus());
+      api.registerHttpRoute({
+        path: cfg.metrics.path,
+        handler: (_req, res) => {
+          res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+          res.end(metrics.toPrometheus());
+        },
       });
       api.logger.info(`semantic-observability: metrics endpoint registered at ${cfg.metrics.path}`);
     }
