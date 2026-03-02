@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-lobster",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Lobster workflow tool plugin (typed pipelines + resumable approvals)",
   "license": "MIT",
   "type": "module",
