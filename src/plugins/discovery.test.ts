@@ -114,7 +114,7 @@ describe("discoverMayrosPlugins", () => {
     });
 
     const ids = candidates.map((c) => c.idHint);
-    expect(ids).toContain("mayros-voice-call");
+    expect(ids).toContain("voice-call");
   });
 
   it("treats configured directory paths as plugin packages", async () => {
@@ -137,7 +137,7 @@ describe("discoverMayrosPlugins", () => {
     });
 
     const ids = candidates.map((c) => c.idHint);
-    expect(ids).toContain("mayros-demo-plugin-dir");
+    expect(ids).toContain("demo-plugin-dir");
   });
   it("blocks extension entries that escape package directory", async () => {
     const stateDir = makeTempDir();
