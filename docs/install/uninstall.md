@@ -81,14 +81,14 @@ Use this if the gateway service keeps running but `mayros` is missing.
 
 ### macOS (launchd)
 
-Default label is `bot.molt.gateway` (or `bot.molt.<profile>`; legacy `com.mayros.*` may still exist):
+Default label is `ai.mayros.gateway` (or `ai.mayros.<profile>`; legacy `com.mayros.*` may still exist):
 
 ```bash
-launchctl bootout gui/$UID/bot.molt.gateway
-rm -f ~/Library/LaunchAgents/bot.molt.gateway.plist
+launchctl bootout gui/$UID/ai.mayros.gateway
+rm -f ~/Library/LaunchAgents/ai.mayros.gateway.plist
 ```
 
-If you used a profile, replace the label and plist name with `bot.molt.<profile>`. Remove any legacy `com.mayros.*` plists if present.
+If you used a profile, replace the label and plist name with `ai.mayros.<profile>`. Remove any legacy `com.mayros.*` plists if present.
 
 ### Linux (systemd user unit)
 
