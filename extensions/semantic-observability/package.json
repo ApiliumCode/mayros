@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-semantic-observability",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Mayros semantic observability plugin — structured tracing of agent decisions as RDF events",
   "type": "module",
