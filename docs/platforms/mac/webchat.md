@@ -24,7 +24,7 @@ agent (with a session switcher for other sessions).
   dist/Mayros.app/Contents/MacOS/Mayros --webchat
   ```
 
-- Logs: `./scripts/clawlog.sh` (subsystem `bot.molt`, category `WebChatSwiftUI`).
+- Logs: `./scripts/mayroslog.sh` (subsystem `ai.mayros`, category `WebChatSwiftUI`).
 
 ## How it’s wired
 

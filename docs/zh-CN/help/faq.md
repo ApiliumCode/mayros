@@ -2245,7 +2245,7 @@ Mayros 通过在启动时立即绑定 WebSocket 监听器来强制运行时锁�
 - 在每个配置文件配置中设置唯一的 `gateway.port`（或手动运行时传 `--port`）。
 - 安装每配置文件的服务：`mayros --profile <name> gateway install`。
 
-配置文件还会为服务名称添加后缀（`bot.molt.<profile>`；旧版 `com.mayros.*`、`mayros-gateway-<profile>.service`、`Mayros Gateway 网关 (<profile>)`）。
+配置文件还会为服务名称添加后缀（`ai.mayros.<profile>`；旧版 `com.mayros.*`、`mayros-gateway-<profile>.service`、`Mayros Gateway 网关 (<profile>)`）。
 完整指南：[多 Gateway 网关](/gateway/multiple-gateways)。
 
 ### "invalid handshake" / code 1008 是什么意思
