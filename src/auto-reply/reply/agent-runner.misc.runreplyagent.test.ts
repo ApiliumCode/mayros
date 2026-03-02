@@ -23,48 +23,27 @@ vi.mock("../../agents/model-fallback.js", () => ({
   }) => runWithModelFallbackMock(params),
 }));
 
-vi.mock("../../agents/pi-embedded.js", async () => {
-  const actual = await vi.importActual<typeof import("../../agents/pi-embedded.js")>(
-    "../../agents/pi-embedded.js",
-  );
-  return {
-    ...actual,
-    queueEmbeddedPiMessage: vi.fn().mockReturnValue(false),
-    runEmbeddedPiAgent: (params: unknown) => runEmbeddedPiAgentMock(params),
-  };
-});
+vi.mock("../../agents/pi-embedded.js", () => ({
+  queueEmbeddedPiMessage: vi.fn().mockReturnValue(false),
+  runEmbeddedPiAgent: (params: unknown) => runEmbeddedPiAgentMock(params),
+}));
 
-vi.mock("../../agents/cli-runner.js", async () => {
-  const actual = await vi.importActual<typeof import("../../agents/cli-runner.js")>(
-    "../../agents/cli-runner.js",
-  );
-  return {
-    ...actual,
-    runCliAgent: (params: unknown) => runCliAgentMock(params),
-  };
-});
+vi.mock("../../agents/cli-runner.js", () => ({
+  runCliAgent: (params: unknown) => runCliAgentMock(params),
+}));
 
-vi.mock("../../runtime.js", async () => {
-  const actual = await vi.importActual<typeof import("../../runtime.js")>("../../runtime.js");
-  return {
-    ...actual,
-    defaultRuntime: {
-      ...actual.defaultRuntime,
-      log: vi.fn(),
-      error: (...args: unknown[]) => runtimeErrorMock(...args),
-      exit: vi.fn(),
-    },
-  };
-});
+vi.mock("../../runtime.js", () => ({
+  defaultRuntime: {
+    log: vi.fn(),
+    error: (...args: unknown[]) => runtimeErrorMock(...args),
+    exit: vi.fn(),
+  },
+}));
 
-vi.mock("./queue.js", async () => {
-  const actual = await vi.importActual<typeof import("./queue.js")>("./queue.js");
-  return {
-    ...actual,
-    enqueueFollowupRun: vi.fn(),
-    scheduleFollowupDrain: vi.fn(),
-  };
-});
+vi.mock("./queue.js", () => ({
+  enqueueFollowupRun: vi.fn(),
+  scheduleFollowupDrain: vi.fn(),
+}));
 
 import { runReplyAgent } from "./agent-runner.js";
 
@@ -79,6 +58,13 @@ beforeEach(() => {
   runCliAgentMock.mockReset();
   runWithModelFallbackMock.mockReset();
   runtimeErrorMock.mockReset();
+
+  // Provide safe default return values so that tests which don't explicitly
+  // configure a return value still get a valid-shaped result instead of
+  // `undefined` (which would cause `runResult.payloads` / `runResult.meta`
+  // to throw).
+  runEmbeddedPiAgentMock.mockResolvedValue({ payloads: [], meta: {} });
+  runCliAgentMock.mockResolvedValue({ payloads: [], meta: {} });
 
   // Default: no provider switch; execute the chosen provider+model.
   runWithModelFallbackMock.mockImplementation(

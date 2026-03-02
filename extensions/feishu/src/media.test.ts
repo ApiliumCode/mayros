@@ -3,29 +3,40 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createFeishuClientMock = vi.hoisted(() => vi.fn());
-const resolveFeishuAccountMock = vi.hoisted(() => vi.fn());
-const normalizeFeishuTargetMock = vi.hoisted(() => vi.fn());
-const resolveReceiveIdTypeMock = vi.hoisted(() => vi.fn());
-const loadWebMediaMock = vi.hoisted(() => vi.fn());
-
 const fileCreateMock = vi.hoisted(() => vi.fn());
 const imageGetMock = vi.hoisted(() => vi.fn());
 const messageCreateMock = vi.hoisted(() => vi.fn());
 const messageResourceGetMock = vi.hoisted(() => vi.fn());
 const messageReplyMock = vi.hoisted(() => vi.fn());
+const loadWebMediaMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./client.js", () => ({
-  createFeishuClient: createFeishuClientMock,
+const defaultAccount = vi.hoisted(() => ({
+  configured: true,
+  accountId: "default",
+  config: {},
+  appId: "app_id",
+  appSecret: "app_secret",
+  domain: "feishu",
 }));
 
 vi.mock("./accounts.js", () => ({
-  resolveFeishuAccount: resolveFeishuAccountMock,
+  resolveFeishuAccount: vi.fn(() => defaultAccount),
+}));
+
+vi.mock("./client.js", () => ({
+  createFeishuClient: vi.fn(() => ({
+    im: {
+      file: { create: fileCreateMock },
+      image: { create: vi.fn(), get: imageGetMock },
+      message: { create: messageCreateMock, reply: messageReplyMock },
+      messageResource: { get: messageResourceGetMock },
+    },
+  })),
 }));
 
 vi.mock("./targets.js", () => ({
-  normalizeFeishuTarget: normalizeFeishuTargetMock,
-  resolveReceiveIdType: resolveReceiveIdTypeMock,
+  normalizeFeishuTarget: vi.fn(() => "ou_target"),
+  resolveReceiveIdType: vi.fn(() => "open_id"),
 }));
 
 vi.mock("./runtime.js", () => ({
@@ -41,36 +52,6 @@ import { downloadImageFeishu, downloadMessageResourceFeishu, sendMediaFeishu } f
 describe("sendMediaFeishu msg_type routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    resolveFeishuAccountMock.mockReturnValue({
-      configured: true,
-      accountId: "main",
-      config: {},
-      appId: "app_id",
-      appSecret: "app_secret",
-      domain: "feishu",
-    });
-
-    normalizeFeishuTargetMock.mockReturnValue("ou_target");
-    resolveReceiveIdTypeMock.mockReturnValue("open_id");
-
-    createFeishuClientMock.mockReturnValue({
-      im: {
-        file: {
-          create: fileCreateMock,
-        },
-        image: {
-          get: imageGetMock,
-        },
-        message: {
-          create: messageCreateMock,
-          reply: messageReplyMock,
-        },
-        messageResource: {
-          get: messageResourceGetMock,
-        },
-      },
-    });
 
     fileCreateMock.mockResolvedValue({
       code: 0,

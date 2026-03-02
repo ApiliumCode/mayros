@@ -354,11 +354,14 @@ export async function ensureLoaded(
               ? parseAbsoluteTimeMs(atRaw)
               : null;
       if (parsedAtMs !== null) {
-        sched.at = new Date(parsedAtMs).toISOString();
-        if ("atMs" in sched) {
-          delete sched.atMs;
+        const canonicalAt = new Date(parsedAtMs).toISOString();
+        if (sched.at !== canonicalAt || "atMs" in sched) {
+          sched.at = canonicalAt;
+          if ("atMs" in sched) {
+            delete sched.atMs;
+          }
+          mutated = true;
         }
-        mutated = true;
       }
 
       const everyMsRaw = sched.everyMs;
