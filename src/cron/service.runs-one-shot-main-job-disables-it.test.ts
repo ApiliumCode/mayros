@@ -192,7 +192,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 beforeEach(() => {
   fsState.entries.clear();
   fsState.nowMs = 0;
-  fsState.fixtureCount = 0;
+  // Do NOT reset fixtureCount: each test must use a unique storePath so that
+  // the module-level storeLocks Map in locked.ts does not chain on a still-
+  // pending lock from the previous test's onTimer() (fire-and-forget).
   ensureDir(fixturesRoot);
 });
 

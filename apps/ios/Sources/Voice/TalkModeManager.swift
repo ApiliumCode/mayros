@@ -92,7 +92,7 @@ final class TalkModeManager: NSObject {
     private var incrementalSpeechContext: IncrementalSpeechContext?
     private var incrementalSpeechDirective: TalkDirective?
 
-    private let logger = Logger(subsystem: "bot.molt", category: "TalkMode")
+    private let logger = Logger(subsystem: "ai.mayros", category: "TalkMode")
 
     init(allowSimulatorCapture: Bool = false) {
         self.allowSimulatorCapture = allowSimulatorCapture

@@ -1,15 +1,78 @@
 import type { Bot } from "grammy";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  getTelegramSendTestMocks,
-  importTelegramSendModule,
-  installTelegramSendTestHooks,
-} from "./send.test-harness.js";
 import { clearSentMessageCache, recordSentMessage, wasSentByBot } from "./sent-message-cache.js";
 
-installTelegramSendTestHooks();
+// ---------------------------------------------------------------------------
+// Mock setup — vi.hoisted + vi.mock must live in the test file so vitest can
+// hoist them above all imports. Placing them in a helper module (the old
+// send.test-harness.ts pattern) stopped working in vitest 4.x where mocks
+// declared in non-test modules are no longer hoisted/applied.
+// ---------------------------------------------------------------------------
 
-const { botApi, botCtorSpy, loadConfig, loadWebMedia } = getTelegramSendTestMocks();
+const { botApi, botCtorSpy } = vi.hoisted(() => ({
+  botApi: {
+    deleteMessage: vi.fn(),
+    editMessageText: vi.fn(),
+    sendMessage: vi.fn(),
+    sendPoll: vi.fn(),
+    sendPhoto: vi.fn(),
+    sendVoice: vi.fn(),
+    sendAudio: vi.fn(),
+    sendVideo: vi.fn(),
+    sendVideoNote: vi.fn(),
+    sendAnimation: vi.fn(),
+    setMessageReaction: vi.fn(),
+    sendSticker: vi.fn(),
+  },
+  botCtorSpy: vi.fn(),
+}));
+
+const { loadWebMedia } = vi.hoisted(() => ({
+  loadWebMedia: vi.fn(),
+}));
+
+const { loadConfig } = vi.hoisted(() => ({
+  loadConfig: vi.fn(() => ({})),
+}));
+
+vi.mock("../web/media.js", () => ({
+  loadWebMedia,
+}));
+
+vi.mock("grammy", () => ({
+  Bot: class {
+    api = botApi;
+    catch = vi.fn();
+    constructor(
+      public token: string,
+      public options?: {
+        client?: { fetch?: typeof fetch; timeoutSeconds?: number };
+      },
+    ) {
+      botCtorSpy(token, options);
+    }
+  },
+  InputFile: class {},
+  HttpError: class extends Error {},
+}));
+
+vi.mock("../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config/config.js")>();
+  return {
+    ...actual,
+    loadConfig,
+  };
+});
+
+beforeEach(() => {
+  loadConfig.mockReturnValue({});
+  loadWebMedia.mockReset();
+  botCtorSpy.mockReset();
+  for (const fn of Object.values(botApi)) {
+    fn.mockReset();
+  }
+});
+
 const {
   buildInlineKeyboard,
   createForumTopicTelegram,
@@ -18,7 +81,7 @@ const {
   sendMessageTelegram,
   sendPollTelegram,
   sendStickerTelegram,
-} = await importTelegramSendModule();
+} = await import("./send.js");
 
 async function expectChatNotFoundWithChatId(
   action: Promise<unknown>,
