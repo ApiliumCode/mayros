@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   expectSingleNpmInstallIgnoreScriptsCall,
@@ -12,7 +13,8 @@ import { isAddressInUseError } from "./gmail-watcher.js";
 const fixtureRoot = path.join(os.tmpdir(), `mayros-hook-install-${randomUUID()}`);
 let tempDirIndex = 0;
 
-const fixturesDir = path.resolve(process.cwd(), "test", "fixtures", "hooks-install");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesDir = path.resolve(__dirname, "..", "..", "test", "fixtures", "hooks-install");
 const zipHooksBuffer = fs.readFileSync(path.join(fixturesDir, "zip-hooks.zip"));
 const zipTraversalBuffer = fs.readFileSync(path.join(fixturesDir, "zip-traversal.zip"));
 const tarHooksBuffer = fs.readFileSync(path.join(fixturesDir, "tar-hooks.tar"));
