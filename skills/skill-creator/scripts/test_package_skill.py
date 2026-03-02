@@ -15,7 +15,7 @@ fake_quick_validate = types.ModuleType("quick_validate")
 fake_quick_validate.validate_skill = lambda _path: (True, "Skill is valid!")
 sys.modules["quick_validate"] = fake_quick_validate
 
-from package_skill import package_skill
+from package_skill import package_skill  # noqa: E402
 
 
 class TestPackageSkillSecurity(TestCase):
