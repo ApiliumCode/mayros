@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-imessage",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Mayros iMessage channel plugin",
   "type": "module",
