@@ -83,6 +83,7 @@ vendor/
 # Vendor build artifacts
 vendor/a2ui/renderers/lit/dist/
 src/canvas-host/a2ui/*.bundle.js
+!src/canvas-host/a2ui/a2ui.bundle.js
 src/canvas-host/a2ui/*.map
 .bundle.hash
 
@@ -109,6 +110,8 @@ apps/ios/LocalSigning.xcconfig
 docs/.local/
 IDENTITY.md
 USER.md
+!docs/reference/templates/IDENTITY.md
+!docs/reference/templates/USER.md
 *.tgz
 .worktrees/
 
