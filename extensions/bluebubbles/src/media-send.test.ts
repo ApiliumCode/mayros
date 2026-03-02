@@ -7,21 +7,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendBlueBubblesMedia } from "./media-send.js";
 import { setBlueBubblesRuntime } from "./runtime.js";
 
-const sendBlueBubblesAttachmentMock = vi.hoisted(() => vi.fn());
-const sendMessageBlueBubblesMock = vi.hoisted(() => vi.fn());
-const resolveBlueBubblesMessageIdMock = vi.hoisted(() => vi.fn((id: string) => id));
-
 vi.mock("./attachments.js", () => ({
-  sendBlueBubblesAttachment: sendBlueBubblesAttachmentMock,
+  sendBlueBubblesAttachment: vi.fn(),
 }));
 
 vi.mock("./send.js", () => ({
-  sendMessageBlueBubbles: sendMessageBlueBubblesMock,
+  sendMessageBlueBubbles: vi.fn(),
 }));
 
 vi.mock("./monitor.js", () => ({
-  resolveBlueBubblesMessageId: resolveBlueBubblesMessageIdMock,
+  resolveBlueBubblesMessageId: vi.fn((id: string) => id),
 }));
+
+// Import the mocked modules to obtain mock references after vi.mock has been applied.
+const { sendBlueBubblesAttachment } = await import("./attachments.js");
+const { sendMessageBlueBubbles } = await import("./send.js");
+const { resolveBlueBubblesMessageId } = await import("./monitor.js");
+
+const sendBlueBubblesAttachmentMock = vi.mocked(sendBlueBubblesAttachment);
+const sendMessageBlueBubblesMock = vi.mocked(sendMessageBlueBubbles);
+const resolveBlueBubblesMessageIdMock = vi.mocked(resolveBlueBubblesMessageId);
 
 type RuntimeMocks = {
   detectMime: ReturnType<typeof vi.fn>;

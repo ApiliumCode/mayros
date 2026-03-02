@@ -169,14 +169,12 @@ x-i18n:
 ## 工作区 + 模板
 
 - [Skills](/tools/skills)
-- [Skills Hub](/tools/skills-hub)
+- [Skills Hub](/tools/skillshub)
 - [Skills 配置](/tools/skills-config)
 - [默认 AGENTS](/reference/AGENTS.default)
 - [模板：AGENTS](/reference/templates/AGENTS)
 - [模板：BOOTSTRAP](/reference/templates/BOOTSTRAP)
-- [模板：HEARTBEAT](/reference/templates/HEARTBEAT)
 - [模板：IDENTITY](/reference/templates/IDENTITY)
-- [模板：SOUL](/reference/templates/SOUL)
 - [模板：TOOLS](/reference/templates/TOOLS)
 - [模板：USER](/reference/templates/USER)
 

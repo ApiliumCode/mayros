@@ -170,7 +170,7 @@ mayros logs --follow
 
 If you’re supervised:
 
-- macOS launchd (app-bundled LaunchAgent): `launchctl kickstart -k gui/$UID/bot.molt.gateway` (use `bot.molt.<profile>`; legacy `com.mayros.*` still works)
+- macOS launchd (app-bundled LaunchAgent): `launchctl kickstart -k gui/$UID/ai.mayros.gateway` (use `ai.mayros.<profile>`; legacy `com.mayros.*` still works)
 - Linux systemd user service: `systemctl --user restart mayros-gateway[-<profile>].service`
 - Windows (WSL2): `systemctl --user restart mayros-gateway[-<profile>].service`
   - `launchctl`/`systemctl` only work if the service is installed; otherwise run `mayros gateway install`.

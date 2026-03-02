@@ -665,7 +665,7 @@ mayros hooks info my-hook
 
 ```bash
 # macOS
-./scripts/clawlog.sh -f
+./scripts/mayroslog.sh -f
 
 # Other platforms
 tail -f ~/.mayros/gateway.log
@@ -788,7 +788,7 @@ mayros hooks info my-hook
 
 3. 检查 Gateway 网关日志中的错误：
    ```bash
-   ./scripts/clawlog.sh | grep hook
+   ./scripts/mayroslog.sh | grep hook
    ```
 
 ### 处理程序错误

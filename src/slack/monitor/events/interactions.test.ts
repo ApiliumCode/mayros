@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { registerSlackInteractionEvents } from "./interactions.js";
 
-const enqueueSystemEventMock = vi.fn();
+const { enqueueSystemEventMock } = vi.hoisted(() => ({
+  enqueueSystemEventMock: vi.fn(),
+}));
 
 vi.mock("../../../infra/system-events.js", () => ({
-  enqueueSystemEvent: (...args: unknown[]) => enqueueSystemEventMock(...args),
+  enqueueSystemEvent: enqueueSystemEventMock,
 }));
 
 type RegisteredHandler = (args: {
