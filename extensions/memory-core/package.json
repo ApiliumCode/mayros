@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-memory-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Mayros core memory search plugin",
   "type": "module",
