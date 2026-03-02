@@ -113,6 +113,7 @@ USER.md
 !docs/reference/templates/IDENTITY.md
 !docs/reference/templates/USER.md
 *.tgz
+!test/fixtures/**/*.tgz
 .worktrees/
 
 # local tooling
