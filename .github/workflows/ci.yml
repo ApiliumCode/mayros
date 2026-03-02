@@ -325,27 +325,37 @@ jobs:
             command: ./gradlew --no-daemon :app:assembleSideloadDebug
           - task: bundle-playstore
             command: ./gradlew --no-daemon :app:bundlePlaystoreRelease
+            requires_signing: true
     steps:
       - name: Checkout
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         uses: actions/checkout@v4
         with:
           submodules: false
 
+      - name: Skip (no signing secrets)
+        if: matrix.requires_signing && secrets.KEYSTORE_FILE == ''
+        run: echo "Skipping ${{ matrix.task }} — KEYSTORE_FILE secret not configured"
+
       - name: Setup Java
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Setup Android SDK
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: false
 
       - name: Setup Gradle
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install Android SDK packages
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager --install \
@@ -353,6 +363,17 @@ jobs:
             "platforms;android-36" \
             "build-tools;36.0.0"
 
+      - name: Decode keystore
+        if: matrix.requires_signing && secrets.KEYSTORE_FILE != ''
+        working-directory: apps/android/app
+        run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > release.keystore
+
       - name: Run Android ${{ matrix.task }}
+        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
         working-directory: apps/android
         run: ${{ matrix.command }}
+        env:
+          KEYSTORE_FILE: ${{ matrix.requires_signing && 'release.keystore' || '' }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
