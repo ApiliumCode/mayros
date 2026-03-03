@@ -360,6 +360,8 @@ export type PluginHookBeforeAgentStartEvent = {
   prompt: string;
   /** Optional because legacy hook can run in pre-session phase. */
   messages?: unknown[];
+  /** Loaded skill entries, available only in the per-attempt phase. */
+  skills?: Array<{ name: string; dir: string; frontmatter?: Record<string, string> }>;
 };
 
 export type PluginHookBeforeAgentStartResult = PluginHookBeforePromptBuildResult &
