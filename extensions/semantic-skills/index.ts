@@ -797,26 +797,24 @@ const semanticSkillsPlugin = {
     // ========================================================================
 
     // Hook: before_agent_start — detect semantic skills, pre-fetch declared queries
-    api.on("before_agent_start", async (event) => {
+    api.on("before_agent_start", async (event, _ctx) => {
       if (!(await ensureCortex())) return;
 
       // Scan for active semantic skills from the event context
-      const skills = (event as Record<string, unknown>).skills;
-      if (!Array.isArray(skills)) return;
+      const skills = event.skills;
+      if (!skills || skills.length === 0) return;
 
       const contextBlocks: string[] = [];
 
       for (const skill of skills) {
-        if (!skill || typeof skill !== "object") continue;
-        const skillObj = skill as Record<string, unknown>;
-        const frontmatter = skillObj.frontmatter as Record<string, string> | undefined;
+        const frontmatter = skill.frontmatter;
         if (!frontmatter) continue;
 
         const manifest = parseSemanticManifest(frontmatter);
         if (!manifest) continue;
 
-        const skillName = (skillObj.name as string) ?? "unknown";
-        const skillDir = (skillObj.dir as string) ?? "";
+        const skillName = skill.name ?? "unknown";
+        const skillDir = skill.dir ?? "";
 
         // Register this semantic skill
         activeManifests.set(skillName, manifest);
