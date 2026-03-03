@@ -6,11 +6,18 @@ import {
 
 export type { CortexConfig };
 
+export type ProjectMemoryConfig = {
+  enabled: boolean;
+  autoDetect: boolean;
+  maxConventions: number;
+};
+
 export type SemanticMemoryConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
   fallbackToMarkdown: boolean;
   autoConsolidate: boolean;
+  projectMemory: ProjectMemoryConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
@@ -25,7 +32,7 @@ export const semanticMemoryConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["cortex", "agentNamespace", "fallbackToMarkdown", "autoConsolidate"],
+      ["cortex", "agentNamespace", "fallbackToMarkdown", "autoConsolidate", "projectMemory"],
       "semantic memory config",
     );
 
@@ -39,11 +46,25 @@ export const semanticMemoryConfigSchema = {
       );
     }
 
+    // Parse projectMemory sub-config
+    const pmRaw = cfg.projectMemory as Record<string, unknown> | undefined;
+    const projectMemory: ProjectMemoryConfig = {
+      enabled: pmRaw?.enabled !== false,
+      autoDetect: pmRaw?.autoDetect !== false,
+      maxConventions:
+        typeof pmRaw?.maxConventions === "number" &&
+        pmRaw.maxConventions > 0 &&
+        pmRaw.maxConventions <= 1000
+          ? pmRaw.maxConventions
+          : 200,
+    };
+
     return {
       cortex,
       agentNamespace,
       fallbackToMarkdown: cfg.fallbackToMarkdown !== false,
       autoConsolidate: cfg.autoConsolidate !== false,
+      projectMemory,
     };
   },
   uiHints: {
@@ -88,6 +109,19 @@ export const semanticMemoryConfigSchema = {
     autoConsolidate: {
       label: "Auto-Consolidate",
       help: "Automatically consolidate short-term to long-term memory on compaction",
+    },
+    "projectMemory.enabled": {
+      label: "Project Memory",
+      help: "Enable project-level convention and decision tracking",
+    },
+    "projectMemory.autoDetect": {
+      label: "Auto-Detect Conventions",
+      help: "Automatically detect conventions and decisions from conversation",
+    },
+    "projectMemory.maxConventions": {
+      label: "Max Conventions",
+      help: "Maximum number of project conventions to store (default: 200)",
+      advanced: true,
     },
   },
 };
