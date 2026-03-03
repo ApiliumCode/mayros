@@ -330,9 +330,13 @@ function registerLazyCommand(program: Command, entry: SubCliEntry) {
 
 export function registerSubCliCommands(program: Command, argv: string[] = process.argv) {
   if (shouldEagerRegisterSubcommands(argv)) {
-    for (const entry of entries) {
-      void entry.register(program);
-    }
+    void Promise.allSettled(entries.map((entry) => entry.register(program))).then((results) => {
+      for (const result of results) {
+        if (result.status === "rejected") {
+          console.error("[mayros] subcli registration failed:", result.reason);
+        }
+      }
+    });
     return;
   }
   const primary = getPrimaryCommand(argv);
