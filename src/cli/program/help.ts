@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { defaultRuntime } from "../../runtime.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { isRich, theme } from "../../terminal/theme.js";
 import { escapeRegExp } from "../../utils.js";
@@ -101,7 +102,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     hasRootVersionAlias(process.argv)
   ) {
     console.log(ctx.programVersion);
-    process.exit(0);
+    defaultRuntime.exit(0);
   }
 
   program.addHelpText("beforeAll", () => {
