@@ -368,6 +368,15 @@ const entries: SubCliEntry[] = [
       mod.registerTasksCli(program);
     },
   },
+  {
+    name: "doctor",
+    description: "Diagnostic checks — runtime, Cortex, plugins, security, config",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../doctor-cli.js");
+      mod.registerDoctorCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
