@@ -9,10 +9,10 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative, extname } from "node:path";
-import type { CortexClient, CreateTripleRequest } from "../shared/cortex-client.js";
+import type { CortexClient } from "../shared/cortex-client.js";
 import type { CodeIndexerConfig } from "./config.js";
-import { scanFileContent, type FileScanResult } from "./scanner.js";
-import { codePredicate, fileSubject, fileScanToTriples, fileSubjects } from "./rdf-mapper.js";
+import { scanFileContent } from "./scanner.js";
+import { codePredicate, fileSubject, fileScanToTriples } from "./rdf-mapper.js";
 
 // ============================================================================
 // Types
@@ -123,7 +123,7 @@ async function getStoredHashes(client: CortexClient, ns: string): Promise<Map<st
     for (const match of result.matches) {
       // Subject: {ns}:code:file:{path}, Object: hash string
       const path = match.subject.replace(`${ns}:code:file:`, "");
-      const hash = typeof match.object === "string" ? match.object : String(match.object);
+      const hash = typeof match.object === "string" ? match.object : JSON.stringify(match.object);
       hashes.set(path, hash);
     }
   } catch {
