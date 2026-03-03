@@ -53,50 +53,56 @@ export class DelegationEngine {
       limit: 50,
     });
 
-    // For each matching memory subject, fetch its triples
+    // For each matching memory subject, fetch its triples in batches of 5
     const relevantTriples: Triple[] = [];
     const relatedMemories: string[] = [];
     const taskLower = task.toLowerCase();
     const taskWords = taskLower.split(/\s+/).filter((w) => w.length > 2);
+    const CONTEXT_BATCH_SIZE = 5;
 
-    for (const match of result.matches) {
-      const memSubject = match.subject;
-      const tripleResult = await this.client.listTriples({
-        subject: memSubject,
-        limit: 20,
-      });
+    for (let i = 0; i < result.matches.length; i += CONTEXT_BATCH_SIZE) {
+      if (relevantTriples.length >= 100) break;
 
-      // Check relevance: does any triple's text contain task keywords?
-      let isRelevant = false;
-      for (const t of tripleResult.triples) {
-        const objStr = String(
-          typeof t.object === "object" && t.object !== null && "node" in t.object
-            ? t.object.node
-            : t.object,
-        ).toLowerCase();
+      const batch = result.matches.slice(i, i + CONTEXT_BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map((match) => this.client.listTriples({ subject: match.subject, limit: 20 })),
+      );
 
-        for (const word of taskWords) {
-          if (objStr.includes(word)) {
-            isRelevant = true;
-            break;
+      for (let j = 0; j < batch.length; j++) {
+        if (relevantTriples.length >= 100) break;
+
+        const memSubject = batch[j].subject;
+        const tripleResult = batchResults[j];
+
+        // Check relevance: does any triple's text contain task keywords?
+        let isRelevant = false;
+        for (const t of tripleResult.triples) {
+          const objStr = String(
+            typeof t.object === "object" && t.object !== null && "node" in t.object
+              ? t.object.node
+              : t.object,
+          ).toLowerCase();
+
+          for (const word of taskWords) {
+            if (objStr.includes(word)) {
+              isRelevant = true;
+              break;
+            }
+          }
+          if (isRelevant) break;
+        }
+
+        if (isRelevant) {
+          for (const t of tripleResult.triples) {
+            relevantTriples.push(this.tripleToSimple(t));
+          }
+          // Extract memory ID from subject: {ns}:memory:{uuid}
+          const memPrefix = `${this.ns}:memory:`;
+          if (memSubject.startsWith(memPrefix)) {
+            relatedMemories.push(memSubject.slice(memPrefix.length));
           }
         }
-        if (isRelevant) break;
       }
-
-      if (isRelevant) {
-        for (const t of tripleResult.triples) {
-          relevantTriples.push(this.tripleToSimple(t));
-        }
-        // Extract memory ID from subject: {ns}:memory:{uuid}
-        const memPrefix = `${this.ns}:memory:`;
-        if (memSubject.startsWith(memPrefix)) {
-          relatedMemories.push(memSubject.slice(memPrefix.length));
-        }
-      }
-
-      // Limit context size
-      if (relevantTriples.length >= 100) break;
     }
 
     return {
@@ -148,6 +154,14 @@ export class DelegationEngine {
   }
 
   /**
+   * Remove injected context for a child session that has ended.
+   * Prevents memory leaks from accumulated delegation contexts.
+   */
+  removeInjectedContext(childSessionKey: string): void {
+    this.injectedContexts.delete(childSessionKey);
+  }
+
+  /**
    * Merge results from a child agent's namespace back into the parent's namespace.
    * Copies new triples from the child run into the parent's knowledge graph,
    * skipping duplicates.
@@ -174,7 +188,24 @@ export class DelegationEngine {
       limit: 500,
     });
 
-    const parentSubjects = new Set(parentResult.matches.map((m) => m.subject));
+    const parentSubjects = parentResult.matches.map((m) => m.subject);
+
+    // Pre-fetch all parent text values to avoid N+1 queries during dedup
+    const parentTextSet = new Set<string>();
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < parentSubjects.length; i += BATCH_SIZE) {
+      const batch = parentSubjects.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map((subj) => this.client.listTriples({ subject: subj, limit: 20 })),
+      );
+      for (const result of results) {
+        for (const t of result.triples) {
+          if (t.predicate === `${this.ns}:memory:text`) {
+            parentTextSet.add(String(t.object));
+          }
+        }
+      }
+    }
 
     let added = 0;
     let skipped = 0;
@@ -200,20 +231,7 @@ export class DelegationEngine {
       }
 
       // Check if parent already has the same text (simple dedup)
-      let isDuplicate = false;
-      for (const parentSubj of parentSubjects) {
-        const parentTriples = await this.client.listTriples({
-          subject: parentSubj,
-          limit: 20,
-        });
-        for (const pt of parentTriples.triples) {
-          if (pt.predicate === `${this.ns}:memory:text` && String(pt.object) === textValue) {
-            isDuplicate = true;
-            break;
-          }
-        }
-        if (isDuplicate) break;
-      }
+      const isDuplicate = parentTextSet.has(textValue);
 
       if (isDuplicate) {
         skipped++;
