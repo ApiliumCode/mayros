@@ -153,7 +153,6 @@ export function removeWorktree(opts: { repoRoot: string; worktreePath: string })
   gitExec(repoRoot, ["worktree", "remove", worktreePath, "--force"]);
 
   // Clean up the branch if it was a mayros worktree branch
-  const entries = listWorktrees(repoRoot);
   const relPath = path.relative(repoRoot, worktreePath);
   const name = path.basename(relPath);
   const branchName = `${BRANCH_PREFIX}${name}`;
