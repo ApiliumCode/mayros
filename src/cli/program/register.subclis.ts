@@ -341,6 +341,33 @@ const entries: SubCliEntry[] = [
       mod.registerMailboxCli(program);
     },
   },
+  {
+    name: "dashboard",
+    description: "Team dashboard — real-time agent status and activity",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../dashboard-cli.js");
+      mod.registerDashboardCli(program);
+    },
+  },
+  {
+    name: "session",
+    description: "Session fork/rewind — checkpoint, fork, and rewind agent sessions",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../fork-cli.js");
+      mod.registerSessionCli(program);
+    },
+  },
+  {
+    name: "tasks",
+    description: "Background tasks — list, inspect, and manage background agent tasks",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../tasks-cli.js");
+      mod.registerTasksCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
