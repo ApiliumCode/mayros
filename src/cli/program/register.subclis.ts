@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import type { MayrosConfig } from "../../config/config.js";
 import { isTruthyEnvValue } from "../../infra/env.js";
+import { defaultRuntime } from "../../runtime.js";
 import { getPrimaryCommand, hasHelpOrVersion } from "../argv.js";
 import { reparseProgramFromActionArgs } from "./action-reparse.js";
 
@@ -23,7 +24,7 @@ const shouldRegisterPrimaryOnly = (argv: string[]) => {
   return true;
 };
 
-const shouldEagerRegisterSubcommands = (_argv: string[]) => {
+const shouldEagerRegisterSubcommands = () => {
   return isTruthyEnvValue(process.env.MAYROS_DISABLE_LAZY_SUBCOMMANDS);
 };
 
@@ -329,11 +330,11 @@ function registerLazyCommand(program: Command, entry: SubCliEntry) {
 }
 
 export function registerSubCliCommands(program: Command, argv: string[] = process.argv) {
-  if (shouldEagerRegisterSubcommands(argv)) {
+  if (shouldEagerRegisterSubcommands()) {
     void Promise.allSettled(entries.map((entry) => entry.register(program))).then((results) => {
       for (const result of results) {
         if (result.status === "rejected") {
-          console.error("[mayros] subcli registration failed:", result.reason);
+          defaultRuntime.error(`[mayros] subcli registration failed: ${String(result.reason)}`);
         }
       }
     });
