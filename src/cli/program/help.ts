@@ -40,7 +40,11 @@ const EXAMPLES = [
   ],
 ] as const;
 
-export function configureProgramHelp(program: Command, ctx: ProgramContext) {
+export function configureProgramHelp(
+  program: Command,
+  ctx: ProgramContext,
+  argv: string[] = process.argv,
+) {
   program
     .name(CLI_NAME)
     .description("")
@@ -96,11 +100,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     outputError: (str, write) => write(theme.error(str)),
   });
 
-  if (
-    hasFlag(process.argv, "-V") ||
-    hasFlag(process.argv, "--version") ||
-    hasRootVersionAlias(process.argv)
-  ) {
+  if (hasFlag(argv, "-V") || hasFlag(argv, "--version") || hasRootVersionAlias(argv)) {
     console.log(ctx.programVersion);
     defaultRuntime.exit(0);
   }

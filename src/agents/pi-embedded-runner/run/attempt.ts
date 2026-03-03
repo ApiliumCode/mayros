@@ -954,6 +954,11 @@ export async function runEmbeddedAttempt(
                 {
                   prompt: params.prompt,
                   messages: activeSession.messages,
+                  skills: skillEntries?.map((e) => ({
+                    name: e.skill.name,
+                    dir: e.skill.baseDir,
+                    frontmatter: e.frontmatter,
+                  })),
                 },
                 hookCtx,
               )
