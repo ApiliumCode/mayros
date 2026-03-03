@@ -8,7 +8,13 @@ import { ensureMayrosCliOnPath } from "../infra/path-env.js";
 import { assertSupportedRuntime } from "../infra/runtime-guard.js";
 import { installUnhandledRejectionHandler } from "../infra/unhandled-rejections.js";
 import { enableConsoleCapture } from "../logging.js";
-import { getCommandPath, getPrimaryCommand, hasHelpOrVersion } from "./argv.js";
+import {
+  getCommandPath,
+  getFlagValue,
+  getPrimaryCommand,
+  hasFlag,
+  hasHelpOrVersion,
+} from "./argv.js";
 import { tryRouteCli } from "./route.js";
 import { normalizeWindowsArgv } from "./windows-argv.js";
 
@@ -71,6 +77,24 @@ export async function runCli(argv: string[] = process.argv) {
 
   // Enforce the minimum supported runtime before doing any work.
   assertSupportedRuntime();
+
+  // Headless mode: -p / --prompt bypasses TUI and Commander entirely.
+  const promptFlagValue =
+    getFlagValue(normalizedArgv, "-p") ?? getFlagValue(normalizedArgv, "--prompt");
+  if (promptFlagValue !== undefined) {
+    const { runHeadless } = await import("./headless-cli.js");
+    await runHeadless({
+      prompt: promptFlagValue ?? "",
+      json: hasFlag(normalizedArgv, "--json"),
+      session: getFlagValue(normalizedArgv, "--session") ?? undefined,
+      url: getFlagValue(normalizedArgv, "--url") ?? undefined,
+      token: getFlagValue(normalizedArgv, "--token") ?? undefined,
+      password: getFlagValue(normalizedArgv, "--password") ?? undefined,
+      thinking: getFlagValue(normalizedArgv, "--thinking") ?? undefined,
+      deliver: hasFlag(normalizedArgv, "--deliver"),
+    });
+    return;
+  }
 
   if (await tryRouteCli(normalizedArgv)) {
     return;
