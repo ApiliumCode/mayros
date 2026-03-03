@@ -41,6 +41,7 @@ import { CompactionExtractor } from "./compaction-extractor.js";
 import { RulesEngine } from "./rules-engine.js";
 import { AgentMemory } from "./agent-memory.js";
 import { ContextualAwareness } from "./contextual-awareness.js";
+import { findMarkdownAgent } from "../../src/agents/markdown-agents.js";
 
 // ============================================================================
 // Safety
@@ -1470,7 +1471,15 @@ const semanticMemoryPlugin = {
         }
 
         // Agent persistent memory: auto-capture key learnings
-        if (cfg.agentMemory.enabled && cfg.agentMemory.autoCapture && (await ensureCortex())) {
+        // Only capture if global config allows AND agent has memory:true in frontmatter
+        const agentDef = findMarkdownAgent(agentId);
+        const agentMemoryEnabled = agentDef?.memory ?? false;
+        if (
+          cfg.agentMemory.enabled &&
+          cfg.agentMemory.autoCapture &&
+          agentMemoryEnabled &&
+          (await ensureCortex())
+        ) {
           let agentStored = 0;
           for (const text of texts.slice(0, 3)) {
             const knowledge = detectProjectKnowledge(text);
@@ -1597,6 +1606,38 @@ const semanticMemoryPlugin = {
         }
       } catch (err) {
         api.logger.warn(`memory-semantic: pre-compaction extract failed: ${String(err)}`);
+      }
+    });
+
+    // Before tool call: rules engine can block tool usage
+    api.on("before_tool_call", async (event, ctx) => {
+      if (!cfg.rules.enabled) return;
+      if (!(await ensureCortex())) return;
+
+      try {
+        const scope = ctx.agentId ? "agent" : "global";
+        const target = ctx.agentId ?? undefined;
+        const rules = await rulesEngine.resolveRules({ scope, target });
+
+        for (const rule of rules) {
+          const lower = rule.content.toLowerCase();
+          const toolLower = event.toolName.toLowerCase();
+          // Check if rule explicitly blocks this tool
+          if (
+            (lower.includes("block") || lower.includes("deny") || lower.includes("forbid")) &&
+            lower.includes(toolLower)
+          ) {
+            api.logger.warn(
+              `memory-semantic: tool "${event.toolName}" blocked by rule: ${rule.content}`,
+            );
+            return {
+              block: true,
+              blockReason: `Blocked by rule [${rule.scope}]: ${rule.content}`,
+            };
+          }
+        }
+      } catch {
+        // Non-fatal: rules check failed, allow tool
       }
     });
 
