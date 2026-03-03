@@ -10,8 +10,8 @@
   "publisher": "apilium",
   "main": "./dist/extension.js",
   "scripts": {
-    "build": "node esbuild.config.mjs",
-    "watch": "node esbuild.config.mjs --watch",
+    "build": "tsx esbuild.config.mts",
+    "watch": "tsx esbuild.config.mts --watch",
     "test": "vitest run",
     "package": "vsce package"
   },
@@ -108,7 +108,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "icon": "assets/icon.png",
+  "icon": "assets/icon.svg",
   "engines": {
     "vscode": "^1.96.0"
   }

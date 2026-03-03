@@ -1,0 +1,108 @@
+/* Trace panel styles — Mayros VSCode extension */
+
+.trace-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.trace-header {
+  padding: 4px 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.trace-header input[type="text"] {
+  flex: 1;
+  padding: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+.trace-header input[type="number"] {
+  width: 60px;
+  padding: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+.trace-header button {
+  padding: 4px 12px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.trace-header button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.event-count {
+  font-size: 0.85em;
+  opacity: 0.7;
+  padding: 2px 0;
+}
+
+.event-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.event-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.event-table th {
+  text-align: left;
+  padding: 4px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+}
+
+.event-table td {
+  padding: 4px;
+}
+
+.event-table tr {
+  cursor: pointer;
+}
+
+.event-table tr:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.event-table__id {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+.event-detail {
+  height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+  margin-top: 4px;
+  padding: 8px;
+  display: none;
+}
+
+.event-detail--visible {
+  display: block;
+}
+
+.event-detail pre {
+  background: var(--vscode-textBlockQuote-background);
+  padding: 8px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85em;
+}
