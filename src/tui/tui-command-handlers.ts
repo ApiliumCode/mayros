@@ -5,6 +5,7 @@ import {
   normalizeUsageDisplay,
   resolveResponseUsageMode,
 } from "../auto-reply/thinking.js";
+import { expandMarkdownCommand, findMarkdownCommand } from "../commands/markdown-commands.js";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
@@ -455,9 +456,17 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         tui.stop();
         process.exit(0);
         break;
-      default:
-        await sendMessage(raw);
+      default: {
+        // Check for user-defined markdown commands before sending raw
+        const mdCmd = findMarkdownCommand(name);
+        if (mdCmd) {
+          const expanded = expandMarkdownCommand(mdCmd, args);
+          await sendMessage(expanded);
+        } else {
+          await sendMessage(raw);
+        }
         break;
+      }
     }
     tui.requestRender();
   };

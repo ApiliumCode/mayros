@@ -1,6 +1,7 @@
 import type { SlashCommand } from "@mariozechner/pi-tui";
 import { listChatCommands, listChatCommandsForConfig } from "../auto-reply/commands-registry.js";
 import { formatThinkingLevels, listThinkingLevelLabels } from "../auto-reply/thinking.js";
+import { discoverMarkdownCommands } from "../commands/markdown-commands.js";
 import type { MayrosConfig } from "../config/types.js";
 
 const VERBOSE_LEVELS = ["on", "off"];
@@ -135,12 +136,24 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     }
   }
 
+  // Discover user-defined markdown commands from .mayros/commands/
+  for (const mdCmd of discoverMarkdownCommands()) {
+    if (seen.has(mdCmd.name)) {
+      continue;
+    }
+    seen.add(mdCmd.name);
+    const desc = mdCmd.argumentHint
+      ? `${mdCmd.description} (${mdCmd.argumentHint})`
+      : mdCmd.description;
+    commands.push({ name: mdCmd.name, description: desc });
+  }
+
   return commands;
 }
 
 export function helpText(options: SlashCommandOptions = {}): string {
   const thinkLevels = formatThinkingLevels(options.provider, options.model, "|");
-  return [
+  const lines = [
     "Slash commands:",
     "/help",
     "/commands",
@@ -159,5 +172,17 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/abort",
     "/settings",
     "/exit",
-  ].join("\n");
+  ];
+
+  // Append user-defined markdown commands
+  const mdCommands = discoverMarkdownCommands();
+  if (mdCommands.length > 0) {
+    lines.push("", "Custom commands (.mayros/commands/):");
+    for (const cmd of mdCommands) {
+      const hint = cmd.argumentHint ? ` ${cmd.argumentHint}` : "";
+      lines.push(`/${cmd.name}${hint} — ${cmd.description}`);
+    }
+  }
+
+  return lines.join("\n");
 }
