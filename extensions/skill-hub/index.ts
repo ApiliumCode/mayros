@@ -422,24 +422,20 @@ const skillHubPlugin = {
     // ========================================================================
 
     // Hook: before_agent_start — warn or block unsigned skills
-    api.on("before_agent_start", async (event) => {
+    api.on("before_agent_start", async (event, _ctx) => {
       if (!cfg.verification.requireSignature && !cfg.verification.blockUnsigned) return;
 
-      const skills = (event as Record<string, unknown>).skills;
-      if (!Array.isArray(skills)) return;
+      const skills = event.skills;
+      if (!skills || skills.length === 0) return;
 
       const unsigned: string[] = [];
       for (const skill of skills) {
-        if (!skill || typeof skill !== "object") continue;
-        const skillObj = skill as Record<string, unknown>;
-        const name = skillObj.name as string;
-        const dir = skillObj.dir as string;
-        if (!dir) continue;
+        if (!skill.dir) continue;
 
         try {
-          await readFile(join(dir, "SKILL.sig"), "utf-8");
+          await readFile(join(skill.dir, "SKILL.sig"), "utf-8");
         } catch {
-          unsigned.push(name);
+          unsigned.push(skill.name);
         }
       }
 
