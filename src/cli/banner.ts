@@ -131,3 +131,7 @@ export function emitCliBanner(version: string, options: BannerOptions = {}) {
 export function hasEmittedCliBanner(): boolean {
   return bannerEmitted;
 }
+
+export function resetBannerEmittedForTest(): void {
+  bannerEmitted = false;
+}
