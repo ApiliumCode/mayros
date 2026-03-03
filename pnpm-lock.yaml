@@ -383,7 +383,11 @@ importers:
         specifier: workspace:*
         version: link:../..
 
-  extensions/llm-task: {}
+  extensions/llm-task:
+    devDependencies:
+      '@apilium/mayros':
+        specifier: workspace:*
+        version: link:../..
 
   extensions/lobster:
     dependencies:
@@ -492,7 +496,11 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
-  extensions/open-prose: {}
+  extensions/open-prose:
+    devDependencies:
+      '@apilium/mayros':
+        specifier: workspace:*
+        version: link:../..
 
   extensions/semantic-observability:
     dependencies:
@@ -525,6 +533,9 @@ importers:
       '@sinclair/typebox':
         specifier: 0.34.48
         version: 0.34.48
+      semver:
+        specifier: ^7.6.0
+        version: 7.7.4
     devDependencies:
       '@apilium/mayros':
         specifier: workspace:*

@@ -1,4 +1,4 @@
-import type { MayrosPluginApi } from "../../src/plugins/types.js";
+import type { MayrosPluginApi } from "mayros/plugin-sdk";
 
 export default function register(_api: MayrosPluginApi) {
   // OpenProse is delivered via plugin-shipped skills.

@@ -11,7 +11,7 @@
     "@apilium/mayros": "workspace:*"
   },
   "peerDependencies": {
-    "@apilium/mayros": ">=2026.1.26"
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [
