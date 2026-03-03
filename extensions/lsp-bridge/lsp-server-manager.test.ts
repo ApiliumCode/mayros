@@ -8,6 +8,7 @@ import type { ChildProcess } from "node:child_process";
 // ============================================================================
 
 let mockSpawnResult: MockChildProcess;
+let allMocks: MockChildProcess[] = [];
 
 class MockStdin extends EventEmitter {
   written: Buffer[] = [];
@@ -32,14 +33,44 @@ class MockChildProcess extends EventEmitter {
     return true;
   }
 
-  // Helper: simulate a JSON-RPC response
+  /** Parse the last JSON-RPC request id from stdin writes. */
+  lastRequestId(): number {
+    for (let i = this.stdin.written.length - 1; i >= 0; i--) {
+      const raw = this.stdin.written[i].toString();
+      const bodyStart = raw.indexOf("\r\n\r\n");
+      if (bodyStart < 0) continue;
+      try {
+        const body = JSON.parse(raw.slice(bodyStart + 4)) as { id?: number };
+        if (typeof body.id === "number") return body.id;
+      } catch {
+        // skip
+      }
+    }
+    return -1;
+  }
+
+  /** Simulate a JSON-RPC response using the last request id. */
+  respondOk(result: unknown): void {
+    const id = this.lastRequestId();
+    this.sendResponse(id, result);
+  }
+
+  /** Simulate a JSON-RPC response with explicit id. */
   sendResponse(id: number, result: unknown): void {
     const body = JSON.stringify({ jsonrpc: "2.0", id, result });
     const message = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
     this.stdout.emit("data", Buffer.from(message));
   }
 
-  // Helper: simulate a JSON-RPC error response
+  /** Simulate a JSON-RPC error response using the last request id. */
+  respondError(code: number, message: string): void {
+    const id = this.lastRequestId();
+    const body = JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
+    const msg = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${msg}`;
+    this.stdout.emit("data", Buffer.from(msg));
+  }
+
+  /** Simulate a JSON-RPC error response with explicit id. */
   sendError(id: number, code: number, message: string): void {
     const body = JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
     const msg = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
@@ -50,6 +81,7 @@ class MockChildProcess extends EventEmitter {
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(() => {
     mockSpawnResult = new MockChildProcess();
+    allMocks.push(mockSpawnResult);
     return mockSpawnResult as unknown as ChildProcess;
   }),
 }));
@@ -73,20 +105,24 @@ describe("LspServerManager", () => {
   });
 
   afterEach(async () => {
+    // Kill all mock processes so stopAll doesn't wait for shutdown timeout
+    for (const m of allMocks) {
+      if (m.exitCode === null) m.kill();
+    }
+    allMocks = [];
     await manager.stopAll();
   });
 
   it("start spawns process with correct command/args", async () => {
-    const spawn = await import("node:child_process").then((m) => m.spawn);
+    const spawnFn = (await import("node:child_process")).spawn;
     const startPromise = manager.start(tsConfig);
 
-    // Respond to initialize request
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
 
     await startPromise;
 
-    expect(spawn).toHaveBeenCalledWith(
+    expect(spawnFn).toHaveBeenCalledWith(
       "typescript-language-server",
       ["--stdio"],
       expect.objectContaining({ stdio: ["pipe", "pipe", "pipe"] }),
@@ -97,11 +133,10 @@ describe("LspServerManager", () => {
     const startPromise = manager.start(tsConfig);
 
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
 
     await startPromise;
 
-    // Check that stdin received initialize request
     expect(mockSpawnResult.stdin.written.length).toBeGreaterThan(0);
     const firstWrite = mockSpawnResult.stdin.written[0].toString();
     expect(firstWrite).toContain("initialize");
@@ -112,7 +147,7 @@ describe("LspServerManager", () => {
     const startPromise = manager.start(tsConfig);
 
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
 
     await startPromise;
     expect(manager.isRunning("typescript")).toBe(true);
@@ -125,15 +160,14 @@ describe("LspServerManager", () => {
   it("stop sends shutdown + exit", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     const proc = mockSpawnResult;
     const stopPromise = manager.stop("typescript");
 
-    // Respond to shutdown request
     await new Promise((resolve) => setTimeout(resolve, 10));
-    proc.sendResponse(2, null);
+    proc.respondOk(null);
 
     await stopPromise;
     expect(manager.isRunning("typescript")).toBe(false);
@@ -142,7 +176,7 @@ describe("LspServerManager", () => {
   it("sendRequest with timeout", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     // Send a request that never gets a response
@@ -154,14 +188,15 @@ describe("LspServerManager", () => {
   it("sendRequest handles JSON-RPC error response", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     const proc = mockSpawnResult;
     const requestPromise = manager.sendRequest("typescript", "textDocument/hover", {});
 
     await new Promise((resolve) => setTimeout(resolve, 10));
-    proc.sendError(2, -32600, "Invalid request");
+    const reqId = proc.lastRequestId();
+    proc.sendError(reqId, -32600, "Invalid request");
 
     await expect(requestPromise).rejects.toThrow("LSP error -32600: Invalid request");
   });
@@ -170,8 +205,11 @@ describe("LspServerManager", () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
 
+    // Get the actual request id
+    const reqId = mockSpawnResult.lastRequestId();
+
     // Send response in two chunks
-    const body = JSON.stringify({ jsonrpc: "2.0", id: 1, result: { capabilities: {} } });
+    const body = JSON.stringify({ jsonrpc: "2.0", id: reqId, result: { capabilities: {} } });
     const message = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
     const midpoint = Math.floor(message.length / 2);
 
@@ -185,7 +223,7 @@ describe("LspServerManager", () => {
   it("double start is idempotent", async () => {
     const startPromise1 = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise1;
 
     // Second start should be idempotent
@@ -196,7 +234,7 @@ describe("LspServerManager", () => {
   it("process crash sets isRunning to false", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     // Simulate crash
@@ -209,7 +247,7 @@ describe("LspServerManager", () => {
   it("getStatus returns all servers", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     const status = manager.getStatus();
@@ -220,7 +258,7 @@ describe("LspServerManager", () => {
   it("sendNotification does not expect response", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     // Should not throw
@@ -240,7 +278,7 @@ describe("LspServerManager", () => {
   it("multiple servers with different languages", async () => {
     const start1 = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await start1;
 
     const pyConfig = {
@@ -250,7 +288,7 @@ describe("LspServerManager", () => {
     };
     const start2 = manager.start(pyConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(2, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await start2;
 
     const status = manager.getStatus();
@@ -260,14 +298,14 @@ describe("LspServerManager", () => {
   it("stopAll stops all servers", async () => {
     const startPromise = manager.start(tsConfig);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    mockSpawnResult.sendResponse(1, { capabilities: {} });
+    mockSpawnResult.respondOk({ capabilities: {} });
     await startPromise;
 
     const proc = mockSpawnResult;
 
     const stopPromise = manager.stopAll();
     await new Promise((resolve) => setTimeout(resolve, 10));
-    proc.sendResponse(2, null);
+    proc.respondOk(null);
     await stopPromise;
 
     expect(manager.getStatus()).toHaveLength(0);
