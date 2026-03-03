@@ -332,6 +332,15 @@ const entries: SubCliEntry[] = [
       mod.registerRulesCli(program);
     },
   },
+  {
+    name: "mailbox",
+    description: "Agent mailbox — persistent messaging between agents",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../mailbox-cli.js");
+      mod.registerMailboxCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
