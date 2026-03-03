@@ -38,6 +38,9 @@ import {
   formatFindingsForPrompt,
 } from "./project-memory.js";
 import { CompactionExtractor } from "./compaction-extractor.js";
+import { RulesEngine } from "./rules-engine.js";
+import { AgentMemory } from "./agent-memory.js";
+import { ContextualAwareness } from "./contextual-awareness.js";
 
 // ============================================================================
 // Safety
@@ -691,6 +694,126 @@ const semanticMemoryPlugin = {
     );
 
     // ========================================================================
+    // Agent Memory Tools
+    // ========================================================================
+
+    api.registerTool(
+      {
+        name: "agent_memory_store",
+        label: "Agent Memory Store",
+        description:
+          "Store a persistent memory entry for the current agent. Memories persist across sessions and are scoped per agent.",
+        parameters: Type.Object({
+          content: Type.String({ description: "Memory content to store" }),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pattern", "convention", "insight", "decision"],
+            }),
+          ),
+          project: Type.Optional(
+            Type.String({ description: 'Project name or "global" (default: "global")' }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            content,
+            type: memType = "insight",
+            project = "global",
+          } = params as {
+            content: string;
+            type?: string;
+            project?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Memory not stored." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedType = memType as import("./agent-memory.js").AgentMemoryType;
+          const id = await agentMemory.store(agentId, {
+            content,
+            type: typedType,
+            project,
+          });
+
+          return {
+            content: [{ type: "text", text: `Stored ${typedType}: "${content.slice(0, 100)}"` }],
+            details: { action: "created", id, memoryType: typedType },
+          };
+        },
+      },
+      { name: "agent_memory_store" },
+    );
+
+    api.registerTool(
+      {
+        name: "agent_memory_recall",
+        label: "Agent Memory Recall",
+        description:
+          "Recall persistent memories for the current agent, optionally filtered by type or keyword.",
+        parameters: Type.Object({
+          query: Type.Optional(Type.String({ description: "Search keyword" })),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pattern", "convention", "insight", "decision"],
+            }),
+          ),
+          limit: Type.Optional(Type.Number({ description: "Max results (default: 10)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            query,
+            type: memType,
+            limit = 10,
+          } = params as {
+            query?: string;
+            type?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable." }],
+              details: { count: 0, reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedType = memType as import("./agent-memory.js").AgentMemoryType | undefined;
+          const memories = await agentMemory.recall(agentId, {
+            type: typedType,
+            query,
+            limit,
+          });
+
+          if (memories.length === 0) {
+            return {
+              content: [{ type: "text", text: "No matching agent memories found." }],
+              details: { count: 0 },
+            };
+          }
+
+          const text = memories
+            .map(
+              (m, i) =>
+                `${i + 1}. [${m.type}] ${m.content} (used: ${m.usageCount}x, confidence: ${m.confidence})`,
+            )
+            .join("\n");
+
+          return {
+            content: [{ type: "text", text: `Found ${memories.length} memories:\n\n${text}` }],
+            details: { count: memories.length, memories },
+          };
+        },
+      },
+      { name: "agent_memory_recall" },
+    );
+
+    // ========================================================================
     // Identity
     // ========================================================================
 
@@ -699,6 +822,15 @@ const semanticMemoryPlugin = {
     const identityProver = new IdentityProver(client, ns);
     const titansClient = new TitansClient(cfg.cortex);
     const projectMemory = new ProjectMemory(client, ns);
+    const rulesEngine = new RulesEngine(client, ns);
+    const agentMemory = new AgentMemory(client, ns);
+    const contextualAwareness = new ContextualAwareness(
+      client,
+      ns,
+      rulesEngine,
+      projectMemory,
+      agentMemory,
+    );
     let titansAvailable = false;
 
     async function ensureTitans(): Promise<boolean> {
@@ -865,7 +997,19 @@ const semanticMemoryPlugin = {
         api.logger.warn(`memory-semantic: identity load failed: ${String(err)}`);
       }
 
-      // 2. Project conventions (if enabled and Cortex available)
+      // 2. Rules engine (if enabled and Cortex available)
+      if (cfg.rules.enabled && cfg.rules.injectIntoPrompt && (await ensureCortex())) {
+        try {
+          const rules = await rulesEngine.resolveRules({ scope: "global" });
+          if (rules.length > 0) {
+            parts.push(rulesEngine.formatRulesForPrompt(rules));
+          }
+        } catch {
+          // Non-fatal: rules unavailable
+        }
+      }
+
+      // 3. Project conventions (if enabled and Cortex available)
       if (cfg.projectMemory.enabled && (await ensureCortex())) {
         try {
           const conventions = await projectMemory.listActive({ limit: 5 });
@@ -876,7 +1020,7 @@ const semanticMemoryPlugin = {
           // Non-fatal: conventions unavailable
         }
 
-        // 3. Recent findings from previous sessions
+        // 4. Recent findings from previous sessions
         try {
           const findings = await projectMemory.recentFindings({ limit: 3 });
           if (findings.length > 0) {
@@ -884,6 +1028,31 @@ const semanticMemoryPlugin = {
           }
         } catch {
           // Non-fatal: findings unavailable
+        }
+      }
+
+      // 5. Agent persistent memory (if enabled and Cortex available)
+      if (cfg.agentMemory.enabled && (await ensureCortex())) {
+        try {
+          const memories = await agentMemory.recall(agentId, { limit: 5 });
+          if (memories.length > 0) {
+            parts.push(agentMemory.formatForPrompt(memories));
+          }
+        } catch {
+          // Non-fatal: agent memory unavailable
+        }
+      }
+
+      // 6. Contextual awareness notifications
+      if (cfg.contextualAwareness.enabled && (await ensureCortex())) {
+        try {
+          const notifications = await contextualAwareness.gatherNotifications(agentId);
+          if (notifications.length > 0) {
+            const limited = notifications.slice(0, cfg.contextualAwareness.maxNotifications);
+            parts.push(contextualAwareness.formatNotifications(limited));
+          }
+        } catch {
+          // Non-fatal: awareness unavailable
         }
       }
 
@@ -1299,6 +1468,31 @@ const semanticMemoryPlugin = {
         if (stored > 0) {
           api.logger.info(`memory-semantic: auto-captured ${stored} memories`);
         }
+
+        // Agent persistent memory: auto-capture key learnings
+        if (cfg.agentMemory.enabled && cfg.agentMemory.autoCapture && (await ensureCortex())) {
+          let agentStored = 0;
+          for (const text of texts.slice(0, 3)) {
+            const knowledge = detectProjectKnowledge(text);
+            if (!knowledge) continue;
+
+            try {
+              await agentMemory.store(agentId, {
+                content: text,
+                type: knowledge.type === "decision" ? "decision" : "convention",
+                project: "auto-capture",
+              });
+              agentStored++;
+            } catch {
+              // Non-fatal: agent memory storage failed
+            }
+          }
+          if (agentStored > 0) {
+            api.logger.info(
+              `memory-semantic: auto-captured ${agentStored} agent memories for ${agentId}`,
+            );
+          }
+        }
       } catch (err) {
         api.logger.warn(`memory-semantic: capture failed: ${String(err)}`);
       }
@@ -1403,6 +1597,23 @@ const semanticMemoryPlugin = {
         }
       } catch (err) {
         api.logger.warn(`memory-semantic: pre-compaction extract failed: ${String(err)}`);
+      }
+    });
+
+    // Session start: contextual awareness notifications
+    api.on("session_start", async () => {
+      if (!cfg.contextualAwareness.enabled || !cfg.contextualAwareness.showOnSessionStart) return;
+      if (!(await ensureCortex())) return;
+
+      try {
+        const notifications = await contextualAwareness.gatherNotifications(agentId);
+        const limited = notifications.slice(0, cfg.contextualAwareness.maxNotifications);
+        for (const n of limited) {
+          const prefix = n.priority === "high" ? "[!]" : n.priority === "medium" ? "[*]" : "[-]";
+          api.logger.info(`memory-semantic: ${prefix} ${n.message}`);
+        }
+      } catch (err) {
+        api.logger.warn(`memory-semantic: session notifications failed: ${String(err)}`);
       }
     });
 

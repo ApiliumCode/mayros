@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CortexClientLike, TripleDto, ValueDto } from "../shared/cortex-client.js";
-import { AgentMemory, type AgentMemoryEntry, type AgentMemoryType } from "./agent-memory.js";
+import { AgentMemory, type AgentMemoryEntry } from "./agent-memory.js";
 
 // ============================================================================
 // Mock CortexClient
@@ -160,7 +160,7 @@ describe("AgentMemory", () => {
       const cortex = createMockCortex();
       const mem = new AgentMemory(cortex, "test");
 
-      const id1 = await mem.store("agent1", { content: "Low use" });
+      await mem.store("agent1", { content: "Low use" });
       const id2 = await mem.store("agent1", { content: "High use" });
 
       // Touch id2 multiple times
