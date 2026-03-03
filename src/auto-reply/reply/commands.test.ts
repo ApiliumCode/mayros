@@ -188,6 +188,7 @@ describe("handleCommands gating", () => {
   });
 
   it("does not enable gated commands from inherited command flags", async () => {
+    resetBashChatCommandForTests();
     const inheritedCommands = Object.create({
       bash: true,
       config: true,

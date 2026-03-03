@@ -5,20 +5,11 @@ import { colorize, isRich, theme } from "../../terminal/theme.js";
 import { shortenHomePath } from "../../utils.js";
 import { shouldMigrateStateFromPath } from "../argv.js";
 import { formatCliCommand } from "../command-format.js";
+import {
+  ALLOWED_INVALID_COMMANDS,
+  ALLOWED_INVALID_GATEWAY_SUBCOMMANDS,
+} from "./lightweight-commands.js";
 
-const ALLOWED_INVALID_COMMANDS = new Set(["doctor", "logs", "health", "help", "status"]);
-const ALLOWED_INVALID_GATEWAY_SUBCOMMANDS = new Set([
-  "status",
-  "probe",
-  "health",
-  "discover",
-  "call",
-  "install",
-  "uninstall",
-  "start",
-  "stop",
-  "restart",
-]);
 let didRunDoctorConfigFlow = false;
 let configSnapshotPromise: Promise<Awaited<ReturnType<typeof readConfigFileSnapshot>>> | null =
   null;
@@ -90,4 +81,9 @@ export async function ensureConfigReady(params: {
   if (!allowInvalid) {
     params.runtime.exit(1);
   }
+}
+
+export function resetConfigGuardForTest(): void {
+  didRunDoctorConfigFlow = false;
+  configSnapshotPromise = null;
 }

@@ -79,7 +79,7 @@ export class NamespaceManager {
 
     // Grant admin access to all owners
     for (const owner of owners) {
-      await this.acl.grant(owners[0], owner, sharedNs, "admin");
+      await this.acl.grant("system", owner, sharedNs, "admin");
     }
 
     return sharedNs;

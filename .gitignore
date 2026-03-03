@@ -132,3 +132,5 @@ USER.md
 # Claude Code project instructions (local only)
 CLAUDE.md
 **/CLAUDE.md
+
+.claude/RULES.md

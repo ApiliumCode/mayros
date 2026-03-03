@@ -114,7 +114,7 @@ export class SkillLoader {
 
     // Create a no-op graph client and logger if not provided
     const graphClient = options?.graphClient ?? {
-      createTriple: async () => ({}) as any,
+      createTriple: async () => ({}) as { hash?: string },
       listTriples: async () => ({ triples: [], total: 0 }),
       patternQuery: async () => ({ matches: [], total: 0 }),
       deleteTriple: async () => {},
