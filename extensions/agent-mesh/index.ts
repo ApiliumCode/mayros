@@ -65,7 +65,24 @@ const agentMeshPlugin = {
     });
 
     // Message bus for mesh messages (in-process for now)
+    const MESSAGE_LOG_MAX = 1000;
     const messageLog: MeshMessage[] = [];
+
+    function appendToMessageLog(msg: MeshMessage): void {
+      messageLog.push(msg);
+      if (messageLog.length > MESSAGE_LOG_MAX) {
+        messageLog.splice(0, messageLog.length - MESSAGE_LOG_MAX);
+      }
+    }
+
+    /**
+     * Ensure a value carries the namespace prefix. If it already starts with
+     * `${nsPrefix}:` it is returned as-is; otherwise the prefix is prepended.
+     */
+    function ensureNsPrefix(value: string, nsPrefix: string): string {
+      if (value.startsWith(`${nsPrefix}:`)) return value;
+      return `${nsPrefix}:${value}`;
+    }
 
     api.logger.info(`agent-mesh: plugin registered (ns: ${ns}, agent: ${agentId})`);
 
@@ -134,8 +151,8 @@ const agentMeshPlugin = {
           let stored = 0;
           for (const t of triples) {
             await client.createTriple({
-              subject: t.subject,
-              predicate: t.predicate,
+              subject: ensureNsPrefix(t.subject, ns),
+              predicate: ensureNsPrefix(t.predicate, ns),
               object: t.object,
             });
             stored++;
@@ -144,7 +161,7 @@ const agentMeshPlugin = {
           const msg = createMeshMessage("knowledge-share", agentId, toAgent, targetNs, {
             tripleCount: stored,
           });
-          messageLog.push(msg);
+          appendToMessageLog(msg);
 
           return {
             content: [
@@ -204,21 +221,45 @@ const agentMeshPlugin = {
             };
           }
 
-          const result = await client.patternQuery({
-            subject,
-            predicate,
+          // Step 1: find memory subjects owned by this namespace
+          const ownershipResult = await client.patternQuery({
+            predicate: `${ns}:memory:ownedBy`,
             object: { node: sourceNs },
-            limit,
+            limit: 200,
           });
 
-          if (result.matches.length === 0) {
+          if (ownershipResult.matches.length === 0) {
             return {
               content: [{ type: "text", text: "No matching knowledge found." }],
               details: { count: 0, namespace: sourceNs },
             };
           }
 
-          const text = result.matches
+          // Step 2: for each owned subject, fetch its triples respecting caller filters
+          type SimpleTriple = { subject: string; predicate: string; object: unknown };
+          const collected: SimpleTriple[] = [];
+          for (const match of ownershipResult.matches) {
+            if (collected.length >= limit) break;
+            const triples = await client.listTriples({
+              subject: match.subject,
+              predicate,
+              limit: 20,
+            });
+            for (const t of triples.triples) {
+              if (subject && t.subject !== subject) continue;
+              collected.push(t);
+              if (collected.length >= limit) break;
+            }
+          }
+
+          if (collected.length === 0) {
+            return {
+              content: [{ type: "text", text: "No matching knowledge found." }],
+              details: { count: 0, namespace: sourceNs },
+            };
+          }
+
+          const text = collected
             .map((t) => `${t.subject} ${t.predicate} ${JSON.stringify(t.object)}`)
             .join("\n");
 
@@ -226,10 +267,10 @@ const agentMeshPlugin = {
             content: [
               {
                 type: "text",
-                text: `Found ${result.matches.length} triples from ${fromAgent}:\n\n${text}`,
+                text: `Found ${collected.length} triples from ${fromAgent}:\n\n${text}`,
               },
             ],
-            details: { count: result.matches.length, namespace: sourceNs },
+            details: { count: collected.length, namespace: sourceNs },
           };
         },
       },
@@ -391,7 +432,7 @@ const agentMeshPlugin = {
               tripleCount: ctx.relevantTriples.length,
               memoryCount: ctx.relatedMemories.length,
             });
-            messageLog.push(msg);
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -475,7 +516,7 @@ const agentMeshPlugin = {
               conflicts: report.conflicts,
               resolutions: report.resolutions?.length ?? 0,
             });
-            messageLog.push(msg);
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -537,14 +578,12 @@ const agentMeshPlugin = {
               )
               .join("\n");
 
-            if (conflicts.length > 0) {
-              const msg = createMeshMessage("conflict-alert", agentId, "mesh", ns, {
-                ns1,
-                ns2,
-                conflictCount: conflicts.length,
-              });
-              messageLog.push(msg);
-            }
+            const msg = createMeshMessage("conflict-alert", agentId, "mesh", ns, {
+              ns1,
+              ns2,
+              conflictCount: conflicts.length,
+            });
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -728,8 +767,8 @@ const agentMeshPlugin = {
       if (!(await ensureCortex())) return;
 
       try {
-        const childId = (event as Record<string, unknown>).childAgentId as string | undefined;
-        const task = (event as Record<string, unknown>).task as string | undefined;
+        const childId = event.agentId;
+        const task = event.label ?? `subagent-${event.childSessionKey}`;
 
         if (!childId || !task) return;
 
@@ -738,10 +777,9 @@ const agentMeshPlugin = {
         const ctx = await delegationEngine.prepareContext(task, agentId);
 
         if (ctx.relevantTriples.length > 0) {
-          const sessionKey = `subagent-${childId}-${Date.now()}`;
-          delegationEngine.injectContext(sessionKey, ctx);
+          delegationEngine.injectContext(event.childSessionKey, ctx);
           api.logger.info(
-            `agent-mesh: injected ${ctx.relevantTriples.length} triples for child ${childId} (session: ${sessionKey})`,
+            `agent-mesh: injected ${ctx.relevantTriples.length} triples for child ${childId} (session: ${event.childSessionKey})`,
           );
         }
       } catch (err) {
@@ -750,20 +788,24 @@ const agentMeshPlugin = {
     });
 
     // Hook: subagent_ended — merge child results back if autoMerge is enabled
-    api.on("subagent_ended", async (event) => {
+    api.on("subagent_ended", async (event, _ctx) => {
+      const childSessionKey = event.targetSessionKey;
+
+      // Always clean up injected context for this child session
+      delegationEngine.removeInjectedContext(childSessionKey);
+
       if (!cfg.mesh.autoMerge) return;
       if (!(await ensureCortex())) return;
 
       try {
-        const childId = (event as Record<string, unknown>).childAgentId as string | undefined;
-        const success = (event as Record<string, unknown>).success as boolean | undefined;
+        const success = event.outcome === "ok";
 
-        if (!childId || !success) return;
+        if (!childSessionKey || !success) return;
 
-        api.logger.info(`agent-mesh: auto-merging results from child ${childId}`);
+        api.logger.info(`agent-mesh: auto-merging results from child ${childSessionKey}`);
 
-        const runId = `run-${Date.now()}`;
-        const report = await delegationEngine.mergeResults(runId, agentId, childId);
+        const runId = event.runId ?? `run-${Date.now()}`;
+        const report = await delegationEngine.mergeResults(runId, agentId, childSessionKey);
 
         api.logger.info(
           `agent-mesh: merge complete — added: ${report.added}, skipped: ${report.skipped}, conflicts: ${report.conflicts}`,
@@ -774,7 +816,7 @@ const agentMeshPlugin = {
     });
 
     // Hook: before_agent_start — register this agent in the mesh
-    api.on("before_agent_start", async (event) => {
+    api.on("before_agent_start", async (_event, _ctx) => {
       if (!(await ensureCortex())) return;
 
       try {
@@ -800,11 +842,11 @@ const agentMeshPlugin = {
     });
 
     // Hook: agent_end — update agent status and persist mesh state
-    api.on("agent_end", async (event) => {
+    api.on("agent_end", async (event, _ctx) => {
       if (!(await ensureCortex())) return;
 
       try {
-        const success = (event as Record<string, unknown>).success as boolean | undefined;
+        const success = event.success;
 
         const agentNode = nsMgr.getPrivateNs(agentId);
 
@@ -942,15 +984,24 @@ const agentMeshPlugin = {
 
             const targetNs = target.includes(":") ? target : nsMgr.getPrivateNs(target);
 
+            // Check write access before writing
+            const hasAccess = await nsMgr.checkAccess(agentId, targetNs, "write");
+            if (!hasAccess) {
+              console.error(`No write access to namespace ${targetNs}.`);
+              return;
+            }
+
+            const prefixedSubject = ensureNsPrefix(subject, targetNs);
+
             try {
               await client.createTriple({
-                subject,
+                subject: prefixedSubject,
                 predicate,
                 object,
               });
 
               console.log(`Shared triple to ${targetNs}:`);
-              console.log(`  ${subject} ${predicate} "${object}"`);
+              console.log(`  ${prefixedSubject} ${predicate} "${object}"`);
             } catch (err) {
               console.error(`Error: ${String(err)}`);
             }
