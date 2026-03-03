@@ -314,6 +314,15 @@ const entries: SubCliEntry[] = [
       mod.registerKgCli(program);
     },
   },
+  {
+    name: "workflow",
+    description: "Multi-agent workflows — run, list, and track workflow execution",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../workflow-cli.js");
+      mod.registerWorkflowCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
