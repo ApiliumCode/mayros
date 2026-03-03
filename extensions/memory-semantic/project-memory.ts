@@ -145,8 +145,6 @@ const CHANGE_PATTERN =
 const BUG_PATTERN =
   /(?:The (?:bug|issue|error|problem) (?:was|is) (?:caused by|due to|in))\s+(.+)/i;
 
-const CONVENTION_EXTRACT_PATTERN = /(?:(?:Convention|Pattern|Rule):\s*)(.+)/i;
-
 /**
  * Extract a session finding from an assistant message.
  */
