@@ -7,7 +7,9 @@
  * Tools: mesh_share_knowledge, mesh_request_knowledge, mesh_create_shared_space,
  *        mesh_list_agents, mesh_delegate, mesh_merge, mesh_conflicts,
  *        mesh_grant_access, mesh_revoke_access,
- *        mesh_create_team, mesh_team_status, mesh_run_workflow
+ *        mesh_create_team, mesh_team_status, mesh_run_workflow,
+ *        agent_send_message, agent_check_inbox, mesh_team_dashboard,
+ *        agent_track_background_task, agent_list_background_tasks
  *
  * Hooks: subagent_spawning, subagent_ended, before_agent_start, agent_end
  *
@@ -34,6 +36,8 @@ import {
 } from "./mesh-protocol.js";
 import { NamespaceManager } from "./namespace-manager.js";
 import { AgentMailbox } from "./agent-mailbox.js";
+import { BackgroundTracker } from "./background-tracker.js";
+import { TeamDashboardService } from "./team-dashboard.js";
 import { TeamManager } from "./team-manager.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
 import { listWorkflows as listWorkflowDefs } from "./workflows/registry.js";
@@ -65,6 +69,8 @@ const agentMeshPlugin = {
     });
     const orchestrator = new WorkflowOrchestrator(client, ns, teamMgr, fusion, nsMgr);
     const mailbox = new AgentMailbox(client, ns);
+    const dashboard = new TeamDashboardService(teamMgr, mailbox, null, ns);
+    const bgTracker = new BackgroundTracker(client, ns);
     let cortexAvailable = false;
     const healthMonitor = new HealthMonitor(client, {
       onHealthy: () => {
@@ -1108,6 +1114,193 @@ const agentMeshPlugin = {
       { name: "agent_check_inbox" },
     );
 
+    // 15. mesh_team_dashboard
+    api.registerTool(
+      {
+        name: "mesh_team_dashboard",
+        label: "Team Dashboard",
+        description:
+          "Get an aggregated dashboard view of team status, member activity, mailbox stats, and trace metrics.",
+        parameters: Type.Object({
+          teamId: Type.Optional(
+            Type.String({ description: "Team ID (omit for summary of all teams)" }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const { teamId } = params as { teamId?: string };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot load dashboard." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            if (teamId) {
+              const d = await dashboard.getTeamDashboard(teamId);
+              if (!d) {
+                return {
+                  content: [{ type: "text", text: `Team ${teamId} not found.` }],
+                  details: { action: "not_found", teamId },
+                };
+              }
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Dashboard: "${d.teamName}" [${d.teamStatus}]\n  members: ${d.members.length}\n  mail: ${d.mailboxSummary.total} total, ${d.mailboxSummary.unread} unread`,
+                  },
+                ],
+                details: d,
+              };
+            }
+
+            const s = await dashboard.getSummary();
+            const teamLines = s.teams
+              .map((t) => `  - ${t.teamId}: "${t.teamName}" [${t.teamStatus}]`)
+              .join("\n");
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Dashboard Summary:\n  active teams: ${s.activeTeams}\n  total agents: ${s.totalAgents}\n  total unread: ${s.totalUnread}\n  total errors: ${s.totalErrors}\n${teamLines}`,
+                },
+              ],
+              details: s,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Dashboard failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_team_dashboard" },
+    );
+
+    // 16. agent_track_background_task
+    api.registerTool(
+      {
+        name: "agent_track_background_task",
+        label: "Track Background Task",
+        description: "Track a new background agent task in the Cortex-backed task tracker.",
+        parameters: Type.Object({
+          agentId: Type.String({ description: "Agent ID running the task" }),
+          description: Type.String({ description: "Description of the background task" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { agentId: taskAgentId, description: taskDesc } = params as {
+            agentId: string;
+            description: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot track task." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const task = await bgTracker.track({ agentId: taskAgentId, description: taskDesc });
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Background task tracked: ${task.id}\n  agent: ${task.agentId}\n  status: ${task.status}`,
+                },
+              ],
+              details: { action: "tracked", task },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Track failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_track_background_task" },
+    );
+
+    // 17. agent_list_background_tasks
+    api.registerTool(
+      {
+        name: "agent_list_background_tasks",
+        label: "List Background Tasks",
+        description: "List background agent tasks with optional filtering by status and agent.",
+        parameters: Type.Object({
+          status: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pending", "running", "completed", "failed", "cancelled"],
+              description: "Filter by task status",
+            }),
+          ),
+          agentId: Type.Optional(Type.String({ description: "Filter by agent ID" })),
+          limit: Type.Optional(Type.Number({ description: "Max tasks to return (default: 20)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            status,
+            agentId: filterAgentId,
+            limit = 20,
+          } = params as {
+            status?: string;
+            agentId?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot list tasks." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const tasks = await bgTracker.listTasks({
+              status: status as "running" | undefined,
+              agentId: filterAgentId,
+              limit,
+            });
+
+            if (tasks.length === 0) {
+              return {
+                content: [{ type: "text", text: "No background tasks found." }],
+                details: { count: 0 },
+              };
+            }
+
+            const text = tasks
+              .map(
+                (t) =>
+                  `- [${t.status}] ${t.id} (${t.agentId}): ${t.description.slice(0, 80)}${t.description.length > 80 ? "…" : ""}`,
+              )
+              .join("\n");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Background tasks (${tasks.length}):\n\n${text}`,
+                },
+              ],
+              details: { count: tasks.length, tasks },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `List failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_list_background_tasks" },
+    );
+
     // ========================================================================
     // Lifecycle Hooks
     // ========================================================================
@@ -1165,7 +1358,7 @@ const agentMeshPlugin = {
       }
     });
 
-    // Hook: before_agent_start — register this agent in the mesh
+    // Hook: before_agent_start — register this agent in the mesh + track background agents
     api.on("before_agent_start", async (_event, _ctx) => {
       if (!(await ensureCortex())) return;
 
@@ -1186,6 +1379,21 @@ const agentMeshPlugin = {
         });
 
         api.logger.info(`agent-mesh: agent ${agentId} registered in mesh`);
+
+        // If the agent is a background agent, track it automatically
+        try {
+          const { findMarkdownAgent } = await import("../../src/agents/markdown-agents.js");
+          const mdAgent = findMarkdownAgent(agentId);
+          if (mdAgent?.background) {
+            await bgTracker.track({
+              agentId,
+              description: `Background agent: ${mdAgent.name}`,
+            });
+            api.logger.info(`agent-mesh: background task tracked for ${agentId}`);
+          }
+        } catch {
+          // Markdown agent not found — not a background agent, skip
+        }
       } catch (err) {
         api.logger.warn(`agent-mesh: agent registration failed: ${String(err)}`);
       }

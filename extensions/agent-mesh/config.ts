@@ -29,6 +29,11 @@ export type MailboxConfig = {
   retentionDays: number;
 };
 
+export type BackgroundConfig = {
+  maxConcurrentTasks: number;
+  taskTimeoutSeconds: number;
+};
+
 export type AgentMeshConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
@@ -36,6 +41,7 @@ export type AgentMeshConfig = {
   teams: TeamsConfig;
   worktree: WorktreeConfig;
   mailbox: MailboxConfig;
+  background: BackgroundConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
@@ -51,6 +57,8 @@ const DEFAULT_WORKTREE_ENABLED = false;
 const DEFAULT_WORKTREE_BASE_PATH = ".mayros/worktrees";
 const DEFAULT_MAILBOX_MAX_MESSAGES = 1000;
 const DEFAULT_MAILBOX_RETENTION_DAYS = 30;
+const DEFAULT_BG_MAX_CONCURRENT = 5;
+const DEFAULT_BG_TASK_TIMEOUT = 3600;
 
 const VALID_STRATEGIES: MergeStrategy[] = [
   "additive",
@@ -157,6 +165,31 @@ export function parseMailboxConfig(raw: unknown): MailboxConfig {
   return { maxMessagesPerAgent, retentionDays };
 }
 
+export function parseBackgroundConfig(raw: unknown): BackgroundConfig {
+  const bg = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(bg, ["maxConcurrentTasks", "taskTimeoutSeconds"], "background config");
+  }
+
+  const maxConcurrentTasks =
+    typeof bg.maxConcurrentTasks === "number"
+      ? Math.floor(bg.maxConcurrentTasks)
+      : DEFAULT_BG_MAX_CONCURRENT;
+  if (maxConcurrentTasks < 1) {
+    throw new Error("background.maxConcurrentTasks must be at least 1");
+  }
+
+  const taskTimeoutSeconds =
+    typeof bg.taskTimeoutSeconds === "number"
+      ? Math.floor(bg.taskTimeoutSeconds)
+      : DEFAULT_BG_TASK_TIMEOUT;
+  if (taskTimeoutSeconds < 1) {
+    throw new Error("background.taskTimeoutSeconds must be at least 1");
+  }
+
+  return { maxConcurrentTasks, taskTimeoutSeconds };
+}
+
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -165,7 +198,7 @@ export const agentMeshConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["cortex", "agentNamespace", "mesh", "teams", "worktree", "mailbox"],
+      ["cortex", "agentNamespace", "mesh", "teams", "worktree", "mailbox", "background"],
       "agent mesh config",
     );
 
@@ -174,6 +207,7 @@ export const agentMeshConfigSchema = {
     const teams = parseTeamsConfig(cfg.teams);
     const worktree = parseWorktreeConfig(cfg.worktree);
     const mailbox = parseMailboxConfig(cfg.mailbox);
+    const background = parseBackgroundConfig(cfg.background);
 
     const agentNamespace =
       typeof cfg.agentNamespace === "string" ? cfg.agentNamespace : DEFAULT_NAMESPACE;
@@ -183,7 +217,7 @@ export const agentMeshConfigSchema = {
       );
     }
 
-    return { cortex, agentNamespace, mesh, teams, worktree, mailbox };
+    return { cortex, agentNamespace, mesh, teams, worktree, mailbox, background };
   },
   uiHints: {
     "cortex.host": {
@@ -265,6 +299,18 @@ export const agentMeshConfigSchema = {
       placeholder: String(DEFAULT_MAILBOX_RETENTION_DAYS),
       advanced: true,
       help: "Number of days to retain mailbox messages",
+    },
+    "background.maxConcurrentTasks": {
+      label: "Max Concurrent Tasks",
+      placeholder: String(DEFAULT_BG_MAX_CONCURRENT),
+      advanced: true,
+      help: "Maximum number of background tasks running simultaneously",
+    },
+    "background.taskTimeoutSeconds": {
+      label: "Task Timeout (seconds)",
+      placeholder: String(DEFAULT_BG_TASK_TIMEOUT),
+      advanced: true,
+      help: "Timeout in seconds before a background task is considered stale",
     },
   },
 };
