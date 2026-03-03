@@ -42,6 +42,9 @@ const mcpClientPlugin = {
     // Track dynamically registered tool names for cleanup
     const dynamicTools = new Map<string, string[]>(); // serverId -> tool names
 
+    // Reverse lookup: bridged tool name -> { serverId, originalName }
+    const toolOrigins = new Map<string, { serverId: string; originalName: string }>();
+
     api.logger.info(`mcp-client: plugin registered (ns: ${ns}, servers: ${cfg.servers.length})`);
 
     // ========================================================================
@@ -93,15 +96,6 @@ const mcpClientPlugin = {
                   (params ?? {}) as Record<string, unknown>,
                 );
 
-                // Update usage in Cortex
-                if (registry && (await ensureCortex())) {
-                  try {
-                    await registry.updateToolUsage(serverId, bridged.originalName);
-                  } catch {
-                    // Non-critical
-                  }
-                }
-
                 const textContent = result.content
                   .map((c) => c.text ?? c.data ?? "")
                   .filter(Boolean)
@@ -128,6 +122,7 @@ const mcpClientPlugin = {
         );
 
         registeredNames.push(bridged.name);
+        toolOrigins.set(bridged.name, { serverId, originalName: descriptor.name });
 
         // Register in Cortex
         if (registry && (await ensureCortex())) {
@@ -335,15 +330,6 @@ const mcpClientPlugin = {
           try {
             const result = await transport.callTool(toolName, args);
 
-            // Update usage in Cortex
-            if (registry && (await ensureCortex())) {
-              try {
-                await registry.updateToolUsage(serverId, toolName);
-              } catch {
-                // Non-critical
-              }
-            }
-
             const textContent = result.content
               .map((c) => c.text ?? c.data ?? "")
               .filter(Boolean)
@@ -373,50 +359,50 @@ const mcpClientPlugin = {
     // CLI: mayros mcp connect|disconnect|list|tools|status
     // ========================================================================
 
-    api.registerCommand({
-      name: "mcp",
-      description: "MCP server client — connect, disconnect, and manage external tool servers",
-      acceptsArgs: true,
-      async handler(ctx) {
-        const parts = (ctx.args ?? "").trim().split(/\s+/);
-        const sub = parts[0] ?? "";
-        const rest = parts.slice(1);
+    api.registerCli(
+      ({ program }) => {
+        const mcp = program
+          .command("mcp")
+          .description("MCP server client — connect, disconnect, and manage external tool servers");
 
-        switch (sub) {
-          case "connect": {
-            const targetId = rest[0];
-            if (!targetId) {
-              return { text: "Usage: mayros mcp connect <serverId>" };
-            }
+        mcp
+          .command("connect")
+          .description("Connect to an MCP server")
+          .argument("<serverId>", "Server ID from config")
+          .action(async (targetId: string) => {
             try {
               const conn = await sessionMgr.connect(targetId);
               const toolCount = await registerBridgedTools(targetId);
-              return {
-                text: `Connected to ${targetId} (${conn.transport}). ${toolCount} tools bridged.`,
-              };
+              console.log(
+                `Connected to ${targetId} (${conn.transport}). ${toolCount} tools bridged.`,
+              );
             } catch (err) {
-              return { text: `Failed: ${String(err)}` };
+              console.log(`Failed: ${String(err)}`);
             }
-          }
+          });
 
-          case "disconnect": {
-            const targetId = rest[0];
-            if (!targetId) {
-              return { text: "Usage: mayros mcp disconnect <serverId>" };
-            }
+        mcp
+          .command("disconnect")
+          .description("Disconnect from an MCP server")
+          .argument("<serverId>", "Server ID to disconnect")
+          .action(async (targetId: string) => {
             try {
               await sessionMgr.disconnect(targetId);
               dynamicTools.delete(targetId);
-              return { text: `Disconnected from ${targetId}.` };
+              console.log(`Disconnected from ${targetId}.`);
             } catch (err) {
-              return { text: `Failed: ${String(err)}` };
+              console.log(`Failed: ${String(err)}`);
             }
-          }
+          });
 
-          case "list": {
+        mcp
+          .command("list")
+          .description("List configured servers")
+          .action(async () => {
             const configuredServers = cfg.servers;
             if (configuredServers.length === 0) {
-              return { text: "No servers configured." };
+              console.log("No servers configured.");
+              return;
             }
 
             const lines = configuredServers.map((s) => {
@@ -426,19 +412,21 @@ const mcpClientPlugin = {
               return `  ${s.id}: ${s.name ?? s.id} (${s.transport.type}) [${status}] ${toolCount} tools`;
             });
 
-            return {
-              text: `Configured servers (${configuredServers.length}):\n${lines.join("\n")}`,
-            };
-          }
+            console.log(`Configured servers (${configuredServers.length}):\n${lines.join("\n")}`);
+          });
 
-          case "tools": {
-            const targetId = rest[0];
+        mcp
+          .command("tools")
+          .description("List available tools")
+          .argument("[serverId]", "Filter by server ID (shows all if omitted)")
+          .action(async (targetId?: string) => {
             const connections = targetId
               ? [sessionMgr.getConnection(targetId)].filter(Boolean)
               : sessionMgr.listConnections().filter((c) => c.status === "connected");
 
             if (connections.length === 0) {
-              return { text: "No connected servers. Use 'mayros mcp connect <serverId>' first." };
+              console.log("No connected servers. Use 'mayros mcp connect <serverId>' first.");
+              return;
             }
 
             const lines: string[] = [];
@@ -454,13 +442,17 @@ const mcpClientPlugin = {
               }
             }
 
-            return { text: `Available tools:${lines.join("\n")}` };
-          }
+            console.log(`Available tools:${lines.join("\n")}`);
+          });
 
-          case "status": {
+        mcp
+          .command("status")
+          .description("Show connection status")
+          .action(async () => {
             const connections = sessionMgr.listConnections();
             if (connections.length === 0) {
-              return { text: "No connections. Configure servers in mcp-client plugin settings." };
+              console.log("No connections. Configure servers in mcp-client plugin settings.");
+              return;
             }
 
             const lines = connections.map((c) => {
@@ -470,24 +462,45 @@ const mcpClientPlugin = {
               return `  ${c.serverId}: ${c.status}${since}, ${toolCount} tools${error}`;
             });
 
-            return { text: `MCP connections (${connections.length}):\n${lines.join("\n")}` };
-          }
-
-          default:
-            return {
-              text: [
-                "Usage: mayros mcp <command>",
-                "",
-                "Commands:",
-                "  connect <serverId>      Connect to an MCP server",
-                "  disconnect <serverId>   Disconnect from an MCP server",
-                "  list                    List configured servers",
-                "  tools [serverId]        List available tools",
-                "  status                  Show connection status",
-              ].join("\n"),
-            };
-        }
+            console.log(`MCP connections (${connections.length}):\n${lines.join("\n")}`);
+          });
       },
+      { commands: ["mcp"] },
+    );
+
+    // ========================================================================
+    // Hook: after_tool_call — update MCP tool usage in Cortex
+    // ========================================================================
+
+    api.on("after_tool_call", async (event, _ctx) => {
+      if (!registry) return;
+
+      const toolName = event.toolName;
+
+      // Case 1: Direct bridged tool call
+      const origin = toolOrigins.get(toolName);
+      if (origin) {
+        if (await ensureCortex()) {
+          try {
+            await registry.updateToolUsage(origin.serverId, origin.originalName);
+          } catch {
+            // Non-critical — usage tracking is best-effort
+          }
+        }
+        return;
+      }
+
+      // Case 2: mcp_call_tool invocation — extract serverId/toolName from params
+      if (toolName === "mcp_call_tool" && event.params) {
+        const params = event.params as { serverId?: string; toolName?: string };
+        if (params.serverId && params.toolName && (await ensureCortex())) {
+          try {
+            await registry.updateToolUsage(params.serverId, params.toolName);
+          } catch {
+            // Non-critical — usage tracking is best-effort
+          }
+        }
+      }
     });
 
     // ========================================================================
@@ -510,6 +523,7 @@ const mcpClientPlugin = {
       async stop() {
         await sessionMgr.disconnectAll();
         dynamicTools.clear();
+        toolOrigins.clear();
         client.destroy();
       },
     });

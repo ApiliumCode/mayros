@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <circle cx="64" cy="64" r="60" fill="#1e1e2e" stroke="#7c3aed" stroke-width="4"/>
+  <text x="64" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-size="72" font-weight="bold" fill="#c4b5fd">M</text>
+</svg>

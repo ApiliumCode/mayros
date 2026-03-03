@@ -1,9 +1,10 @@
 import * as esbuild from "esbuild";
+import type { BuildOptions } from "esbuild";
 
-const isWatch = process.argv.includes("--watch");
+const isWatch: boolean = process.argv.includes("--watch");
 
 /** Extension host bundle (CJS, Node) */
-const extensionConfig = {
+const extensionConfig: BuildOptions = {
   entryPoints: ["src/extension.ts"],
   bundle: true,
   outfile: "dist/extension.js",
@@ -15,14 +16,14 @@ const extensionConfig = {
 };
 
 /** Webview bundles (ESM, browser) */
-const webviewEntries = [
+const webviewEntries: string[] = [
   "src/webview/chat/chat.ts",
   "src/webview/plan/plan.ts",
   "src/webview/trace/trace.ts",
   "src/webview/kg/kg.ts",
 ];
 
-const webviewConfig = {
+const webviewConfig: BuildOptions = {
   entryPoints: webviewEntries,
   bundle: true,
   outdir: "dist/webview",
@@ -32,7 +33,7 @@ const webviewConfig = {
   sourcemap: true,
 };
 
-async function build() {
+async function build(): Promise<void> {
   if (isWatch) {
     const extCtx = await esbuild.context(extensionConfig);
     const webCtx = await esbuild.context(webviewConfig);
@@ -45,7 +46,7 @@ async function build() {
   }
 }
 
-build().catch((err) => {
+build().catch((err: unknown) => {
   console.error(err);
   process.exit(1);
 });

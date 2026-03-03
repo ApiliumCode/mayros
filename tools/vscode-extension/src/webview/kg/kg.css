@@ -1,0 +1,102 @@
+/* Knowledge Graph panel styles — Mayros VSCode extension */
+
+.kg-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.kg-header {
+  padding: 4px 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kg-header input[type="text"] {
+  flex: 1;
+  padding: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+.kg-header input[type="number"] {
+  width: 60px;
+  padding: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+.kg-header button {
+  padding: 4px 12px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.kg-header button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.result-count {
+  font-size: 0.85em;
+  opacity: 0.7;
+  padding: 2px 0;
+}
+
+.results {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.triple-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.triple-table th {
+  text-align: left;
+  padding: 4px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+}
+
+.triple-table td {
+  padding: 4px;
+}
+
+.triple-table tr {
+  cursor: pointer;
+}
+
+.triple-table tr:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.triple-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.triple-link:hover {
+  text-decoration: underline;
+}
+
+.empty-state {
+  padding: 8px;
+  opacity: 0.6;
+}
+
+.error-state {
+  padding: 8px;
+  color: var(--vscode-errorForeground);
+}
