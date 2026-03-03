@@ -15,6 +15,7 @@ import { DecisionGraph } from "./decision-graph.js";
 import { ObservabilityFormatter } from "./formatters.js";
 import { MetricsExporter } from "./metrics-exporter.js";
 import { ObservabilityQueryEngine } from "./query-engine.js";
+import { SessionForkManager } from "./session-fork.js";
 import { TraceEmitter } from "./trace-emitter.js";
 
 // ============================================================================
@@ -64,6 +65,8 @@ const semanticObservabilityPlugin = {
         api.logger.warn("semantic-observability: Cortex unreachable — now unhealthy");
       },
     });
+
+    const forkMgr = new SessionForkManager(client, emitter, ns);
 
     // Metrics exporter
     const metrics = new MetricsExporter();
@@ -239,6 +242,84 @@ const semanticObservabilityPlugin = {
         },
       },
       { name: "trace_stats" },
+    );
+
+    api.registerTool(
+      {
+        name: "trace_session_fork",
+        label: "Session Fork",
+        description: "Fork the current session into a new session, copying all trace events.",
+        parameters: Type.Object({
+          sessionKey: Type.Optional(Type.String({ description: "Source session key" })),
+          newSessionKey: Type.Optional(Type.String({ description: "Name for the forked session" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, newSessionKey } = params as {
+            sessionKey?: string;
+            newSessionKey?: string;
+          };
+
+          const sourceKey = sessionKey ?? "default";
+
+          try {
+            const result = await forkMgr.fork(sourceKey, newSessionKey);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session forked: ${result.originalSession} → ${result.forkedSession}\n  events copied: ${result.eventsCopied}\n  forkedAt: ${result.forkedAt}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Fork failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_fork" },
+    );
+
+    api.registerTool(
+      {
+        name: "trace_session_rewind",
+        label: "Session Rewind",
+        description: "Rewind a session to a specific timestamp, marking later events as inactive.",
+        parameters: Type.Object({
+          sessionKey: Type.String({ description: "Session key to rewind" }),
+          toTimestamp: Type.String({ description: "ISO 8601 timestamp to rewind to" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, toTimestamp } = params as {
+            sessionKey: string;
+            toTimestamp: string;
+          };
+
+          try {
+            const result = await forkMgr.rewind(sessionKey, toTimestamp);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session rewound: ${result.sessionKey}\n  rewindPoint: ${result.rewindPoint}\n  events removed: ${result.eventsRemoved}\n  events retained: ${result.eventsRetained}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Rewind failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_rewind" },
     );
 
     // ========================================================================

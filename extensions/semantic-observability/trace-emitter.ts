@@ -246,6 +246,16 @@ export class TraceEmitter {
     return id;
   }
 
+  // ---------- Raw emit (for fork/copy) ----------
+
+  /**
+   * Push a pre-built event into the buffer without generating a new id or
+   * timestamp. Used by SessionForkManager to copy events across sessions.
+   */
+  emitRaw(event: TraceEvent): void {
+    this.pushEvent(event);
+  }
+
   // ---------- Buffer access (for testing) ----------
 
   /**
@@ -253,6 +263,14 @@ export class TraceEmitter {
    */
   get bufferedCount(): number {
     return this.buffer.length;
+  }
+
+  /**
+   * Return the count of buffered events, optionally filtered by session.
+   */
+  getBufferedEventCount(session?: string): number {
+    if (!session) return this.buffer.length;
+    return this.buffer.filter((e) => e.session === session).length;
   }
 
   /**
