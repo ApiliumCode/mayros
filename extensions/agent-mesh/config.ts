@@ -3,6 +3,7 @@ import {
   parseCortexConfig,
   assertAllowedKeys,
 } from "../shared/cortex-config.js";
+import type { MergeStrategy } from "./mesh-protocol.js";
 
 export type { CortexConfig };
 
@@ -12,10 +13,23 @@ export type MeshConfig = {
   autoMerge: boolean;
 };
 
+export type TeamsConfig = {
+  maxTeamSize: number;
+  defaultStrategy: MergeStrategy;
+  workflowTimeout: number;
+};
+
+export type WorktreeConfig = {
+  enabled: boolean;
+  basePath: string;
+};
+
 export type AgentMeshConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
   mesh: MeshConfig;
+  teams: TeamsConfig;
+  worktree: WorktreeConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
@@ -24,6 +38,19 @@ const DEFAULT_PORT = 8080;
 const DEFAULT_MAX_SHARED_NAMESPACES = 50;
 const DEFAULT_DELEGATION_TIMEOUT = 300;
 const DEFAULT_AUTO_MERGE = true;
+const DEFAULT_MAX_TEAM_SIZE = 8;
+const DEFAULT_TEAM_STRATEGY: MergeStrategy = "additive";
+const DEFAULT_WORKFLOW_TIMEOUT = 600;
+const DEFAULT_WORKTREE_ENABLED = false;
+const DEFAULT_WORKTREE_BASE_PATH = ".mayros/worktrees";
+
+const VALID_STRATEGIES: MergeStrategy[] = [
+  "additive",
+  "replace",
+  "conflict-flag",
+  "newest-wins",
+  "majority-wins",
+];
 
 function parseMeshConfig(raw: unknown): MeshConfig {
   const mesh = (raw ?? {}) as Record<string, unknown>;
@@ -56,16 +83,63 @@ function parseMeshConfig(raw: unknown): MeshConfig {
   return { maxSharedNamespaces, delegationTimeout, autoMerge };
 }
 
+export function parseTeamsConfig(raw: unknown): TeamsConfig {
+  const teams = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(teams, ["maxTeamSize", "defaultStrategy", "workflowTimeout"], "teams config");
+  }
+
+  const maxTeamSize =
+    typeof teams.maxTeamSize === "number" ? Math.floor(teams.maxTeamSize) : DEFAULT_MAX_TEAM_SIZE;
+  if (maxTeamSize < 1) {
+    throw new Error("teams.maxTeamSize must be at least 1");
+  }
+
+  const defaultStrategy =
+    typeof teams.defaultStrategy === "string" &&
+    VALID_STRATEGIES.includes(teams.defaultStrategy as MergeStrategy)
+      ? (teams.defaultStrategy as MergeStrategy)
+      : DEFAULT_TEAM_STRATEGY;
+
+  const workflowTimeout =
+    typeof teams.workflowTimeout === "number"
+      ? Math.floor(teams.workflowTimeout)
+      : DEFAULT_WORKFLOW_TIMEOUT;
+  if (workflowTimeout < 1) {
+    throw new Error("teams.workflowTimeout must be at least 1");
+  }
+
+  return { maxTeamSize, defaultStrategy, workflowTimeout };
+}
+
+export function parseWorktreeConfig(raw: unknown): WorktreeConfig {
+  const wt = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(wt, ["enabled", "basePath"], "worktree config");
+  }
+
+  const enabled = wt.enabled === true ? true : DEFAULT_WORKTREE_ENABLED;
+  const basePath = typeof wt.basePath === "string" ? wt.basePath : DEFAULT_WORKTREE_BASE_PATH;
+
+  return { enabled, basePath };
+}
+
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       throw new Error("agent mesh config required");
     }
     const cfg = value as Record<string, unknown>;
-    assertAllowedKeys(cfg, ["cortex", "agentNamespace", "mesh"], "agent mesh config");
+    assertAllowedKeys(
+      cfg,
+      ["cortex", "agentNamespace", "mesh", "teams", "worktree"],
+      "agent mesh config",
+    );
 
     const cortex = parseCortexConfig(cfg.cortex);
     const mesh = parseMeshConfig(cfg.mesh);
+    const teams = parseTeamsConfig(cfg.teams);
+    const worktree = parseWorktreeConfig(cfg.worktree);
 
     const agentNamespace =
       typeof cfg.agentNamespace === "string" ? cfg.agentNamespace : DEFAULT_NAMESPACE;
@@ -75,7 +149,7 @@ export const agentMeshConfigSchema = {
       );
     }
 
-    return { cortex, agentNamespace, mesh };
+    return { cortex, agentNamespace, mesh, teams, worktree };
   },
   uiHints: {
     "cortex.host": {
@@ -117,6 +191,34 @@ export const agentMeshConfigSchema = {
     "mesh.autoMerge": {
       label: "Auto-Merge",
       help: "Automatically merge child agent results back into parent namespace",
+    },
+    "teams.maxTeamSize": {
+      label: "Max Team Size",
+      placeholder: String(DEFAULT_MAX_TEAM_SIZE),
+      advanced: true,
+      help: "Maximum number of agents per team",
+    },
+    "teams.defaultStrategy": {
+      label: "Default Merge Strategy",
+      placeholder: DEFAULT_TEAM_STRATEGY,
+      advanced: true,
+      help: "Default merge strategy for team results (additive, replace, conflict-flag, newest-wins, majority-wins)",
+    },
+    "teams.workflowTimeout": {
+      label: "Workflow Timeout",
+      placeholder: String(DEFAULT_WORKFLOW_TIMEOUT),
+      advanced: true,
+      help: "Timeout in seconds for workflow execution",
+    },
+    "worktree.enabled": {
+      label: "Worktree Isolation",
+      help: "Enable git worktree isolation for parallel agent work",
+    },
+    "worktree.basePath": {
+      label: "Worktree Base Path",
+      placeholder: DEFAULT_WORKTREE_BASE_PATH,
+      advanced: true,
+      help: "Base path for git worktrees relative to repo root",
     },
   },
 };

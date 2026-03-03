@@ -132,6 +132,107 @@ describe("agent mesh config", () => {
       /mesh\.delegationTimeout must be at least 1/,
     );
   });
+
+  it("parses teams config with defaults", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({});
+
+    expect(config.teams.maxTeamSize).toBe(8);
+    expect(config.teams.defaultStrategy).toBe("additive");
+    expect(config.teams.workflowTimeout).toBe(600);
+  });
+
+  it("parses teams config with custom values", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({
+      teams: {
+        maxTeamSize: 4,
+        defaultStrategy: "conflict-flag",
+        workflowTimeout: 120,
+      },
+    });
+
+    expect(config.teams.maxTeamSize).toBe(4);
+    expect(config.teams.defaultStrategy).toBe("conflict-flag");
+    expect(config.teams.workflowTimeout).toBe(120);
+  });
+
+  it("rejects teams.maxTeamSize less than 1", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    expect(() => agentMeshConfigSchema.parse({ teams: { maxTeamSize: 0 } })).toThrow(
+      /teams\.maxTeamSize must be at least 1/,
+    );
+  });
+
+  it("rejects teams.workflowTimeout less than 1", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    expect(() => agentMeshConfigSchema.parse({ teams: { workflowTimeout: 0 } })).toThrow(
+      /teams\.workflowTimeout must be at least 1/,
+    );
+  });
+
+  it("rejects unknown teams keys", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    expect(() => agentMeshConfigSchema.parse({ teams: { badKey: true } })).toThrow(/unknown keys/);
+  });
+
+  it("parses worktree config with defaults", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({});
+
+    expect(config.worktree.enabled).toBe(false);
+    expect(config.worktree.basePath).toBe(".mayros/worktrees");
+  });
+
+  it("parses worktree config with custom values", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({
+      worktree: {
+        enabled: true,
+        basePath: ".custom/trees",
+      },
+    });
+
+    expect(config.worktree.enabled).toBe(true);
+    expect(config.worktree.basePath).toBe(".custom/trees");
+  });
+
+  it("rejects unknown worktree keys", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    expect(() => agentMeshConfigSchema.parse({ worktree: { badKey: true } })).toThrow(
+      /unknown keys/,
+    );
+  });
+
+  it("allows teams and worktree in top-level keys", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({
+      teams: { maxTeamSize: 6 },
+      worktree: { enabled: true },
+    });
+
+    expect(config.teams.maxTeamSize).toBe(6);
+    expect(config.worktree.enabled).toBe(true);
+  });
+
+  it("uses default strategy for invalid strategy value", async () => {
+    const { agentMeshConfigSchema } = await import("./config.js");
+
+    const config = agentMeshConfigSchema.parse({
+      teams: { defaultStrategy: "invalid-strategy" },
+    });
+
+    expect(config.teams.defaultStrategy).toBe("additive");
+  });
 });
 
 // ============================================================================
@@ -837,5 +938,55 @@ describe("knowledge fusion", () => {
       "mayros",
     );
     expect(fusion).toBeTruthy();
+  });
+});
+
+// ============================================================================
+// Teams Config Tests
+// ============================================================================
+
+describe("teams config", () => {
+  it("parseTeamsConfig returns defaults", async () => {
+    const { parseTeamsConfig } = await import("./config.js");
+
+    const config = parseTeamsConfig(undefined);
+    expect(config.maxTeamSize).toBe(8);
+    expect(config.defaultStrategy).toBe("additive");
+    expect(config.workflowTimeout).toBe(600);
+  });
+
+  it("parseTeamsConfig accepts valid values", async () => {
+    const { parseTeamsConfig } = await import("./config.js");
+
+    const config = parseTeamsConfig({
+      maxTeamSize: 12,
+      defaultStrategy: "newest-wins",
+      workflowTimeout: 300,
+    });
+    expect(config.maxTeamSize).toBe(12);
+    expect(config.defaultStrategy).toBe("newest-wins");
+    expect(config.workflowTimeout).toBe(300);
+  });
+});
+
+// ============================================================================
+// Worktree Config Tests
+// ============================================================================
+
+describe("worktree config", () => {
+  it("parseWorktreeConfig returns defaults", async () => {
+    const { parseWorktreeConfig } = await import("./config.js");
+
+    const config = parseWorktreeConfig(undefined);
+    expect(config.enabled).toBe(false);
+    expect(config.basePath).toBe(".mayros/worktrees");
+  });
+
+  it("parseWorktreeConfig accepts custom values", async () => {
+    const { parseWorktreeConfig } = await import("./config.js");
+
+    const config = parseWorktreeConfig({ enabled: true, basePath: "custom/path" });
+    expect(config.enabled).toBe(true);
+    expect(config.basePath).toBe("custom/path");
   });
 });
