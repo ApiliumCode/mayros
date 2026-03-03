@@ -17,6 +17,7 @@ import { mcpClientConfigSchema } from "./config.js";
 import { McpCortexRegistry } from "./cortex-registry.js";
 import { SessionManager } from "./session-manager.js";
 import { bridgeMcpTool, classifyMcpToolKind } from "./tool-bridge.js";
+import { bridgeMcpContent, hasImageContent } from "./image-bridge.js";
 
 // ============================================================================
 // Plugin Definition
@@ -96,13 +97,19 @@ const mcpClientPlugin = {
                   (params ?? {}) as Record<string, unknown>,
                 );
 
-                const textContent = result.content
-                  .map((c) => c.text ?? c.data ?? "")
-                  .filter(Boolean)
-                  .join("\n");
+                // Use image bridge for content with image blocks
+                const content = hasImageContent(result.content)
+                  ? bridgeMcpContent(result.content)
+                  : (() => {
+                      const textContent = result.content
+                        .map((c) => c.text ?? "")
+                        .filter(Boolean)
+                        .join("\n");
+                      return [{ type: "text" as const, text: textContent || "(empty response)" }];
+                    })();
 
                 return {
-                  content: [{ type: "text", text: textContent || "(empty response)" }],
+                  content,
                   details: {
                     action: "called",
                     server: serverId,
@@ -330,13 +337,19 @@ const mcpClientPlugin = {
           try {
             const result = await transport.callTool(toolName, args);
 
-            const textContent = result.content
-              .map((c) => c.text ?? c.data ?? "")
-              .filter(Boolean)
-              .join("\n");
+            // Use image bridge for content with image blocks
+            const content = hasImageContent(result.content)
+              ? bridgeMcpContent(result.content)
+              : (() => {
+                  const textContent = result.content
+                    .map((c) => c.text ?? "")
+                    .filter(Boolean)
+                    .join("\n");
+                  return [{ type: "text" as const, text: textContent || "(empty response)" }];
+                })();
 
             return {
-              content: [{ type: "text", text: textContent || "(empty response)" }],
+              content,
               details: {
                 action: "called",
                 server: serverId,
