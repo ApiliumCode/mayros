@@ -18,6 +18,7 @@ describe("agent-events sequencing", () => {
   });
 
   test("maintains monotonic seq per runId", async () => {
+    resetAgentRunContextForTest();
     const seen: Record<string, number[]> = {};
     const stop = onAgentEvent((evt) => {
       const list = seen[evt.runId] ?? [];
@@ -37,6 +38,7 @@ describe("agent-events sequencing", () => {
   });
 
   test("preserves compaction ordering on the event bus", async () => {
+    resetAgentRunContextForTest();
     const phases: Array<string> = [];
     const stop = onAgentEvent((evt) => {
       if (evt.runId !== "run-1") {
