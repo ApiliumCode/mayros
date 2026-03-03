@@ -1,0 +1,115 @@
+{
+  "name": "mayros-vscode",
+  "displayName": "Mayros",
+  "version": "0.1.3",
+  "description": "Mayros AI agent framework — sessions, agents, skills, knowledge graph, and trace viewer",
+  "categories": [
+    "Other"
+  ],
+  "license": "MIT",
+  "publisher": "apilium",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.96.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^3.0.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mayros",
+          "title": "Mayros",
+          "icon": "assets/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mayros": [
+        {
+          "id": "mayros.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "mayros.agents",
+          "name": "Agents"
+        },
+        {
+          "id": "mayros.skills",
+          "name": "Skills"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "mayros.connect",
+        "title": "Mayros: Connect to Gateway"
+      },
+      {
+        "command": "mayros.disconnect",
+        "title": "Mayros: Disconnect"
+      },
+      {
+        "command": "mayros.refresh",
+        "title": "Mayros: Refresh"
+      },
+      {
+        "command": "mayros.openChat",
+        "title": "Mayros: Open Chat"
+      },
+      {
+        "command": "mayros.openPlan",
+        "title": "Mayros: Open Plan Mode"
+      },
+      {
+        "command": "mayros.openTrace",
+        "title": "Mayros: Open Trace Viewer"
+      },
+      {
+        "command": "mayros.openKg",
+        "title": "Mayros: Open Knowledge Graph"
+      }
+    ],
+    "configuration": {
+      "title": "Mayros",
+      "properties": {
+        "mayros.gatewayUrl": {
+          "type": "string",
+          "default": "ws://127.0.0.1:18789",
+          "description": "WebSocket URL for the Mayros gateway"
+        },
+        "mayros.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-connect to gateway on activation"
+        },
+        "mayros.reconnectDelayMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Delay between reconnection attempts (ms)"
+        },
+        "mayros.maxReconnectAttempts": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum reconnection attempts"
+        }
+      }
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.96.0"
+  }
+}
