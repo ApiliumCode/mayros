@@ -377,6 +377,15 @@ const entries: SubCliEntry[] = [
       mod.registerDoctorCli(program);
     },
   },
+  {
+    name: "lsp",
+    description: "LSP bridge — query language diagnostics and definitions from Cortex",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../lsp-cli.js");
+      mod.registerLspCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
