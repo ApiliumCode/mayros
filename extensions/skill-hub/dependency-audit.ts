@@ -8,6 +8,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
+import type { CortexClientLike } from "../shared/cortex-client.js";
 
 // ============================================================================
 // Types
@@ -122,7 +123,31 @@ type HubClientLike = {
 // DependencyAuditor
 // ============================================================================
 
+// ============================================================================
+// Cortex persistence helpers
+// ============================================================================
+
+function auditSubject(ns: string, slug: string): string {
+  return `${ns}:skill:audit:${slug}`;
+}
+
+function findingSubject(ns: string, slug: string, index: number): string {
+  return `${ns}:skill:audit:${slug}:finding:${index}`;
+}
+
+function auditPred(ns: string, field: string): string {
+  return `${ns}:skill:audit:${field}`;
+}
+
 export class DependencyAuditor {
+  private readonly cortex: CortexClientLike | null;
+  private readonly ns: string;
+
+  constructor(cortex?: CortexClientLike, ns = "mayros") {
+    this.cortex = cortex ?? null;
+    this.ns = ns;
+  }
+
   /**
    * Scan a single file's content against security rules.
    * Returns findings for any rule that matches.
@@ -182,7 +207,7 @@ export class DependencyAuditor {
 
     const hasCritical = findings.some((f) => f.severity === "critical");
 
-    return {
+    const report: AuditReport = {
       slug,
       version,
       totalDependencies,
@@ -190,6 +215,9 @@ export class DependencyAuditor {
       scannedAt,
       passed: !hasCritical,
     };
+
+    await this.persistReport(report);
+    return report;
   }
 
   /**
@@ -221,6 +249,129 @@ export class DependencyAuditor {
     }
 
     return reports;
+  }
+
+  /**
+   * Retrieve the last persisted audit report for a skill from Cortex.
+   */
+  async getLastAudit(slug: string): Promise<AuditReport | null> {
+    if (!this.cortex) return null;
+
+    try {
+      const subject = auditSubject(this.ns, slug);
+      const { matches } = await this.cortex.patternQuery({ subject, limit: 20 });
+      if (matches.length === 0) return null;
+
+      const fields = new Map<string, string>();
+      for (const t of matches) {
+        const key = t.predicate.split(":").pop() ?? "";
+        fields.set(key, String(t.object));
+      }
+
+      const scannedAt = fields.get("scannedAt") ?? "";
+      const findingCount = parseInt(fields.get("findingCount") ?? "0", 10);
+
+      // Retrieve individual findings
+      const findings: AuditFinding[] = [];
+      for (let i = 0; i < findingCount; i++) {
+        const fSubject = findingSubject(this.ns, slug, i);
+        const { matches: fMatches } = await this.cortex.patternQuery({
+          subject: fSubject,
+          limit: 10,
+        });
+        if (fMatches.length === 0) continue;
+
+        const ff = new Map<string, string>();
+        for (const t of fMatches) {
+          const key = t.predicate.split(":").pop() ?? "";
+          ff.set(key, String(t.object));
+        }
+        findings.push({
+          slug,
+          version: fields.get("version") ?? "unknown",
+          severity: (ff.get("severity") ?? "info") as AuditSeverity,
+          rule: ff.get("rule") ?? "",
+          message: ff.get("message") ?? "",
+          file: ff.get("file") || undefined,
+        });
+      }
+
+      return {
+        slug,
+        version: fields.get("version") ?? "unknown",
+        totalDependencies: parseInt(fields.get("totalDependencies") ?? "0", 10),
+        findings,
+        scannedAt,
+        passed: fields.get("passed") === "true",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist an audit report to Cortex as RDF triples.
+   */
+  private async persistReport(report: AuditReport): Promise<void> {
+    if (!this.cortex) return;
+
+    try {
+      const subject = auditSubject(this.ns, report.slug);
+      const pred = (field: string) => auditPred(this.ns, field);
+
+      // Upsert summary triples
+      const summaryFields: Array<[string, string | number | boolean]> = [
+        ["version", report.version],
+        ["scannedAt", report.scannedAt],
+        ["passed", String(report.passed)],
+        ["totalDependencies", report.totalDependencies],
+        ["findingCount", report.findings.length],
+      ];
+
+      for (const [field, value] of summaryFields) {
+        // Delete old value, then create new
+        const { matches } = await this.cortex.patternQuery({
+          subject,
+          predicate: pred(field),
+          limit: 1,
+        });
+        for (const t of matches) {
+          if (t.id) await this.cortex.deleteTriple(t.id);
+        }
+        await this.cortex.createTriple({ subject, predicate: pred(field), object: value });
+      }
+
+      // Persist individual findings
+      for (let i = 0; i < report.findings.length; i++) {
+        const f = report.findings[i];
+        const fSubject = findingSubject(this.ns, report.slug, i);
+
+        const findingFields: Array<[string, string]> = [
+          ["severity", f.severity],
+          ["rule", f.rule],
+          ["message", f.message],
+        ];
+        if (f.file) findingFields.push(["file", f.file]);
+
+        for (const [field, value] of findingFields) {
+          const { matches } = await this.cortex.patternQuery({
+            subject: fSubject,
+            predicate: pred(field),
+            limit: 1,
+          });
+          for (const t of matches) {
+            if (t.id) await this.cortex.deleteTriple(t.id);
+          }
+          await this.cortex.createTriple({
+            subject: fSubject,
+            predicate: pred(field),
+            object: value,
+          });
+        }
+      }
+    } catch {
+      // Cortex persistence failure is non-fatal
+    }
   }
 
   /**

@@ -479,7 +479,7 @@ const skillHubPlugin = {
       if (!cfg.notifications.checkOnSessionStart) return;
       try {
         const skillsDir = api.resolvePath("skills");
-        const checker = new UpdateChecker();
+        const checker = new UpdateChecker(cortexAvailable ? cortex : undefined, cfg.agentNamespace);
         const updates = await checker.checkForUpdates(skillsDir, hubClient);
         const outdated = updates.filter((u) => u.hasUpdate);
         if (outdated.length > 0) {
@@ -861,7 +861,10 @@ const skillHubPlugin = {
           .argument("[slug]", "Specific skill slug (or --all)")
           .option("--all", "Audit all installed skills")
           .action(async (slug, opts) => {
-            const auditor = new DependencyAuditor();
+            const auditor = new DependencyAuditor(
+              cortexAvailable ? cortex : undefined,
+              cfg.agentNamespace,
+            );
             const skillsDir = api.resolvePath("skills");
 
             try {

@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CortexClientLike } from "../shared/cortex-client.js";
 import { DependencyAuditor, type AuditFinding, type AuditReport } from "./dependency-audit.js";
 
 // ============================================================================
@@ -276,5 +277,155 @@ describe("DependencyAuditor.auditAll", () => {
     const hub = mockHubClient({});
     const reports = await auditor.auditAll("/nonexistent-audit-dir", hub);
     expect(reports).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// Cortex persistence tests
+// ============================================================================
+
+type StoredTriple = {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string | number | boolean | { node: string };
+};
+
+function createMockCortex(): CortexClientLike & { triples: StoredTriple[] } {
+  let nextId = 1;
+  const triples: StoredTriple[] = [];
+
+  return {
+    triples,
+    createTriple: vi.fn(async (req) => {
+      const id = String(nextId++);
+      const t: StoredTriple = {
+        id,
+        subject: req.subject,
+        predicate: req.predicate,
+        object: req.object,
+      };
+      triples.push(t);
+      return { ...t };
+    }),
+    listTriples: vi.fn(async (query) => {
+      const matches = triples.filter((t) => {
+        if (query.subject && t.subject !== query.subject) return false;
+        if (query.predicate && t.predicate !== query.predicate) return false;
+        return true;
+      });
+      return { triples: matches, total: matches.length };
+    }),
+    patternQuery: vi.fn(async (req) => {
+      const matches = triples.filter((t) => {
+        if (req.subject && t.subject !== req.subject) return false;
+        if (req.predicate && t.predicate !== req.predicate) return false;
+        return true;
+      });
+      return { matches, total: matches.length };
+    }),
+    deleteTriple: vi.fn(async (id: string) => {
+      const idx = triples.findIndex((t) => t.id === id);
+      if (idx >= 0) triples.splice(idx, 1);
+    }),
+  };
+}
+
+describe("DependencyAuditor — Cortex persistence", () => {
+  it("persists audit report as triples", async () => {
+    const dir = await createTmpDir();
+    await writeSkillFiles(dir, "my-skill", "1.0.0", 'eval("x")');
+    const hub = mockHubClient({ "my-skill": { version: "1.0.0" } });
+    const cortex = createMockCortex();
+    const auditor = new DependencyAuditor(cortex, "test");
+
+    const report = await auditor.auditSkill("my-skill", path.join(dir, "my-skill"), hub);
+
+    expect(report.passed).toBe(false);
+    expect(cortex.createTriple).toHaveBeenCalled();
+
+    // Summary triples
+    const summaryTriples = cortex.triples.filter((t) => t.subject === "test:skill:audit:my-skill");
+    const preds = summaryTriples.map((t) => t.predicate.split(":").pop());
+    expect(preds).toContain("version");
+    expect(preds).toContain("scannedAt");
+    expect(preds).toContain("passed");
+    expect(preds).toContain("findingCount");
+    expect(preds).toContain("totalDependencies");
+
+    const passedTriple = summaryTriples.find((t) => t.predicate.endsWith(":passed"));
+    expect(passedTriple?.object).toBe("false");
+  });
+
+  it("persists individual findings as triples", async () => {
+    const dir = await createTmpDir();
+    await writeSkillFiles(dir, "bad", "1.0.0", 'eval("x")');
+    const hub = mockHubClient({ bad: { version: "1.0.0" } });
+    const cortex = createMockCortex();
+    const auditor = new DependencyAuditor(cortex, "test");
+
+    await auditor.auditSkill("bad", path.join(dir, "bad"), hub);
+
+    const findingTriples = cortex.triples.filter((t) => t.subject.includes(":finding:"));
+    expect(findingTriples.length).toBeGreaterThan(0);
+
+    const severities = findingTriples.filter((t) => t.predicate.endsWith(":severity"));
+    expect(severities[0]?.object).toBe("critical");
+  });
+
+  it("retrieves last audit from Cortex via getLastAudit", async () => {
+    const dir = await createTmpDir();
+    await writeSkillFiles(dir, "stored", "2.0.0", "export const x = 1;\n");
+    const hub = mockHubClient({ stored: { version: "2.0.0" } });
+    const cortex = createMockCortex();
+    const auditor = new DependencyAuditor(cortex, "test");
+
+    await auditor.auditSkill("stored", path.join(dir, "stored"), hub);
+
+    const last = await auditor.getLastAudit("stored");
+    expect(last).not.toBeNull();
+    expect(last!.slug).toBe("stored");
+    expect(last!.version).toBe("2.0.0");
+    expect(last!.passed).toBe(true);
+    expect(last!.findings).toHaveLength(0);
+  });
+
+  it("getLastAudit returns null without cortex", async () => {
+    const auditor = new DependencyAuditor();
+    const result = await auditor.getLastAudit("anything");
+    expect(result).toBeNull();
+  });
+
+  it("skips persistence silently without cortex", async () => {
+    const dir = await createTmpDir();
+    await writeSkillFiles(dir, "no-cortex", "1.0.0", "export const x = 1;\n");
+    const hub = mockHubClient({ "no-cortex": { version: "1.0.0" } });
+    const auditor = new DependencyAuditor(); // no cortex
+
+    // Should not throw
+    const report = await auditor.auditSkill("no-cortex", path.join(dir, "no-cortex"), hub);
+    expect(report.passed).toBe(true);
+  });
+
+  it("overwrites previous audit triples on re-audit", async () => {
+    const dir = await createTmpDir();
+    await writeSkillFiles(dir, "evolve", "1.0.0", "export const x = 1;\n");
+    const hub = mockHubClient({ evolve: { version: "1.0.0" } });
+    const cortex = createMockCortex();
+    const auditor = new DependencyAuditor(cortex, "test");
+
+    await auditor.auditSkill("evolve", path.join(dir, "evolve"), hub);
+    const countAfterFirst = cortex.triples.filter(
+      (t) => t.subject === "test:skill:audit:evolve",
+    ).length;
+
+    // Re-audit
+    await auditor.auditSkill("evolve", path.join(dir, "evolve"), hub);
+    const countAfterSecond = cortex.triples.filter(
+      (t) => t.subject === "test:skill:audit:evolve",
+    ).length;
+
+    // Should have same number (old deleted, new created)
+    expect(countAfterSecond).toBe(countAfterFirst);
   });
 });
