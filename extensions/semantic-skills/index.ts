@@ -993,8 +993,8 @@ const semanticSkillsPlugin = {
     }
 
     // Hook: before_tool_call — permission gating + tool allowlist
-    api.on("before_tool_call", async (event) => {
-      const toolName = (event as Record<string, unknown>).toolName as string | undefined;
+    api.on("before_tool_call", async (event, _ctx) => {
+      const toolName = event.toolName;
       if (!toolName) return;
 
       // No semantic skills active — allow everything
@@ -1032,13 +1032,11 @@ const semanticSkillsPlugin = {
     });
 
     // Hook: after_tool_call — audit trail for assertions and proofs
-    api.on("after_tool_call", async (event) => {
-      const toolName = (event as Record<string, unknown>).toolName as string | undefined;
-      if (!toolName) return;
-
+    api.on("after_tool_call", async (event, _ctx) => {
+      const toolName = event.toolName;
       if (toolName !== "skill_assert" && toolName !== "skill_request_zk_proof") return;
 
-      const result = (event as Record<string, unknown>).result;
+      const result = event.result;
 
       api.logger.info(
         `semantic-skills: audit — ${toolName} executed (agent: ${agentId}, result: ${typeof result === "object" ? JSON.stringify(result) : String(result)})`,
