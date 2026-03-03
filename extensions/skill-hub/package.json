@@ -5,7 +5,8 @@
   "description": "Apilium Hub marketplace — publish, install, sign, and verify semantic skills",
   "type": "module",
   "dependencies": {
-    "@sinclair/typebox": "0.34.48"
+    "@sinclair/typebox": "0.34.48",
+    "semver": "^7.6.0"
   },
   "devDependencies": {
     "@apilium/mayros": "workspace:*"

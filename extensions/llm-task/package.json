@@ -4,6 +4,9 @@
   "private": true,
   "description": "Mayros JSON-only LLM task plugin",
   "type": "module",
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
   "mayros": {
     "extensions": [
       "./index.ts"

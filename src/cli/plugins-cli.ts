@@ -278,7 +278,8 @@ export function registerPluginsCli(program: Command) {
       const plugin = report.plugins.find((p) => p.id === id || p.name === id);
       if (!plugin) {
         defaultRuntime.error(`Plugin not found: ${id}`);
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
       const cfg = loadConfig();
       const install = cfg.plugins?.installs?.[plugin.id];
@@ -429,7 +430,8 @@ export function registerPluginsCli(program: Command) {
         } else {
           defaultRuntime.error(`Plugin not found: ${id}`);
         }
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
 
       const install = cfg.plugins?.installs?.[pluginId];
@@ -496,7 +498,8 @@ export function registerPluginsCli(program: Command) {
 
       if (!result.ok) {
         defaultRuntime.error(result.error);
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
       for (const warning of result.warnings) {
         defaultRuntime.log(theme.warn(warning));
@@ -540,7 +543,8 @@ export function registerPluginsCli(program: Command) {
       const fileSpec = resolveFileNpmSpecToLocalPath(raw);
       if (fileSpec && !fileSpec.ok) {
         defaultRuntime.error(fileSpec.error);
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
       const normalized = fileSpec && fileSpec.ok ? fileSpec.path : raw;
       const resolved = resolveUserPath(normalized);
@@ -553,7 +557,8 @@ export function registerPluginsCli(program: Command) {
           const probe = await installPluginFromPath({ path: resolved, dryRun: true });
           if (!probe.ok) {
             defaultRuntime.error(probe.error);
-            process.exit(1);
+            defaultRuntime.exit(1);
+            return;
           }
 
           let next: MayrosConfig = enablePluginInConfig(
@@ -591,7 +596,8 @@ export function registerPluginsCli(program: Command) {
         });
         if (!result.ok) {
           defaultRuntime.error(result.error);
-          process.exit(1);
+          defaultRuntime.exit(1);
+          return;
         }
         // Plugin CLI registrars may have warmed the manifest registry cache before install;
         // force a rescan so config validation sees the freshly installed plugin.
@@ -617,7 +623,8 @@ export function registerPluginsCli(program: Command) {
 
       if (opts.link) {
         defaultRuntime.error("`--link` requires a local path.");
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
 
       const looksLikePath =
@@ -634,7 +641,8 @@ export function registerPluginsCli(program: Command) {
         raw.endsWith(".zip");
       if (looksLikePath) {
         defaultRuntime.error(`Path not found: ${resolved}`);
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
 
       const result = await installPluginFromNpmSpec({
@@ -643,7 +651,8 @@ export function registerPluginsCli(program: Command) {
       });
       if (!result.ok) {
         defaultRuntime.error(result.error);
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
       // Ensure config validation sees newly installed plugin(s) even if the cache was warmed at startup.
       clearPluginManifestRegistryCache();
@@ -697,7 +706,8 @@ export function registerPluginsCli(program: Command) {
           return;
         }
         defaultRuntime.error("Provide a plugin id or use --all.");
-        process.exit(1);
+        defaultRuntime.exit(1);
+        return;
       }
 
       const result = await updateNpmInstalledPlugins({

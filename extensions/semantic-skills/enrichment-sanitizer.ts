@@ -108,6 +108,10 @@ const INJECTION_PATTERNS = [
   /\bimportant\s*:\s*(the\s+user|you\s+must|ignore|disregard|new\s+rule)/i,
   /\b(curl|wget|bash|sh|eval)\s+/i,
   /\brm\s+-rf\b/i,
+  // Patterns merged from memory-semantic injection detection
+  /\bdo not follow\s+(the\s+)?(system|developer)\b/i,
+  /\bdeveloper\s+message\b/i,
+  /<\s*(system|assistant|developer|tool|function|relevant-memories)\b/i,
 ];
 
 /**

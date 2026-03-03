@@ -253,13 +253,14 @@ function registerLazyCoreCommand(
   ctx: ProgramContext,
   entry: CoreCliEntry,
   command: CoreCliCommandDescriptor,
+  argv: string[],
 ) {
   const placeholder = program.command(command.name).description(command.description);
   placeholder.allowUnknownOption(true);
   placeholder.allowExcessArguments(true);
   placeholder.action(async (...actionArgs) => {
     removeEntryCommands(program, entry);
-    await entry.register({ program, ctx, argv: process.argv });
+    await entry.register({ program, ctx, argv });
     await reparseProgramFromActionArgs(program, actionArgs);
   });
 }
@@ -291,7 +292,7 @@ export function registerCoreCliCommands(program: Command, ctx: ProgramContext, a
     if (entry) {
       const cmd = entry.commands.find((c) => c.name === primary);
       if (cmd) {
-        registerLazyCoreCommand(program, ctx, entry, cmd);
+        registerLazyCoreCommand(program, ctx, entry, cmd, argv);
       }
       return;
     }
@@ -299,7 +300,7 @@ export function registerCoreCliCommands(program: Command, ctx: ProgramContext, a
 
   for (const entry of coreEntries) {
     for (const cmd of entry.commands) {
-      registerLazyCoreCommand(program, ctx, entry, cmd);
+      registerLazyCoreCommand(program, ctx, entry, cmd, argv);
     }
   }
 }
