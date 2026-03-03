@@ -323,6 +323,15 @@ const entries: SubCliEntry[] = [
       mod.registerWorkflowCli(program);
     },
   },
+  {
+    name: "rules",
+    description: "Rules engine — manage Cortex-backed hierarchical rules",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../rules-cli.js");
+      mod.registerRulesCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
