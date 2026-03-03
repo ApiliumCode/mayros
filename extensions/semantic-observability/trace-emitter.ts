@@ -115,6 +115,7 @@ export class TraceEmitter {
     input: unknown,
     output: unknown,
     durationMs: number,
+    session?: string,
   ): string {
     const id = randomUUID();
     const event: TraceEvent = {
@@ -122,6 +123,7 @@ export class TraceEmitter {
       type: "tool_call",
       agentId,
       timestamp: new Date().toISOString(),
+      session,
       durationMs,
       fields: {
         toolName,
@@ -142,6 +144,7 @@ export class TraceEmitter {
     promptTokens: number,
     completionTokens: number,
     durationMs: number,
+    session?: string,
   ): string {
     const id = randomUUID();
     const event: TraceEvent = {
@@ -149,6 +152,7 @@ export class TraceEmitter {
       type: "llm_call",
       agentId,
       timestamp: new Date().toISOString(),
+      session,
       durationMs,
       fields: {
         model,
@@ -170,6 +174,7 @@ export class TraceEmitter {
     alternatives: string[],
     chosen: string,
     reasoning?: string,
+    session?: string,
   ): string {
     const id = randomUUID();
     const fields: Record<string, string> = {
@@ -185,6 +190,7 @@ export class TraceEmitter {
       type: "decision",
       agentId,
       timestamp: new Date().toISOString(),
+      session,
       fields,
     };
     this.pushEvent(event);
@@ -194,13 +200,20 @@ export class TraceEmitter {
   /**
    * Record a subagent delegation.
    */
-  emitDelegation(parentId: string, childId: string, task: string, runId: string): string {
+  emitDelegation(
+    parentId: string,
+    childId: string,
+    task: string,
+    runId: string,
+    session?: string,
+  ): string {
     const id = randomUUID();
     const event: TraceEvent = {
       id,
       type: "delegation",
       agentId: parentId,
       timestamp: new Date().toISOString(),
+      session,
       fields: {
         parentId,
         childId,
@@ -215,7 +228,7 @@ export class TraceEmitter {
   /**
    * Record an error.
    */
-  emitError(agentId: string, error: string, context?: string): string {
+  emitError(agentId: string, error: string, context?: string, session?: string): string {
     const id = randomUUID();
     const fields: Record<string, string> = { error };
     if (context) {
@@ -226,6 +239,7 @@ export class TraceEmitter {
       type: "error",
       agentId,
       timestamp: new Date().toISOString(),
+      session,
       fields,
     };
     this.pushEvent(event);

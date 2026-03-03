@@ -94,9 +94,12 @@ const semanticObservabilityPlugin = {
     ]);
 
     // Track per-LLM-call timing
-    const llmCallTimers = new Map<string, { model: string; startMs: number }>();
+    const llmCallTimers = new Map<string, { model: string; startMs: number; session?: string }>();
     // Track subagent runs
-    const subagentRuns = new Map<string, { childId: string; task: string; startMs: number }>();
+    const subagentRuns = new Map<
+      string,
+      { childId: string; task: string; startMs: number; session?: string }
+    >();
 
     // ========================================================================
     // Tools
@@ -243,9 +246,16 @@ const semanticObservabilityPlugin = {
     // ========================================================================
 
     if (cfg.tracing.enabled && cfg.tracing.captureToolCalls) {
-      api.on("after_tool_call", async (event, _ctx) => {
+      api.on("after_tool_call", async (event, ctx) => {
         const durationMs = event.durationMs ?? 0;
-        emitter.emitToolCall(agentId, event.toolName, event.params, event.result ?? {}, durationMs);
+        emitter.emitToolCall(
+          agentId,
+          event.toolName,
+          event.params,
+          event.result ?? {},
+          durationMs,
+          ctx.sessionKey,
+        );
 
         if (cfg.metrics.enabled) {
           metrics.incrementCounter("mayros_tool_calls_total", { tool_name: event.toolName });
@@ -263,13 +273,14 @@ const semanticObservabilityPlugin = {
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureLLMCalls) {
-      api.on("llm_input", async (event, _ctx) => {
+      api.on("llm_input", async (event, ctx) => {
         const runId = event.runId;
         const model = event.model;
 
         llmCallTimers.set(runId, {
           model,
           startMs: Date.now(),
+          session: ctx.sessionKey,
         });
       });
 
@@ -282,7 +293,14 @@ const semanticObservabilityPlugin = {
         if (timer) {
           llmCallTimers.delete(runId);
           const durationMs = Date.now() - timer.startMs;
-          emitter.emitLLMCall(agentId, timer.model, promptTokens, completionTokens, durationMs);
+          emitter.emitLLMCall(
+            agentId,
+            timer.model,
+            promptTokens,
+            completionTokens,
+            durationMs,
+            timer.session,
+          );
 
           if (cfg.metrics.enabled) {
             metrics.incrementCounter("mayros_llm_calls_total", { model: timer.model });
@@ -302,18 +320,20 @@ const semanticObservabilityPlugin = {
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureDelegations) {
-      api.on("subagent_spawned", async (event, _ctx) => {
+      api.on("subagent_spawned", async (event, ctx) => {
         const runId = event.runId;
         const childId = event.agentId ?? "unknown";
         const task = event.label ?? "";
+        const session = ctx.requesterSessionKey;
 
         subagentRuns.set(runId, {
           childId,
           task,
           startMs: Date.now(),
+          session,
         });
 
-        emitter.emitDelegation(agentId, childId, task, runId);
+        emitter.emitDelegation(agentId, childId, task, runId, session);
       });
 
       api.on("subagent_ended", async (event, _ctx) => {
@@ -325,17 +345,17 @@ const semanticObservabilityPlugin = {
           subagentRuns.delete(runId);
           if (!success) {
             const error = String(event.error ?? "Subagent run failed");
-            emitter.emitError(run.childId, error, `delegation run: ${runId}`);
+            emitter.emitError(run.childId, error, `delegation run: ${runId}`, run.session);
           }
         }
       });
     }
 
     if (cfg.tracing.enabled) {
-      api.on("agent_end", async (event, _ctx) => {
+      api.on("agent_end", async (event, ctx) => {
         if (event.success === false) {
           const error = String(event.error ?? "Agent run failed");
-          emitter.emitError(agentId, error, "agent_end");
+          emitter.emitError(agentId, error, "agent_end", ctx.sessionKey);
         }
       });
     }
