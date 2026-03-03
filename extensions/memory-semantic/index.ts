@@ -29,20 +29,12 @@ import {
   triplesToMemory,
   type SemanticMemoryEntry,
 } from "./rdf-mapper.js";
+import { INJECTION_PATTERNS } from "../semantic-skills/enrichment-sanitizer.js";
 import { TitansClient } from "./titans-client.js";
 
 // ============================================================================
 // Safety
 // ============================================================================
-
-const PROMPT_INJECTION_PATTERNS = [
-  /ignore\b.{0,30}\binstructions/i,
-  /do not follow (the )?(system|developer)/i,
-  /system prompt/i,
-  /developer message/i,
-  /<\s*(system|assistant|developer|tool|function|relevant-memories)\b/i,
-  /\b(run|execute|call|invoke)\b.{0,40}\b(tool|command)\b/i,
-];
 
 const PROMPT_ESCAPE_MAP: Record<string, string> = {
   "&": "&amp;",
@@ -55,7 +47,7 @@ const PROMPT_ESCAPE_MAP: Record<string, string> = {
 export function looksLikePromptInjection(text: string): boolean {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return false;
-  return PROMPT_INJECTION_PATTERNS.some((p) => p.test(normalized));
+  return INJECTION_PATTERNS.some((p) => p.test(normalized));
 }
 
 export function escapeMemoryForPrompt(text: string): string {
@@ -1102,9 +1094,9 @@ const semanticMemoryPlugin = {
     });
 
     // Before compaction: extract facts before context is truncated + consolidate Titans
-    api.on("before_compaction", async (event) => {
+    api.on("before_compaction", async (event, _ctx) => {
       try {
-        const messages = (event as Record<string, unknown>).messages;
+        const messages = event.messages;
         if (!Array.isArray(messages)) return;
 
         const texts: string[] = [];
