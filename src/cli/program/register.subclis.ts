@@ -287,6 +287,24 @@ const entries: SubCliEntry[] = [
       mod.registerCompletionCli(program);
     },
   },
+  {
+    name: "trace",
+    description: "Inspect agent trace events — query, explain, stats, session trees",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../trace-cli.js");
+      mod.registerTraceCli(program);
+    },
+  },
+  {
+    name: "plan",
+    description: "Semantic plan mode — explore, assert, approve, execute with Cortex",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../plan-cli.js");
+      mod.registerPlanCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
