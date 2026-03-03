@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CortexClientLike, TripleDto, ValueDto } from "../shared/cortex-client.js";
-import { RulesEngine, type Rule, type RuleScope } from "./rules-engine.js";
+import { RulesEngine, type Rule } from "./rules-engine.js";
 
 // ============================================================================
 // Mock CortexClient

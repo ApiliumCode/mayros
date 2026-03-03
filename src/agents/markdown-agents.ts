@@ -38,6 +38,8 @@ export type MarkdownAgent = {
   workspace?: string;
   /** Whether this is the default agent. */
   isDefault: boolean;
+  /** Whether persistent agent memory is enabled. */
+  memory: boolean;
   /** The agent identity / system prompt (body after frontmatter). */
   identity: string;
   /** Absolute path to the source .md file. */
@@ -97,6 +99,7 @@ export function parseMarkdownAgentFile(
   const model = frontmatter.model?.trim() || undefined;
   const workspace = frontmatter.workspace?.trim() || undefined;
   const isDefault = frontmatter.default?.trim().toLowerCase() === "true";
+  const memory = frontmatter.memory?.trim().toLowerCase() === "true";
 
   let allowedTools: string[] | undefined;
   const toolsRaw = frontmatter["allowed-tools"]?.trim();
@@ -117,6 +120,7 @@ export function parseMarkdownAgentFile(
     allowedTools,
     workspace,
     isDefault,
+    memory,
     identity: identity || "",
     sourcePath: filePath,
     origin,
