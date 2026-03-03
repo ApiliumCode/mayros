@@ -244,6 +244,24 @@ describe("WorkflowOrchestrator", () => {
       const runs = await orchestrator.listWorkflowRuns();
       expect(runs).toHaveLength(0);
     });
+
+    it("reflects correct state for each run", async () => {
+      const { orchestrator } = createOrchestrator();
+
+      const entry1 = await orchestrator.startWorkflow({ workflowName: "code-review" });
+      const entry2 = await orchestrator.startWorkflow({ workflowName: "security-review" });
+
+      // Execute and complete one, fail the other
+      await orchestrator.executeNextPhase(entry1.id);
+      await orchestrator.failWorkflow(entry2.id, "timeout");
+
+      const runs = await orchestrator.listWorkflowRuns();
+      const run1 = runs.find((r) => r.id === entry1.id);
+      const run2 = runs.find((r) => r.id === entry2.id);
+
+      expect(run1!.state).toBe("completed");
+      expect(run2!.state).toBe("failed");
+    });
   });
 
   describe("executeNextPhase", () => {
@@ -330,6 +348,46 @@ describe("WorkflowOrchestrator", () => {
       expect(result.summary).toContain("completed");
       expect(result.totalPhases).toBe(1);
       expect(result.phaseResults).toHaveLength(1);
+    });
+
+    it("computes correct aggregates for multi-phase workflow", async () => {
+      const { orchestrator } = createOrchestrator();
+
+      const entry = await orchestrator.startWorkflow({
+        workflowName: "feature-dev",
+        path: "src/",
+      });
+
+      // Run all 4 phases
+      await orchestrator.executeNextPhase(entry.id);
+      await orchestrator.executeNextPhase(entry.id);
+      await orchestrator.executeNextPhase(entry.id);
+      await orchestrator.executeNextPhase(entry.id);
+
+      const result = await orchestrator.completeWorkflow(entry.id);
+
+      expect(result.totalPhases).toBe(4);
+      expect(result.completedPhases).toBe(4);
+      expect(result.phaseResults).toHaveLength(4);
+      expect(result.totalAgents).toBeGreaterThan(0);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
+    });
+
+    it("handles workflow with no executed phases", async () => {
+      const { orchestrator } = createOrchestrator();
+
+      const entry = await orchestrator.startWorkflow({
+        workflowName: "code-review",
+      });
+
+      // Complete without executing any phases — should still produce a result
+      const result = await orchestrator.completeWorkflow(entry.id);
+
+      expect(result.totalPhases).toBe(1);
+      expect(result.completedPhases).toBe(0);
+      expect(result.phaseResults).toHaveLength(0);
+      expect(result.totalFindings).toBe(0);
+      expect(result.totalConflicts).toBe(0);
     });
 
     it("throws for non-existent workflow", async () => {

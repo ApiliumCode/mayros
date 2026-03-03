@@ -437,6 +437,35 @@ describe("TeamManager", () => {
     });
   });
 
+  describe("updateMemberStatus edge cases", () => {
+    it("handles update for member not in original team", async () => {
+      const client = createMockClient();
+      const nsMgr = createMockNsMgr("mayros");
+      const fusion = createMockFusion();
+      const mgr = new TeamManager(
+        client as never,
+        "mayros",
+        nsMgr as never,
+        fusion as never,
+        DEFAULT_CONFIG,
+      );
+
+      const team = await mgr.createTeam({
+        name: "edge-test",
+        strategy: "additive",
+        members: [{ agentId: "a1", role: "r1", task: "t1" }],
+      });
+
+      // Update a member that wasn't in the original team — should create a new entry
+      await mgr.updateMemberStatus(team.id, "unknown-agent", "completed", "late join");
+      const fetched = await mgr.getTeam(team.id);
+      const unknown = fetched!.members.find((m) => m.agentId === "unknown-agent");
+      expect(unknown).toBeTruthy();
+      expect(unknown!.status).toBe("completed");
+      expect(unknown!.result).toBe("late join");
+    });
+  });
+
   describe("mergeTeamResults", () => {
     it("merges completed member results", async () => {
       const client = createMockClient();
@@ -491,6 +520,38 @@ describe("TeamManager", () => {
       const result = await mgr.mergeTeamResults(team.id);
       expect(result.summary).toContain("No completed");
       expect(result.memberResults).toHaveLength(0);
+    });
+
+    it("only merges completed members, skips running and failed", async () => {
+      const client = createMockClient();
+      const nsMgr = createMockNsMgr("mayros");
+      const fusion = createMockFusion();
+      const mgr = new TeamManager(
+        client as never,
+        "mayros",
+        nsMgr as never,
+        fusion as never,
+        DEFAULT_CONFIG,
+      );
+
+      const team = await mgr.createTeam({
+        name: "mixed-status",
+        strategy: "additive",
+        members: [
+          { agentId: "a1", role: "security", task: "scan" },
+          { agentId: "a2", role: "tests", task: "test" },
+          { agentId: "a3", role: "types", task: "check" },
+        ],
+      });
+
+      await mgr.updateMemberStatus(team.id, "a1", "completed", "done");
+      await mgr.updateMemberStatus(team.id, "a2", "running");
+      await mgr.updateMemberStatus(team.id, "a3", "failed", "error");
+
+      const result = await mgr.mergeTeamResults(team.id);
+      // Only a1 (completed) should be merged; a2 (running) and a3 (failed) skipped
+      expect(result.memberResults).toHaveLength(1);
+      expect(result.memberResults[0].agentId).toBe("a1");
     });
 
     it("throws for non-existent team", async () => {
