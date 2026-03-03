@@ -7,6 +7,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { CortexClientLike } from "../shared/cortex-client.js";
 
 export type UpdateInfo = {
   slug: string;
@@ -46,7 +47,27 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
+// ============================================================================
+// Cortex persistence helpers
+// ============================================================================
+
+function updateSubject(ns: string, slug: string): string {
+  return `${ns}:skill:update:${slug}`;
+}
+
+function updatePred(ns: string, field: string): string {
+  return `${ns}:skill:update:${field}`;
+}
+
 export class UpdateChecker {
+  private readonly cortex: CortexClientLike | null;
+  private readonly ns: string;
+
+  constructor(cortex?: CortexClientLike, ns = "mayros") {
+    this.cortex = cortex ?? null;
+    this.ns = ns;
+  }
+
   /**
    * Check a single skill for updates.
    */
@@ -57,12 +78,15 @@ export class UpdateChecker {
   ): Promise<UpdateInfo> {
     const info = await hubClient.getSkill(slug);
     const hasUpdate = compareSemver(currentVersion, info.version) < 0;
-    return {
+    const result: UpdateInfo = {
       slug,
       currentVersion,
       latestVersion: info.version,
       hasUpdate,
     };
+
+    await this.persistCheck(result);
+    return result;
   }
 
   /**
@@ -104,5 +128,68 @@ export class UpdateChecker {
     }
 
     return results;
+  }
+
+  /**
+   * Retrieve the last persisted update check for a skill from Cortex.
+   */
+  async getLastCheck(slug: string): Promise<(UpdateInfo & { checkedAt: string }) | null> {
+    if (!this.cortex) return null;
+
+    try {
+      const subject = updateSubject(this.ns, slug);
+      const { matches } = await this.cortex.patternQuery({ subject, limit: 10 });
+      if (matches.length === 0) return null;
+
+      const fields = new Map<string, string>();
+      for (const t of matches) {
+        const key = t.predicate.split(":").pop() ?? "";
+        fields.set(key, String(t.object));
+      }
+
+      return {
+        slug,
+        currentVersion: fields.get("currentVersion") ?? "unknown",
+        latestVersion: fields.get("latestVersion") ?? "unknown",
+        hasUpdate: fields.get("hasUpdate") === "true",
+        checkedAt: fields.get("checkedAt") ?? "",
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist an update check result to Cortex as RDF triples.
+   */
+  private async persistCheck(info: UpdateInfo): Promise<void> {
+    if (!this.cortex) return;
+
+    try {
+      const subject = updateSubject(this.ns, info.slug);
+      const pred = (field: string) => updatePred(this.ns, field);
+      const now = new Date().toISOString();
+
+      const fields: Array<[string, string | boolean]> = [
+        ["currentVersion", info.currentVersion],
+        ["latestVersion", info.latestVersion],
+        ["hasUpdate", String(info.hasUpdate)],
+        ["checkedAt", now],
+      ];
+
+      for (const [field, value] of fields) {
+        const { matches } = await this.cortex.patternQuery({
+          subject,
+          predicate: pred(field),
+          limit: 1,
+        });
+        for (const t of matches) {
+          if (t.id) await this.cortex.deleteTriple(t.id);
+        }
+        await this.cortex.createTriple({ subject, predicate: pred(field), object: value });
+      }
+    } catch {
+      // Cortex persistence failure is non-fatal
+    }
   }
 }
