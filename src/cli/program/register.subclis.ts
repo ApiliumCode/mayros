@@ -305,6 +305,15 @@ const entries: SubCliEntry[] = [
       mod.registerPlanCli(program);
     },
   },
+  {
+    name: "kg",
+    description: "Knowledge graph — search, explore, and query project memory",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../kg-cli.js");
+      mod.registerKgCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
