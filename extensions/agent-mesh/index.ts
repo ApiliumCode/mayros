@@ -33,6 +33,7 @@ import {
   type MeshMessage,
 } from "./mesh-protocol.js";
 import { NamespaceManager } from "./namespace-manager.js";
+import { AgentMailbox } from "./agent-mailbox.js";
 import { TeamManager } from "./team-manager.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
 import { listWorkflows as listWorkflowDefs } from "./workflows/registry.js";
@@ -63,6 +64,7 @@ const agentMeshPlugin = {
       workflowTimeout: cfg.teams.workflowTimeout,
     });
     const orchestrator = new WorkflowOrchestrator(client, ns, teamMgr, fusion, nsMgr);
+    const mailbox = new AgentMailbox(client, ns);
     let cortexAvailable = false;
     const healthMonitor = new HealthMonitor(client, {
       onHealthy: () => {
@@ -933,6 +935,177 @@ const agentMeshPlugin = {
         },
       },
       { name: "mesh_run_workflow" },
+    );
+
+    // 13. agent_send_message
+    api.registerTool(
+      {
+        name: "agent_send_message",
+        label: "Agent Send Message",
+        description: "Send a persistent message to another agent via the Cortex-backed mailbox.",
+        parameters: Type.Object({
+          to: Type.String({ description: "Recipient agent ID" }),
+          content: Type.String({ description: "Message content" }),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: [
+                "task",
+                "finding",
+                "question",
+                "status",
+                "knowledge-share",
+                "delegation-context",
+              ],
+              description: "Message type (default: task)",
+            }),
+          ),
+          replyTo: Type.Optional(Type.String({ description: "Parent message ID for threading" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { to, content, type, replyTo } = params as {
+            to: string;
+            content: string;
+            type?: string;
+            replyTo?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot send message." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const msg = await mailbox.send({
+              from: agentId,
+              to,
+              content,
+              type: type as "task" | undefined,
+              replyTo,
+            });
+
+            // Also bridge to in-memory message log for backward compat
+            const meshMsg = createMeshMessage(
+              isValidMessageType(type ?? "task") ? (type as "task") : "knowledge-share",
+              agentId,
+              to,
+              ns,
+              { mailboxMessageId: msg.id, content },
+            );
+            appendToMessageLog(meshMsg);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Message sent to ${to} (id: ${msg.id}, type: ${msg.type})`,
+                },
+              ],
+              details: { action: "sent", message: msg },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Send failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_send_message" },
+    );
+
+    // 14. agent_check_inbox
+    api.registerTool(
+      {
+        name: "agent_check_inbox",
+        label: "Agent Check Inbox",
+        description: "Check the current agent's mailbox for persistent messages from other agents.",
+        parameters: Type.Object({
+          status: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["unread", "read", "archived"],
+              description: "Filter by status (default: all)",
+            }),
+          ),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: [
+                "task",
+                "finding",
+                "question",
+                "status",
+                "knowledge-share",
+                "delegation-context",
+              ],
+              description: "Filter by message type",
+            }),
+          ),
+          limit: Type.Optional(
+            Type.Number({ description: "Max messages to return (default: 20)" }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            status,
+            type,
+            limit = 20,
+          } = params as {
+            status?: string;
+            type?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot check inbox." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const messages = await mailbox.inbox({
+              agent: agentId,
+              status: status as "unread" | undefined,
+              type: type as "task" | undefined,
+              limit,
+            });
+
+            if (messages.length === 0) {
+              return {
+                content: [{ type: "text", text: "No messages in inbox." }],
+                details: { count: 0 },
+              };
+            }
+
+            const text = messages
+              .map(
+                (m) =>
+                  `- [${m.status}] ${m.id} from ${m.from} (${m.type}): ${m.content.slice(0, 100)}${m.content.length > 100 ? "…" : ""}`,
+              )
+              .join("\n");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Inbox (${messages.length} message${messages.length === 1 ? "" : "s"}):\n\n${text}`,
+                },
+              ],
+              details: { count: messages.length, messages },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Inbox check failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_check_inbox" },
     );
 
     // ========================================================================

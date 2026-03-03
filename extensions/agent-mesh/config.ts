@@ -24,12 +24,18 @@ export type WorktreeConfig = {
   basePath: string;
 };
 
+export type MailboxConfig = {
+  maxMessagesPerAgent: number;
+  retentionDays: number;
+};
+
 export type AgentMeshConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
   mesh: MeshConfig;
   teams: TeamsConfig;
   worktree: WorktreeConfig;
+  mailbox: MailboxConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
@@ -43,6 +49,8 @@ const DEFAULT_TEAM_STRATEGY: MergeStrategy = "additive";
 const DEFAULT_WORKFLOW_TIMEOUT = 600;
 const DEFAULT_WORKTREE_ENABLED = false;
 const DEFAULT_WORKTREE_BASE_PATH = ".mayros/worktrees";
+const DEFAULT_MAILBOX_MAX_MESSAGES = 1000;
+const DEFAULT_MAILBOX_RETENTION_DAYS = 30;
 
 const VALID_STRATEGIES: MergeStrategy[] = [
   "additive",
@@ -124,6 +132,31 @@ export function parseWorktreeConfig(raw: unknown): WorktreeConfig {
   return { enabled, basePath };
 }
 
+export function parseMailboxConfig(raw: unknown): MailboxConfig {
+  const mb = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(mb, ["maxMessagesPerAgent", "retentionDays"], "mailbox config");
+  }
+
+  const maxMessagesPerAgent =
+    typeof mb.maxMessagesPerAgent === "number"
+      ? Math.floor(mb.maxMessagesPerAgent)
+      : DEFAULT_MAILBOX_MAX_MESSAGES;
+  if (maxMessagesPerAgent < 1) {
+    throw new Error("mailbox.maxMessagesPerAgent must be at least 1");
+  }
+
+  const retentionDays =
+    typeof mb.retentionDays === "number"
+      ? Math.floor(mb.retentionDays)
+      : DEFAULT_MAILBOX_RETENTION_DAYS;
+  if (retentionDays < 1) {
+    throw new Error("mailbox.retentionDays must be at least 1");
+  }
+
+  return { maxMessagesPerAgent, retentionDays };
+}
+
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -132,7 +165,7 @@ export const agentMeshConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["cortex", "agentNamespace", "mesh", "teams", "worktree"],
+      ["cortex", "agentNamespace", "mesh", "teams", "worktree", "mailbox"],
       "agent mesh config",
     );
 
@@ -140,6 +173,7 @@ export const agentMeshConfigSchema = {
     const mesh = parseMeshConfig(cfg.mesh);
     const teams = parseTeamsConfig(cfg.teams);
     const worktree = parseWorktreeConfig(cfg.worktree);
+    const mailbox = parseMailboxConfig(cfg.mailbox);
 
     const agentNamespace =
       typeof cfg.agentNamespace === "string" ? cfg.agentNamespace : DEFAULT_NAMESPACE;
@@ -149,7 +183,7 @@ export const agentMeshConfigSchema = {
       );
     }
 
-    return { cortex, agentNamespace, mesh, teams, worktree };
+    return { cortex, agentNamespace, mesh, teams, worktree, mailbox };
   },
   uiHints: {
     "cortex.host": {
@@ -219,6 +253,18 @@ export const agentMeshConfigSchema = {
       placeholder: DEFAULT_WORKTREE_BASE_PATH,
       advanced: true,
       help: "Base path for git worktrees relative to repo root",
+    },
+    "mailbox.maxMessagesPerAgent": {
+      label: "Max Messages Per Agent",
+      placeholder: String(DEFAULT_MAILBOX_MAX_MESSAGES),
+      advanced: true,
+      help: "Maximum number of messages stored per agent mailbox",
+    },
+    "mailbox.retentionDays": {
+      label: "Retention Days",
+      placeholder: String(DEFAULT_MAILBOX_RETENTION_DAYS),
+      advanced: true,
+      help: "Number of days to retain mailbox messages",
     },
   },
 };
