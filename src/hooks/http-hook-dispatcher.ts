@@ -154,9 +154,9 @@ export class HttpHookDispatcher {
     this.pending.push(promise);
 
     // Clean up resolved promises
-    promise.finally(() => {
+    void promise.finally(() => {
       const idx = this.pending.indexOf(promise);
-      if (idx >= 0) this.pending.splice(idx, 1);
+      if (idx >= 0) void this.pending.splice(idx, 1);
     });
   }
 
