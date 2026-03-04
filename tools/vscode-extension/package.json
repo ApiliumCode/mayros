@@ -1,7 +1,7 @@
 {
   "name": "mayros-vscode",
   "displayName": "Mayros",
-  "version": "0.5.0",
+  "version": "0.1.4",
   "description": "Mayros AI agent framework — sessions, agents, skills, knowledge graph, and trace viewer",
   "categories": [
     "Other"

@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-llm-hooks",
-  "version": "0.5.0",
+  "version": "0.1.4",
   "private": true,
   "description": "Markdown-defined hooks evaluated by LLM for policy enforcement",
   "type": "module",
