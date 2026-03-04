@@ -119,6 +119,14 @@ export async function runCli(argv: string[] = process.argv) {
   // Register the primary command (builtin or subcli) so help and command parsing
   // are correct even with lazy command registration.
   const primary = getPrimaryCommand(parseArgv);
+
+  // No subcommand → default to "code" (interactive session)
+  if (!primary && !hasHelpOrVersion(parseArgv)) {
+    const { registerCodeCli } = await import("./code-cli.js");
+    registerCodeCli(program);
+    await program.parseAsync([...parseArgv.slice(0, 2), "code", ...parseArgv.slice(2)]);
+    return;
+  }
   if (primary && shouldRegisterPrimarySubcommand(parseArgv)) {
     const { getProgramContext } = await import("./program/program-context.js");
     const ctx = getProgramContext(program);

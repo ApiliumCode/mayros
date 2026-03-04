@@ -38,6 +38,15 @@ const loadConfig = async (): Promise<MayrosConfig> => {
 // and set the flag accordingly.
 const entries: SubCliEntry[] = [
   {
+    name: "code",
+    description: "Start interactive coding session",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../code-cli.js");
+      mod.registerCodeCli(program);
+    },
+  },
+  {
     name: "acp",
     description: "Agent Control Protocol tools",
     hasSubcommands: true,
