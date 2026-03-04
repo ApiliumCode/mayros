@@ -27,6 +27,7 @@ import { THEME_PRESETS } from "./theme/palettes.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
+import { VimHandler } from "./vim-handler.js";
 import { formatTokens } from "./tui-formatters.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
 import { createOverlayHandlers } from "./tui-overlays.js";
@@ -266,6 +267,8 @@ export async function runTui(opts: TuiOptions) {
   let showThinking = false;
   let pairingHintShown = false;
   let outputStyle: string | undefined;
+  let vimEnabled = config.ui?.vim ?? false;
+  const vimHandler = new VimHandler();
   const localRunIds = new Set<string>();
 
   const deliverDefault = opts.deliver ?? false;
@@ -402,10 +405,16 @@ export async function runTui(opts: TuiOptions) {
       outputStyle = value;
     },
     get vimEnabled() {
-      return false;
+      return vimEnabled;
     },
-    set vimEnabled(_value) {
-      // placeholder — wired in vim feature
+    set vimEnabled(value) {
+      vimEnabled = value ?? false;
+      if (vimEnabled) {
+        vimHandler.enable();
+      } else {
+        vimHandler.disable();
+      }
+      updateFooter();
     },
   };
 
@@ -453,6 +462,10 @@ export async function runTui(opts: TuiOptions) {
   const chatLog = new ChatLog();
   const editor = new CustomEditor(tui, editorTheme);
   editor.tuiResolver = tuiResolver;
+  editor.vimHandler = vimHandler;
+  if (vimEnabled) {
+    vimHandler.enable();
+  }
   const root = new Container();
   root.addChild(header);
   root.addChild(chatLog);
@@ -690,6 +703,7 @@ export async function runTui(opts: TuiOptions) {
     const reasoning = sessionInfo.reasoningLevel ?? "off";
     const reasoningLabel =
       reasoning === "on" ? "reasoning" : reasoning === "stream" ? "reasoning:stream" : null;
+    const vimLabel = vimEnabled ? vimHandler.getModeIndicator() : null;
     const footerParts = [
       `agent ${agentLabel}`,
       `session ${sessionLabel}`,
@@ -698,6 +712,7 @@ export async function runTui(opts: TuiOptions) {
       verbose !== "off" ? `verbose ${verbose}` : null,
       reasoningLabel,
       tokens,
+      vimLabel,
     ].filter(Boolean);
     footer.setText(theme.dim(footerParts.join(" | ")));
   };
