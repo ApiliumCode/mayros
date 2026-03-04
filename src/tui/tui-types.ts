@@ -106,4 +106,7 @@ export type TuiStateAccess = {
   lastCtrlCAt: number;
   outputStyle?: string;
   vimEnabled?: boolean;
+  permissionMode?: "auto" | "ask" | "deny";
+  fastMode?: boolean;
+  previousThinkingLevel?: string;
 };

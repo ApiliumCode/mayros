@@ -11,6 +11,7 @@ const ACTIVATION_LEVELS = ["mention", "always"];
 const USAGE_FOOTER_LEVELS = ["off", "tokens", "full"];
 const THEME_PRESETS = ["dark", "light", "high-contrast"];
 const OUTPUT_STYLES = ["standard", "explanatory", "learning"];
+const PERMISSION_MODES = ["auto", "ask", "deny"];
 
 export type ParsedCommand = {
   name: string;
@@ -146,6 +147,27 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
       name: "vim",
       description: "Toggle vim editing mode",
     },
+    {
+      name: "permission",
+      description: "Set permission mode",
+      getArgumentCompletions: (prefix) =>
+        PERMISSION_MODES.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "fast",
+      description: "Toggle fast mode (minimal thinking)",
+    },
+    {
+      name: "copy",
+      description: "Copy last response to clipboard",
+    },
+    {
+      name: "export",
+      description: "Export session to file",
+    },
     { name: "abort", description: "Abort active run" },
     { name: "new", description: "Reset the session" },
     { name: "reset", description: "Reset the session" },
@@ -205,6 +227,10 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/context",
     "/style <standard|explanatory|learning>",
     "/vim",
+    "/permission <auto|ask|deny>",
+    "/fast",
+    "/copy",
+    "/export [file]",
     "/new or /reset",
     "/abort",
     "/settings",

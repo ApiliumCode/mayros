@@ -10,6 +10,7 @@ export class ChatLog extends Container {
   private toolById = new Map<string, ToolExecutionComponent>();
   private streamingRuns = new Map<string, AssistantMessageComponent>();
   private toolsExpanded = false;
+  private _lastAssistantText = "";
 
   constructor(maxComponents = 180) {
     super();
@@ -87,9 +88,16 @@ export class ChatLog extends Container {
     if (existing) {
       existing.setText(text);
       this.streamingRuns.delete(effectiveRunId);
+      this._lastAssistantText = text;
       return;
     }
     this.append(new AssistantMessageComponent(text));
+    this._lastAssistantText = text;
+  }
+
+  /** Get the text of the last finalized assistant response. */
+  getLastAssistantText(): string {
+    return this._lastAssistantText;
   }
 
   dropAssistant(runId?: string) {
