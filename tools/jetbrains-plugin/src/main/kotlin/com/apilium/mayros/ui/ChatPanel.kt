@@ -1,6 +1,7 @@
 package com.apilium.mayros.ui
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -23,7 +24,7 @@ import javax.swing.*
  *   - Input field with send button
  *   - Status bar showing connection state
  */
-class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener {
+class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener, Disposable {
 
     private val chatArea = JTextArea().apply {
         isEditable = false
@@ -173,6 +174,11 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
             statusLabel.text = "Disconnected: $reason"
         }
     }
+
+    override fun dispose() {
+        service.removeListener(this)
+        clearRegisteredListeners()
+    }
 }
 
 /**
@@ -181,7 +187,9 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
 class ChatPanelFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = ChatPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel, "", false)
+        val content = ContentFactory.getInstance().createContent(panel, "", false).apply {
+            setDisposer(panel)
+        }
         toolWindow.contentManager.addContent(content)
     }
 }

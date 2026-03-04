@@ -130,7 +130,12 @@ class MayrosClient(
         reconnectFuture?.cancel(false)
         reconnectFuture = null
         disconnect()
-        reconnectExecutor.shutdownNow()
+        reconnectExecutor.shutdown()
+        try {
+            reconnectExecutor.awaitTermination(2, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            reconnectExecutor.shutdownNow()
+        }
         eventListeners.clear()
     }
 

@@ -44,7 +44,11 @@ function resolveCortexClient(opts: { host?: string; port?: string; token?: strin
     }
   }
 
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
+  try {
+    return new CortexClient(parseCortexConfig({ host, port, authToken }));
+  } catch {
+    return new CortexClient(parseCortexConfig({}));
+  }
 }
 
 function resolveNamespace(): string {

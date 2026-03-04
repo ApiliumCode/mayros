@@ -1,6 +1,7 @@
 package com.apilium.mayros.ui
 
 import com.google.gson.JsonObject
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -18,7 +19,7 @@ import javax.swing.table.DefaultTableModel
  * Shows a table with columns: Time, Type, Agent, Details.
  * Events are received via the gateway WebSocket event stream.
  */
-class TracesPanel(private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener {
+class TracesPanel(@Suppress("unused") private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener, Disposable {
 
     private val columnNames = arrayOf("Time", "Type", "Agent", "Details")
     private val tableModel = DefaultTableModel(columnNames, 0)
@@ -73,7 +74,10 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
             val type = payload.get("type")?.asString ?: ""
             val agent = payload.get("agentId")?.asString ?: ""
             val fields = payload.get("fields")?.asJsonObject
-            val details = fields?.entrySet()?.joinToString(", ") { "${it.key}=${it.value.asString}" } ?: ""
+            val details = fields?.entrySet()?.joinToString(", ") {
+                val v = try { it.value.asString } catch (_: Exception) { it.value.toString() }
+                "${it.key}=$v"
+            } ?: ""
 
             SwingUtilities.invokeLater {
                 if (tableModel.rowCount >= maxEvents) {
@@ -106,12 +110,19 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
             statusLabel.text = "Disconnected"
         }
     }
+
+    override fun dispose() {
+        service.removeListener(this)
+        clearRegisteredListeners()
+    }
 }
 
 class TracesPanelFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = TracesPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel, "", false)
+        val content = ContentFactory.getInstance().createContent(panel, "", false).apply {
+            setDisposer(panel)
+        }
         toolWindow.contentManager.addContent(content)
     }
 }

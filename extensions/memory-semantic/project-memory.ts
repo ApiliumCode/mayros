@@ -569,6 +569,7 @@ export class ProjectMemory {
     try {
       const statusMatches = await this.client.patternQuery({
         predicate: projectPredicate(this.ns, "status"),
+        object: "active",
         limit: 10000,
       });
 

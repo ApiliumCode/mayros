@@ -282,41 +282,49 @@ export async function syncWithPeer(
   const start = Date.now();
   const since = peer.lastSyncAt || new Date(0).toISOString();
 
-  // Guard entire sync with a timeout
+  // Guard entire sync with a timeout (timer is cleaned up on completion)
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`sync timeout after ${opts.timeoutMs}ms`)), opts.timeoutMs);
+    timer = setTimeout(
+      () => reject(new Error(`sync timeout after ${opts.timeoutMs}ms`)),
+      opts.timeoutMs,
+    );
   });
 
-  return Promise.race([
-    timeoutPromise,
-    (async (): Promise<SyncResult> => {
-      // 1. Fetch remote delta
-      const remoteDelta = await opts.fetchRemoteDelta(peer, since);
+  try {
+    return await Promise.race([
+      timeoutPromise,
+      (async (): Promise<SyncResult> => {
+        // 1. Fetch remote delta
+        const remoteDelta = await opts.fetchRemoteDelta(peer, since);
 
-      // 2. Get local triples for conflicting namespaces
-      const localTriples: TripleDto[] = [];
-      for (const ns of peer.namespaces) {
-        const result = await localClient.listTriples({
-          subject: `${ns}:`,
-          limit: opts.maxTriples,
-        });
-        localTriples.push(...result.triples);
-      }
+        // 2. Get local triples for conflicting namespaces
+        const localTriples: TripleDto[] = [];
+        for (const ns of peer.namespaces) {
+          const result = await localClient.listTriples({
+            subject: `${ns}:`,
+            limit: opts.maxTriples,
+          });
+          localTriples.push(...result.triples);
+        }
 
-      // 3. Reconcile
-      const { toCreate, conflicts } = reconcile(localTriples, remoteDelta, opts.conflictStrategy);
+        // 3. Reconcile
+        const { toCreate, conflicts } = reconcile(localTriples, remoteDelta, opts.conflictStrategy);
 
-      // 4. Apply
-      const { applied } = await applyDelta(localClient, toCreate);
+        // 4. Apply
+        const { applied } = await applyDelta(localClient, toCreate);
 
-      return {
-        peerId: peer.nodeId,
-        triplesReceived: remoteDelta.triples.length,
-        triplesApplied: applied,
-        conflicts,
-        syncedAt: new Date().toISOString(),
-        durationMs: Date.now() - start,
-      };
-    })(),
-  ]);
+        return {
+          peerId: peer.nodeId,
+          triplesReceived: remoteDelta.triples.length,
+          triplesApplied: applied,
+          conflicts,
+          syncedAt: new Date().toISOString(),
+          durationMs: Date.now() - start,
+        };
+      })(),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
