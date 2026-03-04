@@ -13,6 +13,8 @@ import { execSync } from "node:child_process";
 import { helpText, parseCommand } from "./commands.js";
 import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
+import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
+import type { OutputStyle } from "./output-styles.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { setThemePreset, getThemePreset } from "./theme/theme.js";
@@ -468,6 +470,23 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "style": {
+        const styleName = args.toLowerCase();
+        if (!styleName) {
+          const current = state.outputStyle ?? "standard";
+          chatLog.addSystem(
+            `current style: ${current}. usage: /style <${OUTPUT_STYLE_NAMES.join("|")}>`,
+          );
+          break;
+        }
+        if (!isValidOutputStyle(styleName)) {
+          chatLog.addSystem(`unknown style. usage: /style <${OUTPUT_STYLE_NAMES.join("|")}>`);
+          break;
+        }
+        state.outputStyle = styleName;
+        chatLog.addSystem(`output style set to ${styleName}`);
+        break;
+      }
       case "theme": {
         const preset = args.toLowerCase();
         if (!preset || !THEME_PRESETS.includes(preset as ThemePreset)) {
@@ -527,13 +546,15 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     try {
       chatLog.addUser(text);
       tui.requestRender();
+      const style = (state.outputStyle ?? "standard") as OutputStyle;
+      const styledText = applyOutputStyle(text, style);
       const runId = randomUUID();
       noteLocalRunId(runId);
       state.activeChatRunId = runId;
       setActivityStatus("sending");
       await client.sendChat({
         sessionKey: state.currentSessionKey,
-        message: text,
+        message: styledText,
         thinking: opts.thinking,
         deliver: deliverDefault,
         timeoutMs: opts.timeoutMs,

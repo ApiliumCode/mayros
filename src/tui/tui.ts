@@ -265,6 +265,7 @@ export async function runTui(opts: TuiOptions) {
   let toolsExpanded = false;
   let showThinking = false;
   let pairingHintShown = false;
+  let outputStyle: string | undefined;
   const localRunIds = new Set<string>();
 
   const deliverDefault = opts.deliver ?? false;
@@ -393,6 +394,18 @@ export async function runTui(opts: TuiOptions) {
     },
     set lastCtrlCAt(value) {
       lastCtrlCAt = value;
+    },
+    get outputStyle() {
+      return outputStyle;
+    },
+    set outputStyle(value) {
+      outputStyle = value;
+    },
+    get vimEnabled() {
+      return false;
+    },
+    set vimEnabled(_value) {
+      // placeholder — wired in vim feature
     },
   };
 
