@@ -1429,7 +1429,7 @@ const agentMeshPlugin = {
 
         // Mark running background tasks as completed/failed
         try {
-          const tasks = await bgTracker.list({ agentId, status: "running" });
+          const tasks = await bgTracker.listTasks({ agentId, status: "running" });
           for (const task of tasks) {
             const newStatus = success ? "completed" : "failed";
             const result = success ? "agent session ended" : (event.error ?? "unknown error");

@@ -1,15 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { AsyncHookQueue, createAsyncHookQueue } from "./async-hook-queue.js";
+import type { AsyncHookQueueOptions } from "./async-hook-queue.js";
+
+type TestLogger = NonNullable<AsyncHookQueueOptions["logger"]>;
 
 describe("AsyncHookQueue", () => {
-  let logger: {
-    debug: ReturnType<typeof vi.fn>;
-    warn: ReturnType<typeof vi.fn>;
-    error: ReturnType<typeof vi.fn>;
-  };
+  let logger: TestLogger;
 
   beforeEach(() => {
-    logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    logger = {
+      debug: vi.fn<(msg: string) => void>(),
+      warn: vi.fn<(msg: string) => void>(),
+      error: vi.fn<(msg: string) => void>(),
+    };
   });
 
   it("processes enqueued hooks", async () => {
@@ -135,7 +138,7 @@ describe("AsyncHookQueue", () => {
     expect(queue.running).toBe(1);
     expect(queue.pending).toBe(1);
 
-    resolveHandler?.();
+    (resolveHandler as (() => void) | null)?.();
     await queue.drain();
 
     expect(queue.running).toBe(0);

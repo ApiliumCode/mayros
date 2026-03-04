@@ -81,16 +81,11 @@ describe("formatMcpResponse", () => {
     expect(result).toEqual([{ type: "text", text: "hello" }]);
   });
 
-  it("formats image block to Anthropic base64 format", () => {
+  it("formats image block to agent-compatible format", () => {
     const result = formatMcpResponse([
       { type: "image", data: "base64data", mimeType: "image/png" },
     ]);
-    expect(result).toEqual([
-      {
-        type: "image",
-        source: { type: "base64", media_type: "image/png", data: "base64data" },
-      },
-    ]);
+    expect(result).toEqual([{ type: "image", data: "base64data", mimeType: "image/png" }]);
   });
 
   it("formats mixed content blocks", () => {
@@ -102,7 +97,8 @@ describe("formatMcpResponse", () => {
     expect(result[0]).toEqual({ type: "text", text: "caption" });
     expect(result[1]).toEqual({
       type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data: "imgdata" },
+      data: "imgdata",
+      mimeType: "image/jpeg",
     });
   });
 });
@@ -135,9 +131,7 @@ describe("bridgeMcpContent", () => {
 
   it("returns image block for image content", () => {
     const result = bridgeMcpContent([{ type: "image", data: "imgdata", mimeType: "image/png" }]);
-    expect(result).toEqual([
-      { type: "image", source: { type: "base64", media_type: "image/png", data: "imgdata" } },
-    ]);
+    expect(result).toEqual([{ type: "image", data: "imgdata", mimeType: "image/png" }]);
   });
 
   it("returns empty response placeholder for empty content", () => {

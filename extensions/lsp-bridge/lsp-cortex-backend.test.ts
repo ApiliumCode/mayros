@@ -143,7 +143,7 @@ describe("LspCortexBackend", () => {
       predicate: "test:lsp:range",
     });
     expect(rangeTriples.triples.length).toBeGreaterThanOrEqual(1);
-    const range = JSON.parse(rangeTriples.triples[0].object);
+    const range = JSON.parse(String(rangeTriples.triples[0].object));
     expect(range.start.line).toBe(10);
     expect(range.start.character).toBe(5);
   });

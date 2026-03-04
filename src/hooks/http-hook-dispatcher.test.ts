@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { HttpHookDispatcher, createHttpHookDispatcher } from "./http-hook-dispatcher.js";
-import type { HttpHookTarget } from "./http-hook-dispatcher.js";
+import type { HttpHookTarget, HttpHookDispatcherOptions } from "./http-hook-dispatcher.js";
+
+type TestLogger = NonNullable<HttpHookDispatcherOptions["logger"]>;
 
 function mockFetch(status = 200) {
   return vi.fn().mockResolvedValue({ ok: status >= 200 && status < 300, status });
@@ -8,15 +10,15 @@ function mockFetch(status = 200) {
 
 describe("HttpHookDispatcher", () => {
   let fetchFn: ReturnType<typeof mockFetch>;
-  let logger: {
-    debug: ReturnType<typeof vi.fn>;
-    warn: ReturnType<typeof vi.fn>;
-    error: ReturnType<typeof vi.fn>;
-  };
+  let logger: TestLogger;
 
   beforeEach(() => {
     fetchFn = mockFetch();
-    logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    logger = {
+      debug: vi.fn<(msg: string) => void>(),
+      warn: vi.fn<(msg: string) => void>(),
+      error: vi.fn<(msg: string) => void>(),
+    };
   });
 
   it("dispatches POST to matching targets", async () => {
