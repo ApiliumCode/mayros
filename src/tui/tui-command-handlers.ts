@@ -629,6 +629,56 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         tui.stop();
         process.exit(0);
         break;
+      // --- Mayros ecosystem ---
+      case "plan": {
+        const action = args || "show";
+        await sendMessage(`/plan ${action}`);
+        break;
+      }
+      case "kg": {
+        if (!args) {
+          chatLog.addSystem("usage: /kg <query>");
+          break;
+        }
+        await sendMessage(`Search the knowledge graph for: ${args}`);
+        break;
+      }
+      case "trace": {
+        await sendMessage(`Show trace ${args || "events"} summary for the current session`);
+        break;
+      }
+      case "team": {
+        await sendMessage("Show the team dashboard with current agent status and activity");
+        break;
+      }
+      case "tasks": {
+        await sendMessage("Show background tasks status and summary");
+        break;
+      }
+      case "workflow": {
+        if (!args) {
+          await sendMessage("List available workflows and their status");
+        } else {
+          await sendMessage(`/workflow ${args}`);
+        }
+        break;
+      }
+      case "rules": {
+        await sendMessage(`Show active rules${args ? ` matching: ${args}` : ""}`);
+        break;
+      }
+      case "mailbox": {
+        if (!args) {
+          await sendMessage("Check my inbox for new messages and show unread count");
+        } else {
+          await sendMessage(`/mailbox ${args}`);
+        }
+        break;
+      }
+      case "onboard": {
+        chatLog.addSystem("Run 'mayros onboard' from the terminal to start the setup wizard");
+        break;
+      }
       default: {
         // Check for user-defined markdown commands before sending raw
         const mdCmd = findMarkdownCommand(name);

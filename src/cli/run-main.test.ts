@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveDefaultCommand,
   rewriteUpdateFlagArgv,
   shouldEnsureCliPath,
   shouldRegisterPrimarySubcommand,
@@ -102,6 +103,26 @@ describe("shouldSkipPluginCommandRegistration", () => {
         hasBuiltinPrimary: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveDefaultCommand", () => {
+  it("returns onboard when config does not exist", () => {
+    expect(resolveDefaultCommand({ exists: false })).toBe("onboard");
+  });
+
+  it("returns onboard when config exists but wizard.lastRunAt is missing", () => {
+    expect(resolveDefaultCommand({ exists: true, config: {} })).toBe("onboard");
+    expect(resolveDefaultCommand({ exists: true, config: { wizard: {} } })).toBe("onboard");
+  });
+
+  it("returns code when config exists and wizard.lastRunAt is set", () => {
+    expect(
+      resolveDefaultCommand({
+        exists: true,
+        config: { wizard: { lastRunAt: "2024-01-01T00:00:00Z" } },
+      }),
+    ).toBe("code");
   });
 });
 
