@@ -11,6 +11,7 @@ import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts
 import { normalizeAgentId } from "../routing/session-key.js";
 import { execSync } from "node:child_process";
 import { helpText, parseCommand } from "./commands.js";
+import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import type { ThemePreset } from "./theme/palettes.js";
@@ -433,6 +434,20 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      case "context": {
+        const used = state.sessionInfo.totalTokens ?? 0;
+        const max = state.sessionInfo.contextTokens ?? 0;
+        const lines = formatContextVisualization({
+          usedTokens: used,
+          maxTokens: max,
+          inputTokens: state.sessionInfo.inputTokens,
+          outputTokens: state.sessionInfo.outputTokens,
+        });
+        for (const line of lines) {
+          chatLog.addSystem(line);
+        }
+        break;
+      }
       case "diff": {
         try {
           const cmd = args ? `git diff -- ${args}` : "git diff";
