@@ -485,7 +485,12 @@ export async function runOnboardingWizard(
           });
 
           const peerIdTrimmed = peerId && typeof peerId === "string" ? peerId.trim() : "";
-          if (peerIdTrimmed && /^[a-zA-Z0-9_-]+$/.test(peerIdTrimmed)) {
+          if (!peerIdTrimmed || !/^[a-zA-Z0-9_-]+$/.test(peerIdTrimmed)) {
+            await prompter.note(
+              "Invalid peer name. Use only letters, numbers, dashes, and underscores.",
+              "Cortex Sync",
+            );
+          } else {
             // Store sync peer in config for the cortex-sync plugin to pick up
             const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ??
               {}) as Record<string, unknown>;

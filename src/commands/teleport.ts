@@ -240,30 +240,38 @@ export async function importSession(opts: ImportOptions): Promise<ImportResult> 
     try {
       const healthy = await cortexClient.isHealthy();
       if (healthy) {
-        // Import session triples (remap session key in subject, predicate, and string objects)
+        // Helper: remap session key in strings and {node} references
+        const remapStr = (s: string) =>
+          remapped ? s.replaceAll(bundle.sessionKey, sessionKey) : s;
+        const remapObject = (obj: TripleDto["object"]): TripleDto["object"] => {
+          if (!remapped) return obj;
+          if (typeof obj === "string") return obj.replaceAll(bundle.sessionKey, sessionKey);
+          if (typeof obj === "object" && obj !== null && "node" in obj) {
+            return {
+              node: (obj as { node: string }).node.replaceAll(bundle.sessionKey, sessionKey),
+            };
+          }
+          return obj;
+        };
+
+        // Import session triples (remap session key in subject, predicate, and objects)
         for (const triple of bundle.cortexTriples) {
-          const remapStr = (s: string) =>
-            remapped ? s.replaceAll(bundle.sessionKey, sessionKey) : s;
-          const remappedObject =
-            remapped && typeof triple.object === "string"
-              ? triple.object.replaceAll(bundle.sessionKey, sessionKey)
-              : triple.object;
           const req: CreateTripleRequest = {
             subject: remapStr(triple.subject),
             predicate: remapStr(triple.predicate),
-            object: remappedObject,
+            object: remapObject(triple.object),
           };
           await cortexClient.createTriple(req);
           triplesImported++;
         }
 
-        // Import project memory triples
+        // Import project memory triples (same remapping)
         if (bundle.projectMemory) {
           for (const triple of bundle.projectMemory) {
             await cortexClient.createTriple({
-              subject: triple.subject,
-              predicate: triple.predicate,
-              object: triple.object,
+              subject: remapStr(triple.subject),
+              predicate: remapStr(triple.predicate),
+              object: remapObject(triple.object),
             });
             triplesImported++;
           }
