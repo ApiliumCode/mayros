@@ -682,7 +682,7 @@ function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
-  return slug || `item-${Date.now().toString(36)}`;
+  return slug || `item-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 }
 
 function triplesToFinding(ns: string, triples: TripleDto[]): SessionFinding | null {

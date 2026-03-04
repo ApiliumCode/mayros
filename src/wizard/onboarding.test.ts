@@ -308,6 +308,7 @@ describe("runOnboardingWizard", () => {
         skipSkills: true,
         skipHealth: true,
         skipUi: true,
+        skipSync: true,
       },
       runtime,
       prompter,
