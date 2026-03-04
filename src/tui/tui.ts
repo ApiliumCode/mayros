@@ -17,6 +17,7 @@ import {
   parseAgentSessionKey,
 } from "../routing/session-key.js";
 import { getSlashCommands } from "./commands.js";
+import { applyKeybindingsFromConfig, createTuiResolver } from "./keybinding-resolver.js";
 import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
 import { GatewayChatClient } from "./gateway-chat.js";
@@ -243,6 +244,9 @@ export async function runTui(opts: TuiOptions) {
   if (configTheme && THEME_PRESETS.includes(configTheme as ThemePreset)) {
     setThemePreset(configTheme as ThemePreset);
   }
+  const keybindingsConfig = config.ui?.keybindings;
+  applyKeybindingsFromConfig(keybindingsConfig);
+  const tuiResolver = createTuiResolver(keybindingsConfig);
   const initialSessionInput = (opts.session ?? "").trim();
   let sessionScope: SessionScope = (config.session?.scope ?? "per-sender") as SessionScope;
   let sessionMainKey = normalizeMainKey(config.session?.mainKey);
@@ -434,6 +438,7 @@ export async function runTui(opts: TuiOptions) {
   const footer = new Text("", 1, 0);
   const chatLog = new ChatLog();
   const editor = new CustomEditor(tui, editorTheme);
+  editor.tuiResolver = tuiResolver;
   const root = new Container();
   root.addChild(header);
   root.addChild(chatLog);
