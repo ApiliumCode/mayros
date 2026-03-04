@@ -9,7 +9,9 @@ import { expandMarkdownCommand, findMarkdownCommand } from "../commands/markdown
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
+import { execSync } from "node:child_process";
 import { helpText, parseCommand } from "./commands.js";
+import { renderDiff, renderDiffStats } from "./diff-renderer.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { setThemePreset, getThemePreset } from "./theme/theme.js";
@@ -431,6 +433,26 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      case "diff": {
+        try {
+          const cmd = args ? `git diff -- ${args}` : "git diff";
+          const raw = execSync(cmd, { encoding: "utf-8", maxBuffer: 1024 * 1024 }).trim();
+          if (!raw) {
+            chatLog.addSystem("no changes");
+            break;
+          }
+          const stats = renderDiffStats(raw);
+          chatLog.addSystem(
+            `${stats.files} file(s) changed, +${stats.additions} -${stats.deletions}`,
+          );
+          for (const line of renderDiff(raw)) {
+            chatLog.addSystem(line);
+          }
+        } catch (err) {
+          chatLog.addSystem(`diff failed: ${String(err)}`);
+        }
+        break;
+      }
       case "theme": {
         const preset = args.toLowerCase();
         if (!preset || !THEME_PRESETS.includes(preset as ThemePreset)) {
