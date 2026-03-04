@@ -36,6 +36,9 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     private val service = MayrosService.getInstance()
     private var currentSessionKey = "jetbrains-${UUID.randomUUID().toString().take(8)}"
 
+    // Track our own event listeners so we can remove only ours on reconnect
+    private val registeredListeners = mutableListOf<Pair<String, (JsonObject) -> Unit>>()
+
     init {
         setupUI()
         setupEventListeners()
@@ -78,16 +81,25 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
         service.getClient()?.let { subscribeToEvents(it) }
     }
 
+    private fun unsubscribeFromEvents(client: MayrosClient) {
+        for ((event, listener) in registeredListeners) {
+            client.off(event, listener)
+        }
+        registeredListeners.clear()
+    }
+
     private fun subscribeToEvents(client: MayrosClient) {
-        client.on("chat.delta") { payload ->
-            val text = payload.get("text")?.asString ?: return@on
-            SwingUtilities.invokeLater {
-                chatArea.append(text)
-                chatArea.caretPosition = chatArea.document.length
+        val deltaListener: (JsonObject) -> Unit = { payload ->
+            val text = payload.get("text")?.asString
+            if (text != null) {
+                SwingUtilities.invokeLater {
+                    chatArea.append(text)
+                    chatArea.caretPosition = chatArea.document.length
+                }
             }
         }
 
-        client.on("chat.final") { payload ->
+        val finalListener: (JsonObject) -> Unit = { _ ->
             SwingUtilities.invokeLater {
                 chatArea.append("\n\n")
                 chatArea.caretPosition = chatArea.document.length
@@ -95,13 +107,21 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
             }
         }
 
-        client.on("chat.error") { payload ->
+        val errorListener: (JsonObject) -> Unit = { payload ->
             val error = payload.get("error")?.asString ?: "Unknown error"
             SwingUtilities.invokeLater {
                 chatArea.append("\n[Error: $error]\n\n")
                 statusLabel.text = "Error"
             }
         }
+
+        client.on("chat.delta", deltaListener)
+        client.on("chat.final", finalListener)
+        client.on("chat.error", errorListener)
+
+        registeredListeners.add("chat.delta" to deltaListener)
+        registeredListeners.add("chat.final" to finalListener)
+        registeredListeners.add("chat.error" to errorListener)
     }
 
     private fun sendMessage() {
@@ -143,7 +163,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
         SwingUtilities.invokeLater {
             statusLabel.text = "Connected"
             service.getClient()?.let {
-                it.clearEventListeners()
+                unsubscribeFromEvents(it)
                 subscribeToEvents(it)
             }
         }

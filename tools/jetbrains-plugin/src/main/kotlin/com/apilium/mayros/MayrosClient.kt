@@ -242,10 +242,6 @@ class MayrosClient(
         eventListeners[event]?.remove(listener)
     }
 
-    fun clearEventListeners() {
-        eventListeners.clear()
-    }
-
     // ========================================================================
     // Domain methods
     // ========================================================================

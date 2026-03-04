@@ -66,7 +66,9 @@ export async function buildLocalDelta(
       limit,
     });
 
-    // Filter by created_at >= since
+    // Filter by created_at >= since (inclusive to avoid missing triples created
+    // at the exact boundary timestamp; reconcile() deduplicates by exact key so
+    // re-fetching boundary triples is harmless)
     const sinceRaw = new Date(since).getTime();
     const sinceMs = Number.isNaN(sinceRaw) ? 0 : sinceRaw;
     const filtered = result.triples.filter((t) => {

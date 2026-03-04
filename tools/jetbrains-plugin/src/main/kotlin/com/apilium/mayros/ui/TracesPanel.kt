@@ -7,6 +7,7 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.content.ContentFactory
+import com.apilium.mayros.MayrosClient
 import com.apilium.mayros.MayrosService
 import java.awt.BorderLayout
 import javax.swing.*
@@ -27,6 +28,9 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
     private val statusLabel = JLabel("Not connected")
     private val service = MayrosService.getInstance()
     private var maxEvents = 500
+
+    // Track our own event listeners so we can remove only ours on reconnect
+    private val registeredListeners = mutableListOf<Pair<String, (JsonObject) -> Unit>>()
 
     init {
         setupUI()
@@ -56,10 +60,17 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
         }
     }
 
+    private fun unsubscribeFromTraceEvents(client: MayrosClient) {
+        for ((event, listener) in registeredListeners) {
+            client.off(event, listener)
+        }
+        registeredListeners.clear()
+    }
+
     private fun subscribeToTraceEvents() {
         val client = service.getClient() ?: return
 
-        client.on("trace.event") { payload ->
+        val traceListener: (JsonObject) -> Unit = { payload ->
             val time = payload.get("timestamp")?.asString?.takeLast(12) ?: ""
             val type = payload.get("type")?.asString ?: ""
             val agent = payload.get("agentId")?.asString ?: ""
@@ -79,11 +90,15 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
                 }
             }
         }
+
+        client.on("trace.event", traceListener)
+        registeredListeners.add("trace.event" to traceListener)
     }
 
     override fun onConnected() {
         SwingUtilities.invokeLater {
             statusLabel.text = "Connected — listening for events"
+            service.getClient()?.let { unsubscribeFromTraceEvents(it) }
             subscribeToTraceEvents()
         }
     }
