@@ -453,6 +453,110 @@ export class ProjectMemory {
     return null;
   }
 
+  // --------------------------------------------------------------------------
+  // MAYROS.md / CLAUDE.md Ingestion
+  // --------------------------------------------------------------------------
+
+  /**
+   * Ingest a MAYROS.md / CLAUDE.md file content into Cortex as project memory triples.
+   *
+   * Parses markdown sections and creates triples with predicates:
+   *   mayros:section        — section heading
+   *   mayros:convention     — coding convention
+   *   mayros:key_file       — important file path + purpose
+   *   mayros:build_command  — build/test/install command
+   *
+   * Returns the number of triples created.
+   */
+  async ingestMayrosMd(content: string): Promise<number> {
+    if (!content.trim()) return 0;
+
+    const lines = content.split("\n");
+    const triples: CreateTripleRequest[] = [];
+    let currentSection = "";
+    let sectionDepth = 0;
+
+    for (const line of lines) {
+      // Track section headings
+      const headingMatch = /^(#{1,4})\s+(.+)$/.exec(line);
+      if (headingMatch) {
+        sectionDepth = headingMatch[1].length;
+        currentSection = headingMatch[2].trim();
+
+        triples.push({
+          subject: `${this.ns}:mayros:section:${slugify(currentSection)}`,
+          predicate: `${this.ns}:mayros:section`,
+          object: currentSection,
+        });
+        continue;
+      }
+
+      // Detect build/test commands
+      const cmdMatch = /^\s*[-*]\s*\*?\*?(\w[\w\s]*?)\*?\*?:\s*`(.+)`/.exec(line);
+      if (cmdMatch) {
+        const label = cmdMatch[1].trim().toLowerCase();
+        const cmd = cmdMatch[2].trim();
+
+        if (BUILD_LABELS.some((bl) => label.includes(bl))) {
+          triples.push({
+            subject: `${this.ns}:mayros:build:${slugify(label)}`,
+            predicate: `${this.ns}:mayros:build_command`,
+            object: `${label}: ${cmd}`,
+          });
+          continue;
+        }
+      }
+
+      // Detect key files in table rows
+      const tableMatch = /^\|\s*`([^`]+)`\s*\|\s*(.+?)\s*\|/.exec(line);
+      if (tableMatch && currentSection.toLowerCase().includes("file")) {
+        const filePath = tableMatch[1].trim();
+        const purpose = tableMatch[2].trim();
+        if (filePath && purpose && !filePath.includes("---")) {
+          triples.push({
+            subject: `${this.ns}:mayros:file:${slugify(filePath)}`,
+            predicate: `${this.ns}:mayros:key_file`,
+            object: `${filePath} — ${purpose}`,
+          });
+          continue;
+        }
+      }
+
+      // Detect coding conventions (bullet points with strong indicators)
+      const bulletMatch = /^\s*[-*]\s+(.+)$/.exec(line);
+      if (bulletMatch && currentSection && sectionDepth >= 2) {
+        const text = bulletMatch[1].trim();
+        if (
+          text.length >= 10 &&
+          text.length <= 200 &&
+          CONVENTION_INDICATORS.some((ci) => text.toLowerCase().includes(ci))
+        ) {
+          triples.push({
+            subject: `${this.ns}:mayros:convention:${slugify(text.slice(0, 40))}`,
+            predicate: `${this.ns}:mayros:convention`,
+            object: text,
+          });
+        }
+      }
+    }
+
+    // Deduplicate by subject+predicate
+    const seen = new Set<string>();
+    const unique = triples.filter((t) => {
+      const key = `${t.subject}::${t.predicate}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Write to Cortex
+    for (const t of unique) {
+      await this.client.createTriple(t);
+    }
+
+    return unique.length;
+  }
+
   async stats(): Promise<{
     conventions: number;
     decisions: number;
@@ -540,6 +644,44 @@ function triplesToConvention(ns: string, triples: TripleDto[]): ProjectConventio
   if (!text) return null;
 
   return { id, text, category, source, confidence, context, status, createdAt, supersedes };
+}
+
+// ============================================================================
+// MAYROS.md ingestion helpers
+// ============================================================================
+
+const BUILD_LABELS = ["install", "build", "test", "lint", "type", "check", "run", "deploy", "sync"];
+
+const CONVENTION_INDICATORS = [
+  "typescript",
+  "esm",
+  "strict",
+  "no ",
+  "colocated",
+  "vitest",
+  "pnpm",
+  "npm",
+  "plugin",
+  "extension",
+  "typebox",
+  "zod",
+  "not ",
+  "prefer",
+  "always",
+  "never",
+  "avoid",
+  "use ",
+  "keep",
+  "must",
+  "should",
+];
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
 }
 
 function triplesToFinding(ns: string, triples: TripleDto[]): SessionFinding | null {

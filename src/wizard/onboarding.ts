@@ -451,6 +451,71 @@ export async function runOnboardingWizard(
     nextConfig = await setupMcpServers(nextConfig, runtime, prompter);
   }
 
+  // Cortex sync pairing
+  if (opts.skipSync) {
+    await prompter.note("Skipping sync setup.", "Cortex Sync");
+  } else {
+    const syncChoice = await prompter.select({
+      message: "Pair with another Mayros instance?",
+      options: [
+        { value: "skip", label: "Skip for now" },
+        { value: "manual", label: "Enter peer address manually" },
+      ],
+      initialValue: "skip",
+    });
+
+    if (syncChoice === "manual") {
+      const peerEndpoint = await prompter.text({
+        message: "Peer Cortex endpoint (e.g. http://192.168.1.5:8080)",
+        placeholder: "http://host:8080",
+      });
+
+      if (peerEndpoint && typeof peerEndpoint === "string" && peerEndpoint.trim()) {
+        const peerId = await prompter.text({
+          message: "Peer name (unique identifier)",
+          placeholder: "my-laptop",
+        });
+
+        if (peerId && typeof peerId === "string" && peerId.trim()) {
+          // Store sync peer in config for the cortex-sync plugin to pick up
+          const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const discovery = (syncConfig.discovery ?? {}) as Record<string, unknown>;
+          const manualPeers = (
+            Array.isArray(discovery.manualPeers) ? discovery.manualPeers : []
+          ) as Array<Record<string, unknown>>;
+          manualPeers.push({
+            nodeId: peerId.trim(),
+            endpoint: peerEndpoint.trim(),
+            namespaces: ["mayros"],
+            enabled: true,
+          });
+          discovery.manualPeers = manualPeers;
+          syncConfig.discovery = discovery;
+          nextConfig = {
+            ...nextConfig,
+            plugins: {
+              ...nextConfig.plugins,
+              entries: {
+                ...nextConfig.plugins?.entries,
+                "cortex-sync": {
+                  ...nextConfig.plugins?.entries?.["cortex-sync"],
+                  config: syncConfig,
+                },
+              },
+            },
+          };
+          await prompter.note(
+            `Peer "${peerId.trim()}" added at ${peerEndpoint.trim()}.\nRun 'mayros sync now' after setup to trigger first sync.`,
+            "Cortex Sync",
+          );
+        }
+      }
+    }
+  }
+
   // Setup hooks (session memory on /new)
   const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
   nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);

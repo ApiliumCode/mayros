@@ -150,5 +150,6 @@ export type OnboardOptions = {
   nodeManager?: NodeManagerChoice;
   remoteUrl?: string;
   remoteToken?: string;
+  skipSync?: boolean;
   json?: boolean;
 };

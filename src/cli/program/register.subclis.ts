@@ -395,6 +395,33 @@ const entries: SubCliEntry[] = [
       mod.registerLspCli(program);
     },
   },
+  {
+    name: "batch",
+    description: "Batch prompt processing — run multiple prompts in parallel",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../batch-cli.js");
+      mod.registerBatchCli(program);
+    },
+  },
+  {
+    name: "teleport",
+    description: "Session teleport — export/import sessions between devices",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../teleport-cli.js");
+      mod.registerTeleportCli(program);
+    },
+  },
+  {
+    name: "sync",
+    description: "Cortex sync — peer management and cross-device synchronization",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../sync-cli.js");
+      mod.registerSyncCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {
