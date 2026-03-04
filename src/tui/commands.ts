@@ -9,6 +9,8 @@ const REASONING_LEVELS = ["on", "off"];
 const ELEVATED_LEVELS = ["on", "off", "ask", "full"];
 const ACTIVATION_LEVELS = ["mention", "always"];
 const USAGE_FOOTER_LEVELS = ["off", "tokens", "full"];
+const THEME_PRESETS = ["dark", "light", "high-contrast"];
+const OUTPUT_STYLES = ["standard", "explanatory", "learning"];
 
 export type ParsedCommand = {
   name: string;
@@ -114,6 +116,36 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
           label: value,
         })),
     },
+    {
+      name: "theme",
+      description: "Set TUI color theme",
+      getArgumentCompletions: (prefix) =>
+        THEME_PRESETS.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "diff",
+      description: "Show git diff (optionally for a file)",
+    },
+    {
+      name: "context",
+      description: "Show context window usage",
+    },
+    {
+      name: "style",
+      description: "Set output style",
+      getArgumentCompletions: (prefix) =>
+        OUTPUT_STYLES.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "vim",
+      description: "Toggle vim editing mode",
+    },
     { name: "abort", description: "Abort active run" },
     { name: "new", description: "Reset the session" },
     { name: "reset", description: "Reset the session" },
@@ -168,6 +200,11 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/elevated <on|off|ask|full>",
     "/elev <on|off|ask|full>",
     "/activation <mention|always>",
+    "/theme <dark|light|high-contrast>",
+    "/diff [file]",
+    "/context",
+    "/style <standard|explanatory|learning>",
+    "/vim",
     "/new or /reset",
     "/abort",
     "/settings",

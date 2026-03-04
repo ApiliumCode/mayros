@@ -7,8 +7,14 @@ const cliHighlightMocks = vi.hoisted(() => ({
 
 vi.mock("cli-highlight", () => cliHighlightMocks);
 
-const { markdownTheme, searchableSelectListTheme, selectListTheme, theme } =
-  await import("./theme.js");
+const {
+  markdownTheme,
+  searchableSelectListTheme,
+  selectListTheme,
+  theme,
+  setThemePreset,
+  getThemePreset,
+} = await import("./theme.js");
 
 const stripAnsi = (str: string) =>
   str.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"), "");
@@ -78,5 +84,29 @@ describe("list themes", () => {
     expect(stripAnsi(searchableSelectListTheme.searchPrompt("Search:"))).toBe("Search:");
     expect(stripAnsi(searchableSelectListTheme.searchInput("query"))).toBe("query");
     expect(stripAnsi(searchableSelectListTheme.matchHighlight("match"))).toBe("match");
+  });
+});
+
+describe("setThemePreset / getThemePreset", () => {
+  beforeEach(() => {
+    setThemePreset("dark");
+  });
+
+  it("defaults to dark", () => {
+    expect(getThemePreset()).toBe("dark");
+  });
+
+  it("switches to light and updates theme functions", () => {
+    const darkAccentFn = theme.accent;
+    setThemePreset("light");
+    expect(getThemePreset()).toBe("light");
+    expect(theme.accent).not.toBe(darkAccentFn);
+    expect(stripAnsi(theme.accent("x"))).toBe("x");
+  });
+
+  it("switches to high-contrast", () => {
+    setThemePreset("high-contrast");
+    expect(getThemePreset()).toBe("high-contrast");
+    expect(stripAnsi(theme.accent("test"))).toBe("test");
   });
 });

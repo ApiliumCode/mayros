@@ -20,7 +20,9 @@ import { getSlashCommands } from "./commands.js";
 import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
 import { GatewayChatClient } from "./gateway-chat.js";
-import { editorTheme, theme } from "./theme/theme.js";
+import type { ThemePreset } from "./theme/palettes.js";
+import { THEME_PRESETS } from "./theme/palettes.js";
+import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { formatTokens } from "./tui-formatters.js";
@@ -237,6 +239,10 @@ export function createBackspaceDeduper(params?: { dedupeWindowMs?: number; now?:
 
 export async function runTui(opts: TuiOptions) {
   const config = loadConfig();
+  const configTheme = config.ui?.theme;
+  if (configTheme && THEME_PRESETS.includes(configTheme as ThemePreset)) {
+    setThemePreset(configTheme as ThemePreset);
+  }
   const initialSessionInput = (opts.session ?? "").trim();
   let sessionScope: SessionScope = (config.session?.scope ?? "per-sender") as SessionScope;
   let sessionMainKey = normalizeMainKey(config.session?.mainKey);

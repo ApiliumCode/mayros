@@ -10,6 +10,9 @@ import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { helpText, parseCommand } from "./commands.js";
+import { THEME_PRESETS } from "./theme/palettes.js";
+import type { ThemePreset } from "./theme/palettes.js";
+import { setThemePreset, getThemePreset } from "./theme/theme.js";
 import type { ChatLog } from "./components/chat-log.js";
 import {
   createFilterableSelectList,
@@ -428,6 +431,18 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      case "theme": {
+        const preset = args.toLowerCase();
+        if (!preset || !THEME_PRESETS.includes(preset as ThemePreset)) {
+          chatLog.addSystem(
+            `current theme: ${getThemePreset()}. usage: /theme <${THEME_PRESETS.join("|")}>`,
+          );
+          break;
+        }
+        setThemePreset(preset as ThemePreset);
+        chatLog.addSystem(`theme set to ${preset}`);
+        break;
+      }
       case "new":
       case "reset":
         try {
