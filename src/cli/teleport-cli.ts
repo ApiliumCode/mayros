@@ -12,7 +12,7 @@
 import type { Command } from "commander";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import process from "node:process";
 import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
 import { CortexClient } from "../../extensions/shared/cortex-client.js";
@@ -142,7 +142,8 @@ export function registerTeleportCli(program: Command) {
         includeProjectMemory: opts.projectMemory,
       });
 
-      const outputFile = opts.output ?? `teleport-${sessionKey}.json`;
+      const safeKey = basename(sessionKey).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const outputFile = opts.output ?? `teleport-${safeKey}.json`;
       writeFileSync(outputFile, JSON.stringify(result.bundle, null, 2), "utf-8");
 
       console.log(`Exported to: ${outputFile}`);
@@ -244,6 +245,15 @@ export function registerTeleportCli(program: Command) {
 
       const bundle = data as TeleportBundle;
 
+      // Compute base64 decoded byte length without allocating the full buffer
+      function base64ByteLength(b64: string): number {
+        const len = b64.length;
+        const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+        return Math.floor((len * 3) / 4) - padding;
+      }
+
+      const transcriptBytes = bundle.transcript ? base64ByteLength(bundle.transcript) : 0;
+
       if (opts.format === "json") {
         console.log(
           JSON.stringify(
@@ -252,9 +262,7 @@ export function registerTeleportCli(program: Command) {
               exportedAt: bundle.exportedAt,
               sourceDeviceId: bundle.sourceDeviceId,
               sessionKey: bundle.sessionKey,
-              transcriptBytes: bundle.transcript
-                ? Buffer.from(bundle.transcript, "base64").length
-                : 0,
+              transcriptBytes,
               sessionStoreKeys: Object.keys(bundle.sessionStore),
               cortexTripleCount: bundle.cortexTriples.length,
               projectMemoryTripleCount: bundle.projectMemory?.length ?? 0,
@@ -265,10 +273,6 @@ export function registerTeleportCli(program: Command) {
         );
         return;
       }
-
-      const transcriptBytes = bundle.transcript
-        ? Buffer.from(bundle.transcript, "base64").length
-        : 0;
 
       console.log(`Teleport bundle: ${file}`);
       console.log(`  version: ${bundle.version}`);

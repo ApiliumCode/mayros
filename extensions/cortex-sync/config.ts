@@ -87,7 +87,7 @@ function parseSyncConfig(raw: unknown): SyncConfig {
 
   const intervalSeconds =
     typeof sync.intervalSeconds === "number"
-      ? Math.max(10, Math.floor(sync.intervalSeconds))
+      ? Math.max(10, Math.min(86400, Math.floor(sync.intervalSeconds)))
       : DEFAULT_INTERVAL_SECONDS;
 
   const autoSync = typeof sync.autoSync === "boolean" ? sync.autoSync : DEFAULT_AUTO_SYNC;

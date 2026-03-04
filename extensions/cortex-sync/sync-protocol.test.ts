@@ -6,7 +6,6 @@ import {
   reconcile,
   applyDelta,
   type SyncDelta,
-  type SyncConflict,
 } from "./sync-protocol.js";
 
 // ============================================================================
@@ -204,12 +203,13 @@ describe("applyDelta", () => {
       createTriple,
     } as unknown as import("../shared/cortex-client.js").CortexClient;
 
-    const applied = await applyDelta(mockClient, [
+    const result = await applyDelta(mockClient, [
       { subject: "s1", predicate: "p1", object: "v1" },
       { subject: "s2", predicate: "p2", object: "v2" },
     ]);
 
-    expect(applied).toBe(2);
+    expect(result.applied).toBe(2);
+    expect(result.failed).toBe(0);
     expect(createTriple).toHaveBeenCalledTimes(2);
   });
 
@@ -223,13 +223,14 @@ describe("applyDelta", () => {
       createTriple,
     } as unknown as import("../shared/cortex-client.js").CortexClient;
 
-    const applied = await applyDelta(mockClient, [
+    const result = await applyDelta(mockClient, [
       { subject: "s1", predicate: "p1", object: "v1" },
       { subject: "s2", predicate: "p2", object: "v2" },
       { subject: "s3", predicate: "p3", object: "v3" },
     ]);
 
-    expect(applied).toBe(2);
+    expect(result.applied).toBe(2);
+    expect(result.failed).toBe(1);
     expect(createTriple).toHaveBeenCalledTimes(3);
   });
 
@@ -237,7 +238,8 @@ describe("applyDelta", () => {
     const mockClient = {
       createTriple: vi.fn(),
     } as unknown as import("../shared/cortex-client.js").CortexClient;
-    const applied = await applyDelta(mockClient, []);
-    expect(applied).toBe(0);
+    const result = await applyDelta(mockClient, []);
+    expect(result.applied).toBe(0);
+    expect(result.failed).toBe(0);
   });
 });

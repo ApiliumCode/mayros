@@ -23,7 +23,7 @@
  *   {ns}:project:supersedes — link to previous convention/decision
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   CortexClient,
   CreateTripleRequest,
@@ -357,13 +357,12 @@ export class ProjectMemory {
       if (opts?.category && convention.category !== opts.category) continue;
 
       conventions.push(convention);
-      if (conventions.length >= limit) break;
     }
 
-    // Sort by createdAt descending
+    // Sort by createdAt descending THEN slice — ensures globally most-recent items
     conventions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-    return conventions;
+    return conventions.slice(0, limit);
   }
 
   async listDecisions(opts?: { limit?: number; recent?: boolean }): Promise<ProjectConvention[]> {
@@ -385,12 +384,12 @@ export class ProjectMemory {
       if (!decision) continue;
 
       decisions.push(decision);
-      if (decisions.length >= limit) break;
     }
 
+    // Sort by createdAt descending THEN slice — ensures globally most-recent items
     decisions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-    return decisions;
+    return decisions.slice(0, limit);
   }
 
   async queryConventions(
@@ -422,10 +421,10 @@ export class ProjectMemory {
       const finding = triplesToFinding(this.ns, tripleResult.triples);
       if (finding) {
         findings.push(finding);
-        if (findings.length >= limit) break;
       }
     }
 
+    // Sort by createdAt descending THEN slice — ensures globally most-recent items
     findings.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
     return findings.slice(0, limit);
@@ -531,8 +530,9 @@ export class ProjectMemory {
           text.length <= 200 &&
           CONVENTION_INDICATORS.some((ci) => text.toLowerCase().includes(ci))
         ) {
+          const hash = createHash("sha1").update(text).digest("hex").slice(0, 10);
           triples.push({
-            subject: `${this.ns}:mayros:convention:${slugify(text.slice(0, 40))}`,
+            subject: `${this.ns}:mayros:convention:${slugify(text.slice(0, 40))}-${hash}`,
             predicate: `${this.ns}:mayros:convention`,
             object: text,
           });
@@ -581,7 +581,7 @@ export class ProjectMemory {
         predicate: `${this.ns}:session:type`,
         limit: 10000,
       });
-      findings = sessionMatches.total;
+      findings = sessionMatches.matches.length;
     } catch {
       // Stats unavailable
     }
@@ -627,14 +627,17 @@ function triplesToConvention(ns: string, triples: TripleDto[]): ProjectConventio
 
   for (const t of triples) {
     const pred = t.predicate;
-    if (pred.endsWith(":text")) text = stringValue(t.object);
-    else if (pred.endsWith(":category")) category = stringValue(t.object) as ConventionCategory;
-    else if (pred.endsWith(":source")) source = stringValue(t.object) as ProjectKnowledgeSource;
-    else if (pred.endsWith(":confidence")) confidence = numberValue(t.object);
-    else if (pred.endsWith(":context")) context = stringValue(t.object);
-    else if (pred.endsWith(":status")) status = stringValue(t.object) as ProjectKnowledgeStatus;
-    else if (pred.endsWith(":createdAt")) createdAt = stringValue(t.object);
-    else if (pred.endsWith(":supersedes")) {
+    if (pred === projectPredicate(ns, "text")) text = stringValue(t.object);
+    else if (pred === projectPredicate(ns, "category"))
+      category = stringValue(t.object) as ConventionCategory;
+    else if (pred === projectPredicate(ns, "source"))
+      source = stringValue(t.object) as ProjectKnowledgeSource;
+    else if (pred === projectPredicate(ns, "confidence")) confidence = numberValue(t.object);
+    else if (pred === projectPredicate(ns, "context")) context = stringValue(t.object);
+    else if (pred === projectPredicate(ns, "status"))
+      status = stringValue(t.object) as ProjectKnowledgeStatus;
+    else if (pred === projectPredicate(ns, "createdAt")) createdAt = stringValue(t.object);
+    else if (pred === projectPredicate(ns, "supersedes")) {
       const node = stringValue(t.object);
       const nodeParts = node.split(":");
       supersedes = nodeParts.length >= 4 ? nodeParts.slice(3).join(":") : node;
@@ -699,10 +702,11 @@ function triplesToFinding(ns: string, triples: TripleDto[]): SessionFinding | nu
 
   for (const t of triples) {
     const pred = t.predicate;
-    if (pred.endsWith(":text")) text = stringValue(t.object);
-    else if (pred.endsWith(":type")) type = stringValue(t.object) as "change" | "finding" | "error";
-    else if (pred.endsWith(":createdAt")) createdAt = stringValue(t.object);
-    else if (pred.endsWith(":key")) sessionKey = stringValue(t.object);
+    if (pred === projectPredicate(ns, "text")) text = stringValue(t.object);
+    else if (pred === `${ns}:session:type`)
+      type = stringValue(t.object) as "change" | "finding" | "error";
+    else if (pred === projectPredicate(ns, "createdAt")) createdAt = stringValue(t.object);
+    else if (pred === `${ns}:session:key`) sessionKey = stringValue(t.object);
   }
 
   if (!text) return null;

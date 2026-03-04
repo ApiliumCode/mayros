@@ -8,7 +8,6 @@
  *   {ns}:sync:peer:{nodeId}  →  endpoint, lastSyncAt, namespaces, status
  */
 
-import { randomUUID } from "node:crypto";
 import type {
   CortexClient,
   CreateTripleRequest,
@@ -197,19 +196,19 @@ export class PeerManager {
   async listPeers(opts?: { includeRemoved?: boolean }): Promise<PeerInfo[]> {
     const statusMatches = await this.client.patternQuery({
       predicate: syncPredicate(this.ns, "status"),
-      limit: 100,
+      limit: 500,
     });
 
     const peers: PeerInfo[] = [];
     const seen = new Set<string>();
+    const prefix = peerSubject(this.ns, "");
 
     for (const match of statusMatches.matches) {
-      if (!match.subject.includes(":sync:peer:")) continue;
+      if (!match.subject.startsWith(prefix)) continue;
 
-      // Extract nodeId
-      const parts = match.subject.split(":sync:peer:");
-      if (parts.length < 2) continue;
-      const nodeId = parts[1];
+      // Extract nodeId from subject: "{ns}:sync:peer:{nodeId}"
+      const nodeId = match.subject.slice(prefix.length);
+      if (!nodeId) continue;
 
       if (seen.has(nodeId)) continue;
       seen.add(nodeId);
@@ -218,9 +217,13 @@ export class PeerManager {
       const status = stringValue(match.object);
       if (status === "removed" && !opts?.includeRemoved) continue;
 
-      const peer = await this.getPeer(nodeId);
-      if (peer) {
-        peers.push(peer);
+      try {
+        const peer = await this.getPeer(nodeId);
+        if (peer) {
+          peers.push(peer);
+        }
+      } catch {
+        // Skip peers whose details can't be fetched
       }
     }
 
@@ -292,15 +295,16 @@ function triplesToPeer(ns: string, nodeId: string, triples: TripleDto[]): PeerIn
 
   for (const t of triples) {
     const pred = t.predicate;
-    if (pred.endsWith(":endpoint")) endpoint = stringValue(t.object);
-    else if (pred.endsWith(":namespaces"))
+    if (pred === syncPredicate(ns, "endpoint")) endpoint = stringValue(t.object);
+    else if (pred === syncPredicate(ns, "namespaces"))
       namespaces = stringValue(t.object).split(",").filter(Boolean);
-    else if (pred.endsWith(":status")) status = stringValue(t.object) as PeerStatus;
-    else if (pred.endsWith(":lastSyncAt")) lastSyncAt = stringValue(t.object);
-    else if (pred.endsWith(":lastSyncResult")) lastSyncResult = stringValue(t.object);
-    else if (pred.endsWith(":addedAt")) addedAt = stringValue(t.object);
-    else if (pred.endsWith(":totalSyncs")) totalSyncs = numberValue(t.object);
-    else if (pred.endsWith(":totalTriplesSynced")) totalTriplesSynced = numberValue(t.object);
+    else if (pred === syncPredicate(ns, "status")) status = stringValue(t.object) as PeerStatus;
+    else if (pred === syncPredicate(ns, "lastSyncAt")) lastSyncAt = stringValue(t.object);
+    else if (pred === syncPredicate(ns, "lastSyncResult")) lastSyncResult = stringValue(t.object);
+    else if (pred === syncPredicate(ns, "addedAt")) addedAt = stringValue(t.object);
+    else if (pred === syncPredicate(ns, "totalSyncs")) totalSyncs = numberValue(t.object);
+    else if (pred === syncPredicate(ns, "totalTriplesSynced"))
+      totalTriplesSynced = numberValue(t.object);
   }
 
   return {

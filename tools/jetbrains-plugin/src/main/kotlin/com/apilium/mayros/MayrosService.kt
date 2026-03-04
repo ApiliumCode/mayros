@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.apilium.mayros.settings.MayrosSettings
 import java.util.concurrent.CopyOnWriteArrayList
+import javax.swing.SwingUtilities
 
 /**
  * Application-level service that manages the MayrosClient lifecycle.
@@ -62,10 +63,10 @@ class MayrosService : Disposable {
         val connected = newClient.connect()
         if (connected) {
             log.info("Connected to Mayros gateway")
-            listeners.forEach { it.onConnected() }
+            SwingUtilities.invokeLater { listeners.forEach { it.onConnected() } }
         } else {
             log.warn("Failed to connect to Mayros gateway at $url")
-            listeners.forEach { it.onDisconnected("connection failed") }
+            SwingUtilities.invokeLater { listeners.forEach { it.onDisconnected("connection failed") } }
         }
 
         return connected
@@ -76,7 +77,7 @@ class MayrosService : Disposable {
      */
     fun disconnect() {
         client?.disconnect()
-        listeners.forEach { it.onDisconnected("user requested") }
+        SwingUtilities.invokeLater { listeners.forEach { it.onDisconnected("user requested") } }
         log.info("Disconnected from Mayros gateway")
     }
 

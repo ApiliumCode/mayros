@@ -11,8 +11,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
 import { mkdirSync } from "node:fs";
 import type {
   CortexClient,
@@ -172,7 +172,7 @@ export function validateBundle(data: unknown): data is TeleportBundle {
   if (!data || typeof data !== "object") return false;
   const obj = data as Record<string, unknown>;
 
-  if (obj.version !== TELEPORT_VERSION) return false;
+  if (typeof obj.version !== "number" || obj.version !== TELEPORT_VERSION) return false;
   if (typeof obj.exportedAt !== "string") return false;
   if (typeof obj.sourceDeviceId !== "string") return false;
   if (typeof obj.sessionKey !== "string") return false;
@@ -210,26 +210,28 @@ export async function importSession(opts: ImportOptions): Promise<ImportResult> 
     writeFileSync(transcriptPath, decoded, "utf-8");
   }
 
-  // 2. Update session store
+  // 2. Update session store (atomic write via temp file + rename)
+  const storeDir = dirname(targetStorePath);
+  mkdirSync(storeDir, { recursive: true });
+
+  let store: Record<string, unknown> = {};
   if (existsSync(targetStorePath)) {
     try {
-      const store = JSON.parse(readFileSync(targetStorePath, "utf-8")) as Record<string, unknown>;
-      const entry = { ...bundle.sessionStore, updatedAt: Date.now() };
-      if (remapped) {
-        (entry as Record<string, unknown>).sessionId = sessionKey;
-      }
-      store[sessionKey] = entry;
-      writeFileSync(targetStorePath, JSON.stringify(store, null, 2), "utf-8");
+      store = JSON.parse(readFileSync(targetStorePath, "utf-8")) as Record<string, unknown>;
     } catch {
-      // If store doesn't parse, create a new one
-      const store = { [sessionKey]: { ...bundle.sessionStore, updatedAt: Date.now() } };
-      writeFileSync(targetStorePath, JSON.stringify(store, null, 2), "utf-8");
+      // If store doesn't parse, start fresh
     }
-  } else {
-    mkdirSync(dirname(targetStorePath), { recursive: true });
-    const store = { [sessionKey]: { ...bundle.sessionStore, updatedAt: Date.now() } };
-    writeFileSync(targetStorePath, JSON.stringify(store, null, 2), "utf-8");
   }
+
+  const entry = { ...bundle.sessionStore, updatedAt: Date.now() };
+  if (remapped) {
+    (entry as Record<string, unknown>).sessionId = sessionKey;
+  }
+  store[sessionKey] = entry;
+
+  const tmpStorePath = join(storeDir, `.sessions-${randomUUID().slice(0, 8)}.tmp`);
+  writeFileSync(tmpStorePath, JSON.stringify(store, null, 2), "utf-8");
+  renameSync(tmpStorePath, targetStorePath);
 
   // 3. Import Cortex triples
   let triplesImported = 0;
@@ -238,14 +240,18 @@ export async function importSession(opts: ImportOptions): Promise<ImportResult> 
     try {
       const healthy = await cortexClient.isHealthy();
       if (healthy) {
-        // Import session triples
+        // Import session triples (remap session key in subject, predicate, and string objects)
         for (const triple of bundle.cortexTriples) {
+          const remapStr = (s: string) =>
+            remapped ? s.replaceAll(bundle.sessionKey, sessionKey) : s;
+          const remappedObject =
+            remapped && typeof triple.object === "string"
+              ? triple.object.replaceAll(bundle.sessionKey, sessionKey)
+              : triple.object;
           const req: CreateTripleRequest = {
-            subject: remapped
-              ? triple.subject.replaceAll(bundle.sessionKey, sessionKey)
-              : triple.subject,
-            predicate: triple.predicate,
-            object: triple.object,
+            subject: remapStr(triple.subject),
+            predicate: remapStr(triple.predicate),
+            object: remappedObject,
           };
           await cortexClient.createTriple(req);
           triplesImported++;
