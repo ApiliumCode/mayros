@@ -17,6 +17,7 @@ import {
   parseAgentSessionKey,
 } from "../routing/session-key.js";
 import { getSlashCommands } from "./commands.js";
+import { createEnrichedProvider } from "./enriched-autocomplete.js";
 import { applyKeybindingsFromConfig, createTuiResolver } from "./keybinding-resolver.js";
 import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
@@ -447,16 +448,15 @@ export async function runTui(opts: TuiOptions) {
   root.addChild(editor);
 
   const updateAutocompleteProvider = () => {
-    editor.setAutocompleteProvider(
-      new CombinedAutocompleteProvider(
-        getSlashCommands({
-          cfg: config,
-          provider: sessionInfo.modelProvider,
-          model: sessionInfo.model,
-        }),
-        process.cwd(),
-      ),
+    const base = new CombinedAutocompleteProvider(
+      getSlashCommands({
+        cfg: config,
+        provider: sessionInfo.modelProvider,
+        model: sessionInfo.model,
+      }),
+      process.cwd(),
     );
+    editor.setAutocompleteProvider(createEnrichedProvider(base));
   };
 
   tui.addChild(root);
