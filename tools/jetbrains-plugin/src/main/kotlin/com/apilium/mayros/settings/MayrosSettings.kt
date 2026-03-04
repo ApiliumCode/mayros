@@ -2,6 +2,7 @@ package com.apilium.mayros.settings
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
+import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.options.Configurable
@@ -12,6 +13,7 @@ import javax.swing.*
 /**
  * Persistent settings state for the Mayros plugin.
  */
+@Service
 @State(
     name = "MayrosSettings",
     storages = [Storage("mayros.xml")]

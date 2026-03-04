@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-interactive-permissions",
-  "version": "0.5.0",
+  "version": "0.1.4",
   "private": true,
   "description": "Runtime permission dialogs, bash intent classification, policy persistence, and audit trail",
   "type": "module",

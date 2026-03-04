@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-cortex-sync",
-  "version": "0.5.0",
+  "version": "0.1.4",
   "private": true,
   "description": "Cortex DAG synchronization — peer discovery, delta sync, and cross-device knowledge replication",
   "type": "module",
