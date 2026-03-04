@@ -267,6 +267,9 @@ export async function runTui(opts: TuiOptions) {
   let showThinking = false;
   let pairingHintShown = false;
   let outputStyle: string | undefined;
+  let permissionMode: "auto" | "ask" | "deny" = "auto";
+  let fastMode = false;
+  let previousThinkingLevel: string | undefined;
   let vimEnabled = config.ui?.vim ?? false;
   const vimHandler = new VimHandler();
   const localRunIds = new Set<string>();
@@ -415,6 +418,26 @@ export async function runTui(opts: TuiOptions) {
         vimHandler.disable();
       }
       updateFooter();
+    },
+    get permissionMode() {
+      return permissionMode;
+    },
+    set permissionMode(value) {
+      permissionMode = value ?? "auto";
+      updateFooter();
+    },
+    get fastMode() {
+      return fastMode;
+    },
+    set fastMode(value) {
+      fastMode = value ?? false;
+      updateFooter();
+    },
+    get previousThinkingLevel() {
+      return previousThinkingLevel;
+    },
+    set previousThinkingLevel(value) {
+      previousThinkingLevel = value;
     },
   };
 
@@ -704,6 +727,8 @@ export async function runTui(opts: TuiOptions) {
     const reasoningLabel =
       reasoning === "on" ? "reasoning" : reasoning === "stream" ? "reasoning:stream" : null;
     const vimLabel = vimEnabled ? vimHandler.getModeIndicator() : null;
+    const permLabel = permissionMode !== "auto" ? `perm ${permissionMode}` : null;
+    const fastLabel = fastMode ? "FAST" : null;
     const footerParts = [
       `agent ${agentLabel}`,
       `session ${sessionLabel}`,
@@ -713,6 +738,8 @@ export async function runTui(opts: TuiOptions) {
       reasoningLabel,
       tokens,
       vimLabel,
+      permLabel,
+      fastLabel,
     ].filter(Boolean);
     footer.setText(theme.dim(footerParts.join(" | ")));
   };
@@ -847,6 +874,14 @@ export async function runTui(opts: TuiOptions) {
   editor.onCtrlT = () => {
     showThinking = !showThinking;
     void loadHistory();
+  };
+  editor.onShiftTab = () => {
+    const modes: Array<"auto" | "ask" | "deny"> = ["auto", "ask", "deny"];
+    const idx = modes.indexOf(permissionMode);
+    permissionMode = modes[(idx + 1) % modes.length] ?? "auto";
+    state.permissionMode = permissionMode;
+    setActivityStatus(`permission: ${permissionMode}`);
+    tui.requestRender();
   };
 
   client.onEvent = (evt) => {

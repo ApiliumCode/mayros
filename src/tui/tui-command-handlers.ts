@@ -9,7 +9,8 @@ import { expandMarkdownCommand, findMarkdownCommand } from "../commands/markdown
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { helpText, parseCommand } from "./commands.js";
 import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
@@ -223,6 +224,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         currentValue: state.showThinking ? "on" : "off",
         values: ["off", "on"],
       },
+      {
+        id: "permission",
+        label: "Permission mode",
+        currentValue: state.permissionMode ?? "auto",
+        values: ["auto", "ask", "deny"],
+      },
     ];
     const settings = createSettingsList(
       items,
@@ -234,6 +241,9 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (id === "thinking") {
           state.showThinking = value === "on";
           void loadHistory();
+        }
+        if (id === "permission") {
+          state.permissionMode = value as "auto" | "ask" | "deny";
         }
         tui.requestRender();
       },
@@ -519,6 +529,92 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         const enabled = !state.vimEnabled;
         state.vimEnabled = enabled;
         chatLog.addSystem(`vim mode ${enabled ? "enabled" : "disabled"}`);
+        break;
+      }
+      case "permission": {
+        const MODES = ["auto", "ask", "deny"] as const;
+        type PermMode = (typeof MODES)[number];
+        const mode = args.toLowerCase();
+        if (!mode) {
+          const current = state.permissionMode ?? "auto";
+          const idx = MODES.indexOf(current);
+          const next = MODES[(idx + 1) % MODES.length] as PermMode;
+          state.permissionMode = next;
+          chatLog.addSystem(`permission mode: ${next}`);
+        } else if (MODES.includes(mode as PermMode)) {
+          state.permissionMode = mode as PermMode;
+          chatLog.addSystem(`permission mode set to ${mode}`);
+        } else {
+          chatLog.addSystem("usage: /permission <auto|ask|deny>");
+        }
+        break;
+      }
+      case "fast": {
+        const isFast = !state.fastMode;
+        state.fastMode = isFast;
+        if (isFast) {
+          // Save current thinking level before switching
+          state.previousThinkingLevel = state.sessionInfo.thinkingLevel ?? "medium";
+          try {
+            const result = await client.patchSession({
+              key: state.currentSessionKey,
+              thinkingLevel: "off",
+            });
+            applySessionInfoFromPatch(result);
+          } catch {
+            // Best-effort — fast mode works locally even without gateway
+          }
+          state.outputStyle = "standard";
+          chatLog.addSystem("fast mode enabled (thinking: off, style: standard)");
+        } else {
+          // Restore previous thinking level
+          const prevLevel = state.previousThinkingLevel ?? "medium";
+          try {
+            const result = await client.patchSession({
+              key: state.currentSessionKey,
+              thinkingLevel: prevLevel,
+            });
+            applySessionInfoFromPatch(result);
+          } catch {
+            // Best-effort
+          }
+          chatLog.addSystem(`fast mode disabled (thinking: ${prevLevel})`);
+        }
+        break;
+      }
+      case "copy": {
+        const lastText = chatLog.getLastAssistantText();
+        if (!lastText) {
+          chatLog.addSystem("nothing to copy");
+          break;
+        }
+        try {
+          const proc = spawn(
+            process.platform === "darwin" ? "pbcopy" : "xclip",
+            process.platform === "darwin" ? [] : ["-selection", "clipboard"],
+            { stdio: ["pipe", "ignore", "ignore"] },
+          );
+          proc.stdin?.write(lastText);
+          proc.stdin?.end();
+          chatLog.addSystem("last response copied to clipboard");
+        } catch (err) {
+          chatLog.addSystem(`copy failed: ${String(err)}`);
+        }
+        break;
+      }
+      case "export": {
+        const lastText = chatLog.getLastAssistantText();
+        if (!lastText) {
+          chatLog.addSystem("nothing to export");
+          break;
+        }
+        const filePath = args || `mayros-export-${Date.now()}.md`;
+        try {
+          writeFileSync(filePath, lastText, "utf-8");
+          chatLog.addSystem(`exported to ${filePath}`);
+        } catch (err) {
+          chatLog.addSystem(`export failed: ${String(err)}`);
+        }
         break;
       }
       case "abort":
