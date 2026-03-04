@@ -471,47 +471,54 @@ export async function runOnboardingWizard(
       });
 
       if (peerEndpoint && typeof peerEndpoint === "string" && peerEndpoint.trim()) {
-        const peerId = await prompter.text({
-          message: "Peer name (unique identifier)",
-          placeholder: "my-laptop",
-        });
-
-        if (peerId && typeof peerId === "string" && peerId.trim()) {
-          // Store sync peer in config for the cortex-sync plugin to pick up
-          const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ?? {}) as Record<
-            string,
-            unknown
-          >;
-          const discovery = (syncConfig.discovery ?? {}) as Record<string, unknown>;
-          const manualPeers = (
-            Array.isArray(discovery.manualPeers) ? discovery.manualPeers : []
-          ) as Array<Record<string, unknown>>;
-          manualPeers.push({
-            nodeId: peerId.trim(),
-            endpoint: peerEndpoint.trim(),
-            namespaces: ["mayros"],
-            enabled: true,
-          });
-          discovery.manualPeers = manualPeers;
-          syncConfig.discovery = discovery;
-          nextConfig = {
-            ...nextConfig,
-            plugins: {
-              ...nextConfig.plugins,
-              entries: {
-                ...nextConfig.plugins?.entries,
-                "cortex-sync": {
-                  ...nextConfig.plugins?.entries?.["cortex-sync"],
-                  config: syncConfig,
-                },
-              },
-            },
-          };
+        // Validate URL format
+        const endpoint = peerEndpoint.trim();
+        if (!/^https?:\/\/.+/.test(endpoint)) {
           await prompter.note(
-            `Peer "${peerId.trim()}" added at ${peerEndpoint.trim()}.\nRun 'mayros sync now' after setup to trigger first sync.`,
+            `Invalid endpoint "${endpoint}". Must start with http:// or https://`,
             "Cortex Sync",
           );
-        }
+        } else {
+          const peerId = await prompter.text({
+            message: "Peer name (unique identifier, alphanumeric/dashes)",
+            placeholder: "my-laptop",
+          });
+
+          if (peerId && typeof peerId === "string" && /^[a-zA-Z0-9_-]+$/.test(peerId.trim())) {
+            // Store sync peer in config for the cortex-sync plugin to pick up
+            const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ??
+              {}) as Record<string, unknown>;
+            const discovery = (syncConfig.discovery ?? {}) as Record<string, unknown>;
+            const manualPeers = (
+              Array.isArray(discovery.manualPeers) ? discovery.manualPeers : []
+            ) as Array<Record<string, unknown>>;
+            manualPeers.push({
+              nodeId: peerId.trim(),
+              endpoint: peerEndpoint.trim(),
+              namespaces: ["mayros"],
+              enabled: true,
+            });
+            discovery.manualPeers = manualPeers;
+            syncConfig.discovery = discovery;
+            nextConfig = {
+              ...nextConfig,
+              plugins: {
+                ...nextConfig.plugins,
+                entries: {
+                  ...nextConfig.plugins?.entries,
+                  "cortex-sync": {
+                    ...nextConfig.plugins?.entries?.["cortex-sync"],
+                    config: syncConfig,
+                  },
+                },
+              },
+            };
+            await prompter.note(
+              `Peer "${peerId.trim()}" added at ${peerEndpoint.trim()}.\nRun 'mayros sync now' after setup to trigger first sync.`,
+              "Cortex Sync",
+            );
+          }
+        } // close else (valid URL)
       }
     }
   }

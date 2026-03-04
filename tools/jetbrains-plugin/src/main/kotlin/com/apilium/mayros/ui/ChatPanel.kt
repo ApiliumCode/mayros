@@ -142,7 +142,10 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     override fun onConnected() {
         SwingUtilities.invokeLater {
             statusLabel.text = "Connected"
-            service.getClient()?.let { subscribeToEvents(it) }
+            service.getClient()?.let {
+                it.clearEventListeners()
+                subscribeToEvents(it)
+            }
         }
     }
 

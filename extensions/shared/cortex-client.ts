@@ -413,10 +413,12 @@ export class CortexClient implements CortexClientLike, CortexLike {
     query?: Omit<ListTriplesQuery, "offset">,
   ): Promise<ListTriplesResponse> {
     const result = await this.listTriples({ ...query, limit: query?.limit ?? 10000 });
-    const sinceMs = new Date(since).getTime();
+    const sinceRaw = new Date(since).getTime();
+    const sinceMs = Number.isNaN(sinceRaw) ? 0 : sinceRaw;
     const filtered = result.triples.filter((t) => {
       if (!t.created_at) return false;
-      return new Date(t.created_at).getTime() > sinceMs;
+      const ts = new Date(t.created_at).getTime();
+      return !Number.isNaN(ts) && ts >= sinceMs;
     });
     return { triples: filtered, total: filtered.length };
   }
