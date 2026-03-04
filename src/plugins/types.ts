@@ -319,7 +319,12 @@ export type PluginHookName =
   | "subagent_spawned"
   | "subagent_ended"
   | "gateway_start"
-  | "gateway_stop";
+  | "gateway_stop"
+  | "permission_request"
+  | "notification"
+  | "teammate_idle"
+  | "task_completed"
+  | "config_change";
 
 // Agent context shared across agent hooks
 export type PluginHookAgentContext = {
@@ -655,6 +660,79 @@ export type PluginHookGatewayStopEvent = {
   reason?: string;
 };
 
+// permission_request hook
+export type PluginHookPermissionRequestEvent = {
+  /** Tool requesting permission */
+  toolName: string;
+  /** Tool call parameters */
+  params: Record<string, unknown>;
+  /** Risk classification from the permission system */
+  riskLevel: "low" | "medium" | "high" | "critical";
+  /** Human-readable reason for the permission request */
+  reason?: string;
+};
+
+export type PluginHookPermissionRequestResult = {
+  /** Override the permission decision */
+  action?: "allow" | "deny" | "ask";
+  /** Reason for the override */
+  reason?: string;
+};
+
+// notification hook
+export type PluginHookNotificationEvent = {
+  /** Notification severity */
+  level: "info" | "warn" | "error";
+  /** Short title */
+  title: string;
+  /** Detailed message body */
+  body?: string;
+  /** Origin of the notification (plugin id, agent id, etc.) */
+  source?: string;
+  /** Arbitrary metadata */
+  metadata?: Record<string, unknown>;
+};
+
+// teammate_idle hook
+export type PluginHookTeammateIdleEvent = {
+  /** Agent id of the idle teammate */
+  agentId: string;
+  /** Session key of the idle agent */
+  sessionKey: string;
+  /** How long the agent has been idle in ms */
+  idleDurationMs: number;
+  /** Last activity timestamp */
+  lastActivityAt?: number;
+};
+
+// task_completed hook
+export type PluginHookTaskCompletedEvent = {
+  /** Task identifier */
+  taskId: string;
+  /** Agent that completed the task */
+  agentId: string;
+  /** Session key where the task ran */
+  sessionKey?: string;
+  /** Task outcome */
+  outcome: "success" | "failure" | "cancelled";
+  /** Duration in ms */
+  durationMs?: number;
+  /** Error message if outcome is failure */
+  error?: string;
+  /** Arbitrary result data */
+  result?: Record<string, unknown>;
+};
+
+// config_change hook
+export type PluginHookConfigChangeEvent = {
+  /** Dot-path keys that changed (e.g. ["ui.theme", "hooks.enabled"]) */
+  changedKeys: string[];
+  /** Source of the change ("user" | "plugin" | "cli" | "api") */
+  source: string;
+  /** Timestamp of the change */
+  timestamp: number;
+};
+
 // Hook handler types mapped by hook name
 export type PluginHookHandlerMap = {
   before_model_resolve: (
@@ -752,6 +830,26 @@ export type PluginHookHandlerMap = {
   gateway_stop: (
     event: PluginHookGatewayStopEvent,
     ctx: PluginHookGatewayContext,
+  ) => Promise<void> | void;
+  permission_request: (
+    event: PluginHookPermissionRequestEvent,
+    ctx: PluginHookToolContext,
+  ) => Promise<PluginHookPermissionRequestResult | void> | PluginHookPermissionRequestResult | void;
+  notification: (
+    event: PluginHookNotificationEvent,
+    ctx: PluginHookAgentContext,
+  ) => Promise<void> | void;
+  teammate_idle: (
+    event: PluginHookTeammateIdleEvent,
+    ctx: PluginHookAgentContext,
+  ) => Promise<void> | void;
+  task_completed: (
+    event: PluginHookTaskCompletedEvent,
+    ctx: PluginHookAgentContext,
+  ) => Promise<void> | void;
+  config_change: (
+    event: PluginHookConfigChangeEvent,
+    ctx: PluginHookAgentContext,
   ) => Promise<void> | void;
 };
 
