@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.handshake.ServerHandshake
+import com.intellij.openapi.diagnostic.Logger
 import java.net.URI
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -73,6 +74,7 @@ class MayrosClient(
     // State
     // ========================================================================
 
+    private val log = Logger.getInstance(MayrosClient::class.java)
     private val gson = Gson()
     private var ws: WebSocketClient? = null
     private var connected = false
@@ -80,6 +82,7 @@ class MayrosClient(
     private val pendingRequests = ConcurrentHashMap<String, PendingRequest>()
     private val eventListeners = ConcurrentHashMap<String, MutableList<(JsonObject) -> Unit>>()
     private var connectLatch: CountDownLatch? = null
+    private var reconnectTimer: Timer? = null
 
     private data class PendingRequest(
         val latch: CountDownLatch,
@@ -113,6 +116,8 @@ class MayrosClient(
     }
 
     fun dispose() {
+        reconnectTimer?.cancel()
+        reconnectTimer = null
         disconnect()
         eventListeners.clear()
     }
@@ -146,14 +151,17 @@ class MayrosClient(
     private fun scheduleReconnect() {
         reconnectAttempts++
         val delay = options.reconnectDelayMs * (1L shl (reconnectAttempts - 1).coerceAtMost(4))
-        Timer().schedule(object : TimerTask() {
-            override fun run() {
-                if (!connected) {
-                    createWebSocket()
-                    ws?.connect()
+        reconnectTimer?.cancel()
+        reconnectTimer = Timer().also { timer ->
+            timer.schedule(object : TimerTask() {
+                override fun run() {
+                    if (!connected) {
+                        createWebSocket()
+                        ws?.connect()
+                    }
                 }
-            }
-        }, delay)
+            }, delay)
+        }
     }
 
     // ========================================================================
@@ -164,6 +172,7 @@ class MayrosClient(
         val response = try {
             gson.fromJson(raw, RpcResponse::class.java)
         } catch (e: Exception) {
+            log.warn("Failed to parse WebSocket message", e)
             return
         }
 
@@ -231,6 +240,10 @@ class MayrosClient(
 
     fun off(event: String, listener: (JsonObject) -> Unit) {
         eventListeners[event]?.remove(listener)
+    }
+
+    fun clearEventListeners() {
+        eventListeners.clear()
     }
 
     // ========================================================================

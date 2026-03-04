@@ -176,7 +176,8 @@ export function validateBundle(data: unknown): data is TeleportBundle {
   if (typeof obj.sourceDeviceId !== "string") return false;
   if (typeof obj.sessionKey !== "string") return false;
   if (typeof obj.transcript !== "string") return false;
-  if (!obj.sessionStore || typeof obj.sessionStore !== "object") return false;
+  if (!obj.sessionStore || typeof obj.sessionStore !== "object" || Array.isArray(obj.sessionStore))
+    return false;
   if (!Array.isArray(obj.cortexTriples)) return false;
 
   return true;
@@ -200,9 +201,8 @@ export async function importSession(opts: ImportOptions): Promise<ImportResult> 
   const transcriptDir = resolve(targetTranscriptDir);
   mkdirSync(transcriptDir, { recursive: true });
 
-  const sessionId =
-    ((bundle.sessionStore as Record<string, unknown>).sessionId as string) ?? sessionKey;
-  const transcriptPath = resolve(transcriptDir, `${sessionId}.jsonl`);
+  // Always use the (possibly remapped) sessionKey for the transcript filename
+  const transcriptPath = resolve(transcriptDir, `${sessionKey}.jsonl`);
 
   if (bundle.transcript) {
     const decoded = Buffer.from(bundle.transcript, "base64").toString("utf-8");
@@ -241,7 +241,7 @@ export async function importSession(opts: ImportOptions): Promise<ImportResult> 
         for (const triple of bundle.cortexTriples) {
           const req: CreateTripleRequest = {
             subject: remapped
-              ? triple.subject.replace(bundle.sessionKey, sessionKey)
+              ? triple.subject.replaceAll(bundle.sessionKey, sessionKey)
               : triple.subject,
             predicate: triple.predicate,
             object: triple.object,

@@ -11,6 +11,7 @@
 
 import type { Command } from "commander";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
 import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
@@ -79,7 +80,8 @@ function resolveSessionPaths(sessionKey: string): {
   storePath: string;
   sessionsDir: string;
 } {
-  const stateDir = process.env.MAYROS_STATE_DIR ?? resolve(process.env.HOME ?? "~", ".mayros");
+  const stateDir =
+    process.env.MAYROS_STATE_DIR ?? resolve(process.env.HOME || homedir(), ".mayros");
   const agentId = process.env.MAYROS_AGENT_ID ?? "default";
   const sessionsDir = resolve(stateDir, "agents", agentId, "sessions");
   return {

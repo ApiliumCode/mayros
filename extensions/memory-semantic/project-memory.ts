@@ -524,7 +524,7 @@ export class ProjectMemory {
 
       // Detect coding conventions (bullet points with strong indicators)
       const bulletMatch = /^\s*[-*]\s+(.+)$/.exec(line);
-      if (bulletMatch && currentSection && sectionDepth >= 2) {
+      if (bulletMatch && currentSection && sectionDepth >= 1) {
         const text = bulletMatch[1].trim();
         if (
           text.length >= 10 &&
@@ -677,11 +677,12 @@ const CONVENTION_INDICATORS = [
 ];
 
 function slugify(text: string): string {
-  return text
+  const slug = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+  return slug || `item-${Date.now().toString(36)}`;
 }
 
 function triplesToFinding(ns: string, triples: TripleDto[]): SessionFinding | null {

@@ -15,6 +15,10 @@ import java.util.UUID
  */
 class ExplainCodeAction : AnAction() {
 
+    companion object {
+        private val sessionKey = "jetbrains-explain-${UUID.randomUUID().toString().take(8)}"
+    }
+
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val selection = editor.selectionModel.selectedText ?: return
@@ -42,7 +46,7 @@ class ExplainCodeAction : AnAction() {
             try {
                 client.sendMessage(
                     MayrosClient.ChatMessage(
-                        sessionKey = "jetbrains-${UUID.randomUUID().toString().take(8)}",
+                        sessionKey = sessionKey,
                         message = message,
                         runId = UUID.randomUUID().toString()
                     )

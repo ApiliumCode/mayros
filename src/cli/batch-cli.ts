@@ -156,10 +156,12 @@ async function runSinglePrompt(
 
   return new Promise<BatchResult>((resolve) => {
     let resolved = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
     const finish = (result: BatchResult) => {
       if (resolved) return;
       resolved = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       client.stop();
       resolve(result);
     };
@@ -212,7 +214,7 @@ async function runSinglePrompt(
     };
 
     // Timeout
-    setTimeout(() => {
+    timeoutHandle = setTimeout(() => {
       finish({
         id: item.id,
         status: "error",

@@ -66,21 +66,23 @@ export async function buildLocalDelta(
       limit,
     });
 
-    // Filter by created_at > since
-    const sinceMs = new Date(since).getTime();
+    // Filter by created_at >= since
+    const sinceRaw = new Date(since).getTime();
+    const sinceMs = Number.isNaN(sinceRaw) ? 0 : sinceRaw;
     const filtered = result.triples.filter((t) => {
       if (!t.created_at) return false;
-      return new Date(t.created_at).getTime() > sinceMs;
+      const ts = new Date(t.created_at).getTime();
+      return !Number.isNaN(ts) && ts >= sinceMs;
     });
 
     allTriples.push(...filtered);
   }
 
-  // Sort by created_at ascending
+  // Sort by created_at ascending (NaN → 0)
   allTriples.sort((a, b) => {
-    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return aTime - bTime;
+    const aRaw = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bRaw = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return (Number.isNaN(aRaw) ? 0 : aRaw) - (Number.isNaN(bRaw) ? 0 : bRaw);
   });
 
   // Cap to limit
@@ -135,8 +137,10 @@ export function resolveConflict(
 ): SyncConflict {
   switch (strategy) {
     case "last-writer-wins": {
-      const localTime = local.created_at ? new Date(local.created_at).getTime() : 0;
-      const remoteTime = remote.created_at ? new Date(remote.created_at).getTime() : 0;
+      const localRaw = local.created_at ? new Date(local.created_at).getTime() : 0;
+      const remoteRaw = remote.created_at ? new Date(remote.created_at).getTime() : 0;
+      const localTime = Number.isNaN(localRaw) ? 0 : localRaw;
+      const remoteTime = Number.isNaN(remoteRaw) ? 0 : remoteRaw;
       return {
         local,
         remote,
@@ -199,15 +203,15 @@ export function reconcile(
     // Skip if exact triple already exists locally
     if (localKeys.has(exactKey)) continue;
 
-    // Handle conflict case
+    // Skip if conflict resolved to keep local
     if (conflictRemoteSkip.has(conflictKey)) continue;
-    if (conflictRemoteKeep.has(conflictKey) || !conflictRemoteSkip.has(conflictKey)) {
-      toCreate.push({
-        subject: rt.subject,
-        predicate: rt.predicate,
-        object: rt.object,
-      });
-    }
+
+    // Add if new (no conflict) or conflict resolved to keep remote/both
+    toCreate.push({
+      subject: rt.subject,
+      predicate: rt.predicate,
+      object: rt.object,
+    });
   }
 
   return { toCreate, conflicts: resolvedConflicts };
