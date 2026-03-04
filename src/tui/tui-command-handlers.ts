@@ -675,6 +675,33 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "batch": {
+        if (!args) {
+          chatLog.addSystem("usage: /batch <file> — run 'mayros batch run <file>' from terminal");
+        } else {
+          chatLog.addSystem(
+            `Run 'mayros batch run ${args}' from the terminal for batch processing`,
+          );
+        }
+        break;
+      }
+      case "teleport": {
+        const action = args || "export";
+        if (action === "export") {
+          chatLog.addSystem(
+            `Run 'mayros teleport export --session ${state.currentSessionKey}' from the terminal`,
+          );
+        } else if (action === "import") {
+          chatLog.addSystem("Run 'mayros teleport import <file>' from the terminal");
+        } else {
+          chatLog.addSystem("usage: /teleport [export|import]");
+        }
+        break;
+      }
+      case "sync": {
+        await sendMessage(`Show Cortex sync ${args || "status"}`);
+        break;
+      }
       case "onboard": {
         chatLog.addSystem("Run 'mayros onboard' from the terminal to start the setup wizard");
         break;
