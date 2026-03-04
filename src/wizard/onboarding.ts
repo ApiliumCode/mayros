@@ -443,6 +443,14 @@ export async function runOnboardingWizard(
     nextConfig = await setupSkills(nextConfig, workspaceDir, runtime, prompter);
   }
 
+  // MCP server setup
+  if (opts.skipMcp) {
+    await prompter.note("Skipping MCP server setup.", "MCP Servers");
+  } else {
+    const { setupMcpServers } = await import("../commands/onboard-mcp.js");
+    nextConfig = await setupMcpServers(nextConfig, runtime, prompter);
+  }
+
   // Setup hooks (session memory on /new)
   const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
   nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);
