@@ -8,6 +8,7 @@ import com.intellij.openapi.diagnostic.Logger
 import java.net.URI
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -76,13 +77,13 @@ class MayrosClient(
 
     private val log = Logger.getInstance(MayrosClient::class.java)
     private val gson = Gson()
-    private var ws: WebSocketClient? = null
-    private var connected = false
-    private var reconnectAttempts = 0
+    @Volatile private var ws: WebSocketClient? = null
+    @Volatile private var connected = false
+    @Volatile private var reconnectAttempts = 0
     private val pendingRequests = ConcurrentHashMap<String, PendingRequest>()
-    private val eventListeners = ConcurrentHashMap<String, MutableList<(JsonObject) -> Unit>>()
-    private var connectLatch: CountDownLatch? = null
-    private var reconnectTimer: Timer? = null
+    private val eventListeners = ConcurrentHashMap<String, CopyOnWriteArrayList<(JsonObject) -> Unit>>()
+    @Volatile private var connectLatch: CountDownLatch? = null
+    @Volatile private var reconnectTimer: Timer? = null
 
     private data class PendingRequest(
         val latch: CountDownLatch,
@@ -104,15 +105,18 @@ class MayrosClient(
     }
 
     fun disconnect() {
+        reconnectTimer?.cancel()
+        reconnectTimer = null
         connected = false
         ws?.close()
         ws = null
         // Reject all pending requests
-        pendingRequests.forEach { (_, pending) ->
+        val snapshot = ArrayList(pendingRequests.values)
+        pendingRequests.clear()
+        for (pending in snapshot) {
             pending.error = "disconnected"
             pending.latch.countDown()
         }
-        pendingRequests.clear()
     }
 
     fun dispose() {
@@ -235,7 +239,7 @@ class MayrosClient(
     // ========================================================================
 
     fun on(event: String, listener: (JsonObject) -> Unit) {
-        eventListeners.getOrPut(event) { mutableListOf() }.add(listener)
+        eventListeners.getOrPut(event) { CopyOnWriteArrayList() }.add(listener)
     }
 
     fun off(event: String, listener: (JsonObject) -> Unit) {

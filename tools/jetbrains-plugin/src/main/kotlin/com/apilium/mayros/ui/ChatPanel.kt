@@ -81,10 +81,9 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
         service.getClient()?.let { subscribeToEvents(it) }
     }
 
-    private fun unsubscribeFromEvents(client: MayrosClient) {
-        for ((event, listener) in registeredListeners) {
-            client.off(event, listener)
-        }
+    private fun clearRegisteredListeners() {
+        // On reconnect the old client is already disposed (its eventListeners cleared),
+        // so we only need to reset our tracking list before subscribing to the new client.
         registeredListeners.clear()
     }
 
@@ -163,7 +162,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
         SwingUtilities.invokeLater {
             statusLabel.text = "Connected"
             service.getClient()?.let {
-                unsubscribeFromEvents(it)
+                clearRegisteredListeners()
                 subscribeToEvents(it)
             }
         }

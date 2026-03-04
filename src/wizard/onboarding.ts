@@ -484,7 +484,8 @@ export async function runOnboardingWizard(
             placeholder: "my-laptop",
           });
 
-          if (peerId && typeof peerId === "string" && /^[a-zA-Z0-9_-]+$/.test(peerId.trim())) {
+          const peerIdTrimmed = peerId && typeof peerId === "string" ? peerId.trim() : "";
+          if (peerIdTrimmed && /^[a-zA-Z0-9_-]+$/.test(peerIdTrimmed)) {
             // Store sync peer in config for the cortex-sync plugin to pick up
             const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ??
               {}) as Record<string, unknown>;
@@ -493,8 +494,8 @@ export async function runOnboardingWizard(
               Array.isArray(discovery.manualPeers) ? discovery.manualPeers : []
             ) as Array<Record<string, unknown>>;
             manualPeers.push({
-              nodeId: peerId.trim(),
-              endpoint: peerEndpoint.trim(),
+              nodeId: peerIdTrimmed,
+              endpoint,
               namespaces: ["mayros"],
               enabled: true,
             });
@@ -514,7 +515,7 @@ export async function runOnboardingWizard(
               },
             };
             await prompter.note(
-              `Peer "${peerId.trim()}" added at ${peerEndpoint.trim()}.\nRun 'mayros sync now' after setup to trigger first sync.`,
+              `Peer "${peerIdTrimmed}" added at ${endpoint}.\nRun 'mayros sync now' after setup to trigger first sync.`,
               "Cortex Sync",
             );
           }

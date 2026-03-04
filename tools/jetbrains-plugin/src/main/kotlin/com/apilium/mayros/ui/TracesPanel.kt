@@ -7,7 +7,6 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.content.ContentFactory
-import com.apilium.mayros.MayrosClient
 import com.apilium.mayros.MayrosService
 import java.awt.BorderLayout
 import javax.swing.*
@@ -60,10 +59,9 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
         }
     }
 
-    private fun unsubscribeFromTraceEvents(client: MayrosClient) {
-        for ((event, listener) in registeredListeners) {
-            client.off(event, listener)
-        }
+    private fun clearRegisteredListeners() {
+        // On reconnect the old client is already disposed (its eventListeners cleared),
+        // so we only need to reset our tracking list before subscribing to the new client.
         registeredListeners.clear()
     }
 
@@ -98,7 +96,7 @@ class TracesPanel(private val project: Project) : JPanel(BorderLayout()), Mayros
     override fun onConnected() {
         SwingUtilities.invokeLater {
             statusLabel.text = "Connected — listening for events"
-            service.getClient()?.let { unsubscribeFromTraceEvents(it) }
+            clearRegisteredListeners()
             subscribeToTraceEvents()
         }
     }

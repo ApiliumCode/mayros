@@ -471,7 +471,7 @@ export class ProjectMemory {
   async ingestMayrosMd(content: string): Promise<number> {
     if (!content.trim()) return 0;
 
-    const lines = content.split("\n");
+    const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     const triples: CreateTripleRequest[] = [];
     let currentSection = "";
     let sectionDepth = 0;
@@ -503,8 +503,8 @@ export class ProjectMemory {
             predicate: `${this.ns}:mayros:build_command`,
             object: `${label}: ${cmd}`,
           });
-          continue;
         }
+        continue;
       }
 
       // Detect key files in table rows

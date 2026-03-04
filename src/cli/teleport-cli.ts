@@ -34,11 +34,12 @@ function resolveCortexClient(opts: {
   token?: string;
 }): CortexClient | undefined {
   const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
+  const rawPort = opts.port
     ? Number.parseInt(opts.port, 10)
     : process.env.CORTEX_PORT
       ? Number.parseInt(process.env.CORTEX_PORT, 10)
       : 8080;
+  const port = Number.isFinite(rawPort) ? rawPort : 8080;
   const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
 
   if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
