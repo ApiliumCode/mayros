@@ -1,0 +1,61 @@
+<idea-plugin>
+    <id>com.apilium.mayros</id>
+    <name>Mayros</name>
+    <vendor email="dev@apilium.com" url="https://apilium.com">Apilium</vendor>
+
+    <description><![CDATA[
+    Mayros AI agent framework integration for IntelliJ-based IDEs.
+    Connect to the Mayros gateway for interactive sessions, agent management,
+    knowledge graph exploration, and trace visualization.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Application-level service -->
+        <applicationService
+            serviceImplementation="com.apilium.mayros.MayrosService"/>
+
+        <!-- Tool Windows -->
+        <toolWindow id="Mayros Chat"
+                    anchor="right"
+                    factoryClass="com.apilium.mayros.ui.ChatPanelFactory"
+                    icon="/icons/mayros-13.svg"/>
+
+        <toolWindow id="Mayros Agents"
+                    anchor="right"
+                    factoryClass="com.apilium.mayros.ui.AgentsPanelFactory"
+                    icon="/icons/mayros-13.svg"/>
+
+        <toolWindow id="Mayros Traces"
+                    anchor="bottom"
+                    factoryClass="com.apilium.mayros.ui.TracesPanelFactory"
+                    icon="/icons/mayros-13.svg"/>
+
+        <!-- Settings -->
+        <applicationConfigurable
+            parentId="tools"
+            instance="com.apilium.mayros.settings.MayrosConfigurable"
+            id="com.apilium.mayros.settings"
+            displayName="Mayros"/>
+
+        <!-- Gutter line markers -->
+        <codeInsight.lineMarkerProvider
+            language=""
+            implementationClass="com.apilium.mayros.gutter.MayrosLineMarkerProvider"/>
+    </extensions>
+
+    <actions>
+        <group id="Mayros.EditorPopup" text="Mayros" popup="true">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <action id="Mayros.SendSelection"
+                    class="com.apilium.mayros.actions.SendSelectionAction"
+                    text="Send to Mayros"
+                    description="Send selected code to Mayros chat"/>
+            <action id="Mayros.ExplainCode"
+                    class="com.apilium.mayros.actions.ExplainCodeAction"
+                    text="Explain with Mayros"
+                    description="Ask Mayros to explain selected code"/>
+        </group>
+    </actions>
+</idea-plugin>
