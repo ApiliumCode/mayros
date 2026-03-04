@@ -101,8 +101,9 @@ export async function exportSession(opts: ExportOptions): Promise<ExportResult> 
   let transcriptSize = 0;
   if (existsSync(transcriptPath)) {
     const raw = readFileSync(transcriptPath, "utf-8");
-    transcriptContent = Buffer.from(raw).toString("base64");
-    transcriptSize = raw.length;
+    const rawBuf = Buffer.from(raw);
+    transcriptContent = rawBuf.toString("base64");
+    transcriptSize = rawBuf.length;
   }
 
   // 2. Read session store entry

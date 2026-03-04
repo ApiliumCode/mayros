@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.apilium.mayros.settings.MayrosSettings
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Application-level service that manages the MayrosClient lifecycle.
@@ -16,8 +17,8 @@ import com.apilium.mayros.settings.MayrosSettings
 class MayrosService : Disposable {
 
     private val log = Logger.getInstance(MayrosService::class.java)
-    private var client: MayrosClient? = null
-    private val listeners = mutableListOf<ConnectionListener>()
+    @Volatile private var client: MayrosClient? = null
+    private val listeners = CopyOnWriteArrayList<ConnectionListener>()
 
     interface ConnectionListener {
         fun onConnected()
@@ -34,6 +35,7 @@ class MayrosService : Disposable {
     /**
      * Connect to the Mayros gateway using current settings.
      */
+    @Synchronized
     fun connect(): Boolean {
         val settings = MayrosSettings.getInstance()
         val url = settings.gatewayUrl
