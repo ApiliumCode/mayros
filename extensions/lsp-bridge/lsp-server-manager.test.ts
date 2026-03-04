@@ -66,7 +66,7 @@ class MockChildProcess extends EventEmitter {
   respondError(code: number, message: string): void {
     const id = this.lastRequestId();
     const body = JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } });
-    const msg = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${msg}`;
+    const msg = `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`;
     this.stdout.emit("data", Buffer.from(msg));
   }
 

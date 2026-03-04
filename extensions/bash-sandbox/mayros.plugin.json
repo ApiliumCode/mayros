@@ -1,0 +1,32 @@
+{
+  "id": "bash-sandbox",
+  "kind": "security",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": { "type": "string", "enum": ["enforce", "warn", "off"] },
+      "domainAllowlist": { "type": "array", "items": { "type": "string" } },
+      "domainDenylist": { "type": "array", "items": { "type": "string" } },
+      "commandBlocklist": { "type": "array", "items": { "type": "string" } },
+      "commandAllowOverrides": { "type": "array", "items": { "type": "string" } },
+      "dangerousPatterns": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "pattern": { "type": "string" },
+            "severity": { "type": "string", "enum": ["block", "warn"] },
+            "message": { "type": "string" }
+          },
+          "required": ["id", "pattern", "severity", "message"]
+        }
+      },
+      "maxCommandLengthBytes": { "type": "integer", "minimum": 64, "maximum": 65536 },
+      "allowSudo": { "type": "boolean" },
+      "allowCurlToArbitraryDomains": { "type": "boolean" },
+      "bypassEnvVar": { "type": "string" }
+    }
+  }
+}

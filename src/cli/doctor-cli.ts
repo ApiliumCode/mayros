@@ -208,17 +208,17 @@ function checkPlugins(): DoctorCheck[] {
   try {
     const report = buildPluginStatusReport();
     const loaded = report.plugins?.length ?? 0;
-    const errors = report.errors?.length ?? 0;
     const diagnostics = report.diagnostics ?? [];
+    const errorDiags = diagnostics.filter((d) => d.level === "error");
 
-    if (errors > 0) {
+    if (errorDiags.length > 0) {
       checks.push({
         name: "Plugin loading",
         status: "fail",
-        message: `${loaded} plugins loaded, ${errors} error(s)`,
-        detail: report.errors
-          ?.slice(0, 3)
-          .map((e) => e.message ?? String(e))
+        message: `${loaded} plugins loaded, ${errorDiags.length} error(s)`,
+        detail: errorDiags
+          .slice(0, 3)
+          .map((e: { message: string }) => e.message)
           .join("; "),
       });
     } else {

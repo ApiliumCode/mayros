@@ -82,11 +82,13 @@ const mcpClientPlugin = {
             label: bridged.label,
             description: bridged.description,
             parameters: bridged.parameters as Parameters<typeof Type.Object>[0],
-            async execute(_toolCallId, params) {
+            async execute(_toolCallId, params, _signal?, _onUpdate?) {
               const transport = sessionMgr.getTransport(serverId);
               if (!transport || !transport.isConnected()) {
                 return {
-                  content: [{ type: "text", text: `Server ${serverId} is not connected.` }],
+                  content: [
+                    { type: "text" as const, text: `Server ${serverId} is not connected.` },
+                  ],
                   details: { action: "failed", reason: "not_connected" },
                 };
               }
@@ -119,7 +121,7 @@ const mcpClientPlugin = {
                 };
               } catch (err) {
                 return {
-                  content: [{ type: "text", text: `Tool call failed: ${String(err)}` }],
+                  content: [{ type: "text" as const, text: `Tool call failed: ${String(err)}` }],
                   details: { action: "failed", error: String(err) },
                 };
               }
@@ -315,7 +317,7 @@ const mcpClientPlugin = {
             }),
           ),
         }),
-        async execute(_toolCallId, params) {
+        async execute(_toolCallId, params, _signal?, _onUpdate?) {
           const {
             serverId,
             toolName,
@@ -329,7 +331,7 @@ const mcpClientPlugin = {
           const transport = sessionMgr.getTransport(serverId);
           if (!transport || !transport.isConnected()) {
             return {
-              content: [{ type: "text", text: `Server ${serverId} is not connected.` }],
+              content: [{ type: "text" as const, text: `Server ${serverId} is not connected.` }],
               details: { action: "failed", reason: "not_connected" },
             };
           }
@@ -359,7 +361,7 @@ const mcpClientPlugin = {
             };
           } catch (err) {
             return {
-              content: [{ type: "text", text: `Tool call failed: ${String(err)}` }],
+              content: [{ type: "text" as const, text: `Tool call failed: ${String(err)}` }],
               details: { action: "failed", server: serverId, tool: toolName, error: String(err) },
             };
           }

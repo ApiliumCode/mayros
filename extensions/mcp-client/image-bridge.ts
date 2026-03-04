@@ -16,10 +16,7 @@ export type McpContentBlock =
 
 export type AgentContentBlock =
   | { type: "text"; text: string }
-  | {
-      type: "image";
-      source: { type: "base64"; media_type: string; data: string };
-    };
+  | { type: "image"; data: string; mimeType: string };
 
 // ============================================================================
 // Extract
@@ -69,11 +66,8 @@ export function formatMcpResponse(blocks: McpContentBlock[]): AgentContentBlock[
     if (block.type === "image") {
       return {
         type: "image" as const,
-        source: {
-          type: "base64" as const,
-          media_type: block.mimeType,
-          data: block.data,
-        },
+        data: block.data,
+        mimeType: block.mimeType,
       };
     }
     return { type: "text" as const, text: block.text };
