@@ -19,13 +19,7 @@ import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { CortexClient } from "../shared/cortex-client.js";
 import { parseCortexSyncConfig, type CortexSyncConfig } from "./config.js";
 import { PeerManager } from "./peer-manager.js";
-import {
-  buildLocalDelta,
-  syncWithPeer,
-  type SyncPeer,
-  type SyncDelta,
-  type SyncResult,
-} from "./sync-protocol.js";
+import { syncWithPeer, type SyncPeer, type SyncDelta, type SyncResult } from "./sync-protocol.js";
 
 // ============================================================================
 // Remote delta fetcher (HTTP-based)
@@ -147,169 +141,230 @@ const cortexSyncPlugin = {
     // Tool: cortex_sync_status
     // ========================================================================
 
-    api.registerTool({
-      name: "cortex_sync_status",
-      description: "Show Cortex sync peer status and statistics",
-      parameters: Type.Object({}),
-      handler: async () => {
-        if (!cortexAvailable) {
-          return { content: "Cortex unavailable. Cannot query sync status." };
-        }
-
-        const status = await peerManager.status();
-        const peers = await peerManager.listPeers();
-
-        const lines = [
-          `Cortex Sync Status:`,
-          `  Total peers: ${status.totalPeers}`,
-          `  Active: ${status.activePeers}`,
-          `  Unreachable: ${status.unreachablePeers}`,
-          `  Total syncs: ${status.totalSyncs}`,
-          `  Total triples synced: ${status.totalTriplesSynced}`,
-          "",
-        ];
-
-        if (peers.length > 0) {
-          lines.push("Peers:");
-          for (const peer of peers) {
-            const lastSync = peer.lastSyncAt || "never";
-            lines.push(
-              `  ${peer.nodeId} [${peer.status}] → ${peer.endpoint}`,
-              `    last sync: ${lastSync}`,
-              `    namespaces: ${peer.namespaces.join(", ")}`,
-              `    syncs: ${peer.totalSyncs}, triples: ${peer.totalTriplesSynced}`,
-            );
+    api.registerTool(
+      {
+        name: "cortex_sync_status",
+        label: "Cortex Sync Status",
+        description: "Show Cortex sync peer status and statistics",
+        parameters: Type.Object({}),
+        async execute() {
+          if (!cortexAvailable) {
+            return {
+              content: [
+                { type: "text" as const, text: "Cortex unavailable. Cannot query sync status." },
+              ],
+              details: {},
+            };
           }
-        }
 
-        return { content: lines.join("\n") };
+          const status = await peerManager.status();
+          const peers = await peerManager.listPeers();
+
+          const lines = [
+            `Cortex Sync Status:`,
+            `  Total peers: ${status.totalPeers}`,
+            `  Active: ${status.activePeers}`,
+            `  Unreachable: ${status.unreachablePeers}`,
+            `  Total syncs: ${status.totalSyncs}`,
+            `  Total triples synced: ${status.totalTriplesSynced}`,
+            "",
+          ];
+
+          if (peers.length > 0) {
+            lines.push("Peers:");
+            for (const peer of peers) {
+              const lastSync = peer.lastSyncAt || "never";
+              lines.push(
+                `  ${peer.nodeId} [${peer.status}] → ${peer.endpoint}`,
+                `    last sync: ${lastSync}`,
+                `    namespaces: ${peer.namespaces.join(", ")}`,
+                `    syncs: ${peer.totalSyncs}, triples: ${peer.totalTriplesSynced}`,
+              );
+            }
+          }
+
+          return {
+            content: [{ type: "text" as const, text: lines.join("\n") }],
+            details: { totalPeers: status.totalPeers },
+          };
+        },
       },
-    });
+      { name: "cortex_sync_status" },
+    );
 
     // ========================================================================
     // Tool: cortex_sync_now
     // ========================================================================
 
-    api.registerTool({
-      name: "cortex_sync_now",
-      description: "Force immediate sync with a specific peer or all peers",
-      parameters: Type.Object({
-        peerId: Type.Optional(Type.String({ description: "Peer node ID (omit for all)" })),
-      }),
-      handler: async (params) => {
-        if (!cortexAvailable) {
-          return { content: "Cortex unavailable. Cannot sync." };
-        }
+    api.registerTool(
+      {
+        name: "cortex_sync_now",
+        label: "Cortex Sync Now",
+        description: "Force immediate sync with a specific peer or all peers",
+        parameters: Type.Object({
+          peerId: Type.Optional(Type.String({ description: "Peer node ID (omit for all)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { peerId } = params as { peerId?: string };
 
-        if (params.peerId) {
-          const result = await syncPeer(params.peerId);
-          if (!result) {
-            return { content: `Peer ${params.peerId} not found or unreachable.` };
+          if (!cortexAvailable) {
+            return {
+              content: [{ type: "text" as const, text: "Cortex unavailable. Cannot sync." }],
+              details: {},
+            };
           }
+
+          if (peerId) {
+            const result = await syncPeer(peerId);
+            if (!result) {
+              return {
+                content: [
+                  { type: "text" as const, text: `Peer ${peerId} not found or unreachable.` },
+                ],
+                details: {},
+              };
+            }
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: [
+                    `Synced with ${peerId}:`,
+                    `  Triples received: ${result.triplesReceived}`,
+                    `  Triples applied: ${result.triplesApplied}`,
+                    `  Conflicts: ${result.conflicts.length}`,
+                    `  Duration: ${result.durationMs}ms`,
+                  ].join("\n"),
+                },
+              ],
+              details: { peerId, triplesApplied: result.triplesApplied },
+            };
+          }
+
+          const results = await syncAllPeers();
+          if (results.length === 0) {
+            return {
+              content: [{ type: "text" as const, text: "No active peers to sync with." }],
+              details: {},
+            };
+          }
+
+          const lines = [`Synced with ${results.length} peer(s):`];
+          for (const r of results) {
+            lines.push(
+              `  ${r.peerId}: ${r.triplesApplied} applied, ${r.conflicts.length} conflicts (${r.durationMs}ms)`,
+            );
+          }
+
           return {
-            content: [
-              `Synced with ${params.peerId}:`,
-              `  Triples received: ${result.triplesReceived}`,
-              `  Triples applied: ${result.triplesApplied}`,
-              `  Conflicts: ${result.conflicts.length}`,
-              `  Duration: ${result.durationMs}ms`,
-            ].join("\n"),
+            content: [{ type: "text" as const, text: lines.join("\n") }],
+            details: { peerCount: results.length },
           };
-        }
-
-        const results = await syncAllPeers();
-        if (results.length === 0) {
-          return { content: "No active peers to sync with." };
-        }
-
-        const lines = [`Synced with ${results.length} peer(s):`];
-        for (const r of results) {
-          lines.push(
-            `  ${r.peerId}: ${r.triplesApplied} applied, ${r.conflicts.length} conflicts (${r.durationMs}ms)`,
-          );
-        }
-
-        return { content: lines.join("\n") };
+        },
       },
-    });
+      { name: "cortex_sync_now" },
+    );
 
     // ========================================================================
     // Tool: cortex_sync_pair
     // ========================================================================
 
-    api.registerTool({
-      name: "cortex_sync_pair",
-      description: "Pair with a new Cortex peer for synchronization",
-      parameters: Type.Object({
-        nodeId: Type.String({ description: "Unique identifier for the peer" }),
-        endpoint: Type.String({
-          description: "Cortex HTTP endpoint (e.g. http://192.168.1.5:8080)",
-        }),
-        namespaces: Type.Optional(
-          Type.Array(Type.String(), {
-            description: "Namespaces to sync (default: current namespace)",
+    api.registerTool(
+      {
+        name: "cortex_sync_pair",
+        label: "Cortex Sync Pair",
+        description: "Pair with a new Cortex peer for synchronization",
+        parameters: Type.Object({
+          nodeId: Type.String({ description: "Unique identifier for the peer" }),
+          endpoint: Type.String({
+            description: "Cortex HTTP endpoint (e.g. http://192.168.1.5:8080)",
           }),
-        ),
-      }),
-      handler: async (params) => {
-        if (!cortexAvailable) {
-          return { content: "Cortex unavailable. Cannot pair." };
-        }
+          namespaces: Type.Optional(
+            Type.Array(Type.String(), {
+              description: "Namespaces to sync (default: current namespace)",
+            }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const { nodeId, endpoint, namespaces } = params as {
+            nodeId: string;
+            endpoint: string;
+            namespaces?: string[];
+          };
 
-        const existing = await peerManager.getPeer(params.nodeId);
-        if (existing && existing.status !== "removed") {
-          return { content: `Peer ${params.nodeId} already exists (status: ${existing.status}).` };
-        }
+          if (!cortexAvailable) {
+            return {
+              content: [{ type: "text" as const, text: "Cortex unavailable. Cannot pair." }],
+              details: {},
+            };
+          }
 
-        const peer = await peerManager.addPeer({
-          nodeId: params.nodeId,
-          endpoint: params.endpoint,
-          namespaces: params.namespaces ?? [ns],
-          enabled: true,
-        });
+          const existing = await peerManager.getPeer(nodeId);
+          if (existing && existing.status !== "removed") {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Peer ${nodeId} already exists (status: ${existing.status}).`,
+                },
+              ],
+              details: { action: "skipped", reason: "already_exists" },
+            };
+          }
 
-        return {
-          content: [
-            `Paired with peer ${peer.nodeId}:`,
-            `  Endpoint: ${peer.endpoint}`,
-            `  Namespaces: ${peer.namespaces.join(", ")}`,
-            `  Status: ${peer.status}`,
-            "",
-            `Run 'mayros sync now' or use cortex_sync_now to trigger first sync.`,
-          ].join("\n"),
-        };
+          const peer = await peerManager.addPeer({
+            nodeId,
+            endpoint,
+            namespaces: namespaces ?? [ns],
+            enabled: true,
+          });
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: [
+                  `Paired with peer ${peer.nodeId}:`,
+                  `  Endpoint: ${peer.endpoint}`,
+                  `  Namespaces: ${peer.namespaces.join(", ")}`,
+                  `  Status: ${peer.status}`,
+                  "",
+                  `Run 'mayros sync now' or use cortex_sync_now to trigger first sync.`,
+                ].join("\n"),
+              },
+            ],
+            details: { action: "paired", nodeId: peer.nodeId },
+          };
+        },
       },
-    });
+      { name: "cortex_sync_pair" },
+    );
 
     // ========================================================================
     // Hooks: auto-sync on session end and config change
     // ========================================================================
 
     if (cfg.sync.autoSync) {
-      api.registerHook("agent_end", {
-        handler: async () => {
-          if (!cortexAvailable) return;
-          try {
-            const results = await syncAllPeers();
-            if (results.length > 0) {
-              const total = results.reduce((s, r) => s + r.triplesApplied, 0);
-              api.logger.info(`cortex-sync: auto-synced ${total} triples on session end`);
-            }
-          } catch (err) {
-            api.logger.warn(`cortex-sync: auto-sync failed: ${String(err)}`);
+      api.on("agent_end", async () => {
+        if (!cortexAvailable) return;
+        try {
+          const results = await syncAllPeers();
+          if (results.length > 0) {
+            const total = results.reduce((s, r) => s + r.triplesApplied, 0);
+            api.logger.info(`cortex-sync: auto-synced ${total} triples on session end`);
           }
-        },
+        } catch (err) {
+          api.logger.warn(`cortex-sync: auto-sync failed: ${String(err)}`);
+        }
       });
 
-      api.registerHook("config_change", {
-        handler: async () => {
-          if (!cortexAvailable) return;
-          try {
-            await syncAllPeers();
-          } catch {
-            // Best-effort
-          }
-        },
+      api.on("config_change", async () => {
+        if (!cortexAvailable) return;
+        try {
+          await syncAllPeers();
+        } catch {
+          // Best-effort
+        }
       });
     }
   },
