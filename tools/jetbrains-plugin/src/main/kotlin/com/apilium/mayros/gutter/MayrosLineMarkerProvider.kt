@@ -60,6 +60,7 @@ class MayrosLineMarkerProvider : LineMarkerProvider {
         if (!client.isConnected) return
 
         val file = element.containingFile?.virtualFile?.name ?: "unknown"
+        val projectName = element.project.name
         val line = element.containingFile?.let { psiFile ->
             val doc = com.intellij.psi.PsiDocumentManager.getInstance(psiFile.project)
                 .getDocument(psiFile)
@@ -72,11 +73,14 @@ class MayrosLineMarkerProvider : LineMarkerProvider {
             append("Please analyze this and suggest a resolution or improvement.")
         }
 
+        // Use project-scoped session key to avoid mixing gutter actions across projects
+        val sessionKey = "jetbrains-gutter-${projectName.lowercase().replace(Regex("[^a-z0-9-]"), "-")}"
+
         Thread {
             try {
                 client.sendMessage(
                     MayrosClient.ChatMessage(
-                        sessionKey = "jetbrains-gutter",
+                        sessionKey = sessionKey,
                         message = message,
                         runId = UUID.randomUUID().toString()
                     )

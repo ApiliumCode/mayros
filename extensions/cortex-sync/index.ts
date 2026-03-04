@@ -77,11 +77,19 @@ const cortexSyncPlugin = {
 
     api.logger.info(`cortex-sync: plugin registered (ns: ${ns})`);
 
+    async function checkCortex(): Promise<boolean> {
+      try {
+        cortexAvailable = await client.isHealthy();
+      } catch {
+        cortexAvailable = false;
+      }
+      return cortexAvailable;
+    }
+
     // Initialize peers from config
     void (async () => {
       try {
-        const healthy = await client.isHealthy();
-        cortexAvailable = healthy;
+        const healthy = await checkCortex();
         if (healthy) {
           const added = await peerManager.initFromConfig(cfg.discovery.manualPeers);
           if (added > 0) {
@@ -97,16 +105,16 @@ const cortexSyncPlugin = {
     // Sync helper
     // ========================================================================
 
-    async function syncPeer(nodeId: string): Promise<SyncResult | null> {
-      if (!cortexAvailable) return null;
+    async function executePeerSync(nodeId: string): Promise<SyncResult | null> {
+      if (!cortexAvailable && !(await checkCortex())) return null;
 
       const peer = await peerManager.getPeer(nodeId);
       if (!peer || peer.status === "removed") return null;
 
-      const syncPeer = peerManager.toSyncPeer(peer);
+      const peerTarget = peerManager.toSyncPeer(peer);
 
       try {
-        const result = await syncWithPeer(client, syncPeer, {
+        const result = await syncWithPeer(client, peerTarget, {
           conflictStrategy: cfg.sync.conflictStrategy,
           maxTriples: cfg.sync.maxTriplesPerSync,
           timeoutMs: cfg.sync.syncTimeoutMs,
@@ -123,14 +131,14 @@ const cortexSyncPlugin = {
     }
 
     async function syncAllPeers(): Promise<SyncResult[]> {
-      if (!cortexAvailable) return [];
+      if (!cortexAvailable && !(await checkCortex())) return [];
 
       const peers = await peerManager.listPeers();
       const activePeers = peers.filter((p) => p.status === "active");
       const results: SyncResult[] = [];
 
       for (const peer of activePeers) {
-        const result = await syncPeer(peer.nodeId);
+        const result = await executePeerSync(peer.nodeId);
         if (result) results.push(result);
       }
 
@@ -148,7 +156,7 @@ const cortexSyncPlugin = {
         description: "Show Cortex sync peer status and statistics",
         parameters: Type.Object({}),
         async execute() {
-          if (!cortexAvailable) {
+          if (!cortexAvailable && !(await checkCortex())) {
             return {
               content: [
                 { type: "text" as const, text: "Cortex unavailable. Cannot query sync status." },
@@ -207,7 +215,7 @@ const cortexSyncPlugin = {
         async execute(_toolCallId, params) {
           const { peerId } = params as { peerId?: string };
 
-          if (!cortexAvailable) {
+          if (!cortexAvailable && !(await checkCortex())) {
             return {
               content: [{ type: "text" as const, text: "Cortex unavailable. Cannot sync." }],
               details: {},
@@ -215,7 +223,7 @@ const cortexSyncPlugin = {
           }
 
           if (peerId) {
-            const result = await syncPeer(peerId);
+            const result = await executePeerSync(peerId);
             if (!result) {
               return {
                 content: [
@@ -292,7 +300,26 @@ const cortexSyncPlugin = {
             namespaces?: string[];
           };
 
-          if (!cortexAvailable) {
+          if (!nodeId || typeof nodeId !== "string" || !nodeId.trim()) {
+            return {
+              content: [{ type: "text" as const, text: "Error: nodeId is required." }],
+              details: { error: "missing_nodeId" },
+            };
+          }
+
+          if (!endpoint || typeof endpoint !== "string" || !/^https?:\/\/.+/.test(endpoint)) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Error: endpoint must be a valid http:// or https:// URL.",
+                },
+              ],
+              details: { error: "invalid_endpoint" },
+            };
+          }
+
+          if (!cortexAvailable && !(await checkCortex())) {
             return {
               content: [{ type: "text" as const, text: "Cortex unavailable. Cannot pair." }],
               details: {},

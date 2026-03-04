@@ -11,8 +11,7 @@
 
 import type { Command } from "commander";
 import { randomUUID } from "node:crypto";
-import { createReadStream, existsSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
+import { existsSync, writeFileSync } from "node:fs";
 import process from "node:process";
 import {
   GatewayChatClient,
@@ -259,7 +258,7 @@ async function runSinglePrompt(
  * Run a batch of prompts with concurrency control.
  */
 export async function runBatch(opts: BatchRunOptions): Promise<BatchResult[]> {
-  const results: BatchResult[] = [];
+  const results: BatchResult[] = Array.from<BatchResult>({ length: opts.items.length });
   const { items, concurrency, onResult } = opts;
 
   const connection = resolveGatewayConnection({
@@ -273,7 +272,8 @@ export async function runBatch(opts: BatchRunOptions): Promise<BatchResult[]> {
 
   async function processNext(): Promise<void> {
     while (cursor < items.length) {
-      const item = items[cursor++];
+      const idx = cursor++;
+      const item = items[idx];
       const sessionKey = opts.sessionKey ?? `batch-${item.id}-${randomUUID().slice(0, 8)}`;
 
       const result = await runSinglePrompt(item, {
@@ -285,7 +285,7 @@ export async function runBatch(opts: BatchRunOptions): Promise<BatchResult[]> {
         timeoutMs: opts.timeoutMs,
       });
 
-      results.push(result);
+      results[idx] = result;
       onResult(result);
     }
   }
@@ -369,26 +369,33 @@ export function registerBatchCli(program: Command) {
       let completed = 0;
       const total = items.length;
 
-      const results = await runBatch({
-        items,
-        concurrency,
-        sessionKey: opts.session,
-        thinking: opts.thinking,
-        timeoutMs,
-        url: opts.url,
-        token: opts.token,
-        password: opts.password,
-        onResult: (result) => {
-          completed++;
-          if (isJson && !opts.output) {
-            writeJsonLine(result as unknown as Record<string, unknown>);
-          }
-          const statusIcon = result.status === "ok" ? "✓" : "✗";
-          console.error(
-            `  [${completed}/${total}] ${statusIcon} ${result.id} (${result.durationMs}ms)`,
-          );
-        },
-      });
+      let results: BatchResult[];
+      try {
+        results = await runBatch({
+          items,
+          concurrency,
+          sessionKey: opts.session,
+          thinking: opts.thinking,
+          timeoutMs,
+          url: opts.url,
+          token: opts.token,
+          password: opts.password,
+          onResult: (result) => {
+            completed++;
+            if (isJson && !opts.output) {
+              writeJsonLine(result as unknown as Record<string, unknown>);
+            }
+            const statusIcon = result.status === "ok" ? "✓" : "✗";
+            console.error(
+              `  [${completed}/${total}] ${statusIcon} ${result.id} (${result.durationMs ?? 0}ms)`,
+            );
+          },
+        });
+      } catch (err) {
+        console.error(`Error: ${String(err)}`);
+        process.exitCode = 1;
+        return;
+      }
 
       // Write output file if specified
       if (opts.output) {

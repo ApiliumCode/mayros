@@ -10,6 +10,9 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -83,7 +86,9 @@ class MayrosClient(
     private val pendingRequests = ConcurrentHashMap<String, PendingRequest>()
     private val eventListeners = ConcurrentHashMap<String, CopyOnWriteArrayList<(JsonObject) -> Unit>>()
     @Volatile private var connectLatch: CountDownLatch? = null
-    @Volatile private var reconnectTimer: Timer? = null
+    private val reconnectExecutor: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "mayros-reconnect").apply { isDaemon = true } }
+    @Volatile private var reconnectFuture: ScheduledFuture<*>? = null
 
     private data class PendingRequest(
         val latch: CountDownLatch,
@@ -97,16 +102,18 @@ class MayrosClient(
     // Lifecycle
     // ========================================================================
 
+    @Synchronized
     fun connect(): Boolean {
-        connectLatch = CountDownLatch(1)
+        val latch = CountDownLatch(1)
+        connectLatch = latch
         createWebSocket()
         ws?.connect()
-        return connectLatch?.await(options.requestTimeoutMs, TimeUnit.MILLISECONDS) == true && connected
+        return latch.await(options.requestTimeoutMs, TimeUnit.MILLISECONDS) && connected
     }
 
     fun disconnect() {
-        reconnectTimer?.cancel()
-        reconnectTimer = null
+        reconnectFuture?.cancel(false)
+        reconnectFuture = null
         connected = false
         ws?.close()
         ws = null
@@ -120,9 +127,10 @@ class MayrosClient(
     }
 
     fun dispose() {
-        reconnectTimer?.cancel()
-        reconnectTimer = null
+        reconnectFuture?.cancel(false)
+        reconnectFuture = null
         disconnect()
+        reconnectExecutor.shutdownNow()
         eventListeners.clear()
     }
 
@@ -155,17 +163,13 @@ class MayrosClient(
     private fun scheduleReconnect() {
         reconnectAttempts++
         val delay = options.reconnectDelayMs * (1L shl (reconnectAttempts - 1).coerceAtMost(4))
-        reconnectTimer?.cancel()
-        reconnectTimer = Timer().also { timer ->
-            timer.schedule(object : TimerTask() {
-                override fun run() {
-                    if (!connected) {
-                        createWebSocket()
-                        ws?.connect()
-                    }
-                }
-            }, delay)
-        }
+        reconnectFuture?.cancel(false)
+        reconnectFuture = reconnectExecutor.schedule({
+            if (!connected) {
+                createWebSocket()
+                ws?.connect()
+            }
+        }, delay, TimeUnit.MILLISECONDS)
     }
 
     // ========================================================================

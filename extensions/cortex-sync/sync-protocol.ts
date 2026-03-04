@@ -60,10 +60,13 @@ export async function buildLocalDelta(
 ): Promise<SyncDelta> {
   const allTriples: TripleDto[] = [];
 
+  // Use a higher per-namespace limit to avoid losing triples when multi-namespace
+  const perNsLimit = Math.ceil(limit / Math.max(1, namespaces.length)) + limit;
+
   for (const ns of namespaces) {
     const result = await client.listTriples({
       subject: `${ns}:`,
-      limit,
+      limit: perNsLimit,
     });
 
     // Filter by created_at >= since (inclusive to avoid missing triples created
@@ -107,21 +110,32 @@ export async function buildLocalDelta(
  * Find conflicts between local and remote triples.
  * A conflict exists when both have the same subject+predicate but different objects.
  */
+// Use null byte separator to avoid collisions when subject/predicate contain `::`
+function tripleKey(subject: string, predicate: string): string {
+  return `${subject}\0${predicate}`;
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return JSON.stringify(value.map(stableStringify));
+  const sorted = Object.keys(value as Record<string, unknown>).sort();
+  return `{${sorted.map((k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`).join(",")}}`;
+}
+
 export function detectConflicts(
   local: TripleDto[],
   remote: TripleDto[],
 ): Array<{ local: TripleDto; remote: TripleDto }> {
   const localMap = new Map<string, TripleDto>();
   for (const t of local) {
-    const key = `${t.subject}::${t.predicate}`;
-    localMap.set(key, t);
+    localMap.set(tripleKey(t.subject, t.predicate), t);
   }
 
   const conflicts: Array<{ local: TripleDto; remote: TripleDto }> = [];
   for (const rt of remote) {
-    const key = `${rt.subject}::${rt.predicate}`;
-    const lt = localMap.get(key);
-    if (lt && JSON.stringify(lt.object) !== JSON.stringify(rt.object)) {
+    const lt = localMap.get(tripleKey(rt.subject, rt.predicate));
+    if (lt && stableStringify(lt.object) !== stableStringify(rt.object)) {
       conflicts.push({ local: lt, remote: rt });
     }
   }
@@ -178,7 +192,7 @@ export function reconcile(
 } {
   const localKeys = new Set<string>();
   for (const t of localTriples) {
-    localKeys.add(`${t.subject}::${t.predicate}::${JSON.stringify(t.object)}`);
+    localKeys.add(`${t.subject}\0${t.predicate}\0${stableStringify(t.object)}`);
   }
 
   const conflicts = detectConflicts(localTriples, remoteDelta.triples);
@@ -188,7 +202,7 @@ export function reconcile(
   const conflictRemoteKeep = new Set<string>();
   const conflictRemoteSkip = new Set<string>();
   for (const rc of resolvedConflicts) {
-    const key = `${rc.remote.subject}::${rc.remote.predicate}`;
+    const key = tripleKey(rc.remote.subject, rc.remote.predicate);
     if (rc.resolution === "kept-remote" || rc.resolution === "kept-both") {
       conflictRemoteKeep.add(key);
     } else {
@@ -199,14 +213,14 @@ export function reconcile(
   const toCreate: CreateTripleRequest[] = [];
 
   for (const rt of remoteDelta.triples) {
-    const exactKey = `${rt.subject}::${rt.predicate}::${JSON.stringify(rt.object)}`;
-    const conflictKey = `${rt.subject}::${rt.predicate}`;
+    const exactKey = `${rt.subject}\0${rt.predicate}\0${stableStringify(rt.object)}`;
+    const ck = tripleKey(rt.subject, rt.predicate);
 
     // Skip if exact triple already exists locally
     if (localKeys.has(exactKey)) continue;
 
     // Skip if conflict resolved to keep local
-    if (conflictRemoteSkip.has(conflictKey)) continue;
+    if (conflictRemoteSkip.has(ck)) continue;
 
     // Add if new (no conflict) or conflict resolved to keep remote/both
     toCreate.push({
@@ -229,17 +243,18 @@ export function reconcile(
 export async function applyDelta(
   client: CortexClient,
   toCreate: CreateTripleRequest[],
-): Promise<number> {
+): Promise<{ applied: number; failed: number }> {
   let applied = 0;
+  let failed = 0;
   for (const req of toCreate) {
     try {
       await client.createTriple(req);
       applied++;
     } catch {
-      // Skip individual failures
+      failed++;
     }
   }
-  return applied;
+  return { applied, failed };
 }
 
 // ============================================================================
@@ -267,31 +282,41 @@ export async function syncWithPeer(
   const start = Date.now();
   const since = peer.lastSyncAt || new Date(0).toISOString();
 
-  // 1. Fetch remote delta
-  const remoteDelta = await opts.fetchRemoteDelta(peer, since);
+  // Guard entire sync with a timeout
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`sync timeout after ${opts.timeoutMs}ms`)), opts.timeoutMs);
+  });
 
-  // 2. Get local triples for conflicting namespaces
-  const localTriples: TripleDto[] = [];
-  for (const ns of peer.namespaces) {
-    const result = await localClient.listTriples({
-      subject: `${ns}:`,
-      limit: opts.maxTriples,
-    });
-    localTriples.push(...result.triples);
-  }
+  return Promise.race([
+    timeoutPromise,
+    (async (): Promise<SyncResult> => {
+      // 1. Fetch remote delta
+      const remoteDelta = await opts.fetchRemoteDelta(peer, since);
 
-  // 3. Reconcile
-  const { toCreate, conflicts } = reconcile(localTriples, remoteDelta, opts.conflictStrategy);
+      // 2. Get local triples for conflicting namespaces
+      const localTriples: TripleDto[] = [];
+      for (const ns of peer.namespaces) {
+        const result = await localClient.listTriples({
+          subject: `${ns}:`,
+          limit: opts.maxTriples,
+        });
+        localTriples.push(...result.triples);
+      }
 
-  // 4. Apply
-  const applied = await applyDelta(localClient, toCreate);
+      // 3. Reconcile
+      const { toCreate, conflicts } = reconcile(localTriples, remoteDelta, opts.conflictStrategy);
 
-  return {
-    peerId: peer.nodeId,
-    triplesReceived: remoteDelta.triples.length,
-    triplesApplied: applied,
-    conflicts,
-    syncedAt: new Date().toISOString(),
-    durationMs: Date.now() - start,
-  };
+      // 4. Apply
+      const { applied } = await applyDelta(localClient, toCreate);
+
+      return {
+        peerId: peer.nodeId,
+        triplesReceived: remoteDelta.triples.length,
+        triplesApplied: applied,
+        conflicts,
+        syncedAt: new Date().toISOString(),
+        durationMs: Date.now() - start,
+      };
+    })(),
+  ]);
 }
