@@ -1399,7 +1399,7 @@ const agentMeshPlugin = {
       }
     });
 
-    // Hook: agent_end — update agent status and persist mesh state
+    // Hook: agent_end — update agent status, persist mesh state, emit task_completed
     api.on("agent_end", async (event, _ctx) => {
       if (!(await ensureCortex())) return;
 
@@ -1425,6 +1425,18 @@ const agentMeshPlugin = {
           api.logger.info(
             `agent-mesh: session ended with ${messageLog.length} mesh messages exchanged`,
           );
+        }
+
+        // Mark running background tasks as completed/failed
+        try {
+          const tasks = await bgTracker.list({ agentId, status: "running" });
+          for (const task of tasks) {
+            const newStatus = success ? "completed" : "failed";
+            const result = success ? "agent session ended" : (event.error ?? "unknown error");
+            await bgTracker.updateStatus(task.id, newStatus, result);
+          }
+        } catch {
+          // Background tracker may not have tasks for this agent
         }
       } catch (err) {
         api.logger.warn(`agent-mesh: agent end tracking failed: ${String(err)}`);
