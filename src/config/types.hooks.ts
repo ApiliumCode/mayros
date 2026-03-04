@@ -119,6 +119,21 @@ export type InternalHooksConfig = {
   installs?: Record<string, HookInstallRecord>;
 };
 
+export type HttpHookTargetConfig = {
+  /** Webhook endpoint URL */
+  url: string;
+  /** Only deliver these hook events (empty = all) */
+  events?: string[];
+  /** HMAC-SHA256 secret for X-Mayros-Signature header */
+  secret?: string;
+  /** Max retries on failure (default: 2) */
+  retries?: number;
+  /** Request timeout in ms (default: 5000) */
+  timeoutMs?: number;
+  /** Custom headers to include */
+  headers?: Record<string, string>;
+};
+
 export type HooksConfig = {
   enabled?: boolean;
   path?: string;
@@ -148,6 +163,8 @@ export type HooksConfig = {
   transformsDir?: string;
   mappings?: HookMappingConfig[];
   gmail?: HooksGmailConfig;
+  /** HTTP webhook targets — POST dispatched when hooks fire */
+  http?: HttpHookTargetConfig[];
   /** Internal agent event hooks */
   internal?: InternalHooksConfig;
 };
