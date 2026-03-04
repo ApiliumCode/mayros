@@ -515,6 +515,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`reset failed: ${String(err)}`);
         }
         break;
+      case "vim": {
+        const enabled = !state.vimEnabled;
+        state.vimEnabled = enabled;
+        chatLog.addSystem(`vim mode ${enabled ? "enabled" : "disabled"}`);
+        break;
+      }
       case "abort":
         await abortActive();
         break;

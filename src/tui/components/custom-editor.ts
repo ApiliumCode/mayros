@@ -1,5 +1,6 @@
 import { Editor, Key, matchesKey } from "@mariozechner/pi-tui";
 import type { TuiKeybindingResolver } from "../keybinding-resolver.js";
+import type { VimHandler } from "../vim-handler.js";
 
 export class CustomEditor extends Editor {
   onEscape?: () => void;
@@ -13,8 +14,15 @@ export class CustomEditor extends Editor {
   onShiftTab?: () => void;
   onAltEnter?: () => void;
   tuiResolver?: TuiKeybindingResolver;
+  vimHandler?: VimHandler;
 
   handleInput(data: string): void {
+    // Vim mode intercept: if vim is in normal mode, consume keys there.
+    if (this.vimHandler?.isNormalMode()) {
+      if (this.vimHandler.handleKey(data)) {
+        return;
+      }
+    }
     if (matchesKey(data, Key.alt("enter")) && this.onAltEnter) {
       this.onAltEnter();
       return;
@@ -68,9 +76,15 @@ export class CustomEditor extends Editor {
       this.onShiftTab();
       return;
     }
-    if (matchesKey(data, Key.escape) && this.onEscape && !this.isShowingAutocomplete()) {
-      this.onEscape();
-      return;
+    if (matchesKey(data, Key.escape) && !this.isShowingAutocomplete()) {
+      // In vim insert mode, Escape switches to normal mode
+      if (this.vimHandler && this.vimHandler.handleKey(data)) {
+        return;
+      }
+      if (this.onEscape) {
+        this.onEscape();
+        return;
+      }
     }
     if (matchesKey(data, Key.ctrl("c")) && this.onCtrlC) {
       this.onCtrlC();
