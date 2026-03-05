@@ -132,3 +132,22 @@ USER.md
 # Claude Code project instructions (local only)
 CLAUDE.md
 **/CLAUDE.md
+
+.claude/RULES.md
+
+docs/evolution/
+
+# JetBrains plugin build artifacts
+tools/jetbrains-plugin/.gradle/
+tools/jetbrains-plugin/build/
+
+# VSCode extension build artifacts
+tools/vscode-extension/dist/
+tools/vscode-extension/*.vsix
+tools/vscode-extension/.claude/
+
+tools/PUBLISHING.md
+docs/internal/
+
+# IDE workspace settings (may contain tokens)
+.vscode/

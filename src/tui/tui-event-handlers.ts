@@ -128,6 +128,10 @@ export function createEventHandlers(context: EventHandlerContext) {
     if (evt.sessionKey !== state.currentSessionKey) {
       return;
     }
+    // Suppress heartbeat events — they are infrastructure noise, not user-visible.
+    if (evt.isHeartbeat) {
+      return;
+    }
     if (finalizedRuns.has(evt.runId)) {
       if (evt.state === "delta") {
         return;

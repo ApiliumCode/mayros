@@ -140,9 +140,19 @@ describe("config plugin validation", () => {
 
   it("accepts known plugin ids", async () => {
     const home = await createCaseHome();
+    const pluginDir = path.join(home, "discord-plugin");
+    await writePluginFixture({
+      dir: pluginDir,
+      id: "discord",
+      schema: { type: "object" },
+    });
     const res = validateInHome(home, {
       agents: { list: [{ id: "pi" }] },
-      plugins: { enabled: false, entries: { discord: { enabled: true } } },
+      plugins: {
+        enabled: false,
+        load: { paths: [pluginDir] },
+        entries: { discord: { enabled: true } },
+      },
     });
     expect(res.ok).toBe(true);
   });

@@ -1,0 +1,152 @@
+{
+  "name": "mayros-vscode",
+  "displayName": "Mayros",
+  "version": "0.1.0",
+  "description": "Mayros AI agent framework — sessions, agents, skills, knowledge graph, and trace viewer",
+  "categories": [
+    "Other"
+  ],
+  "license": "MIT",
+  "publisher": "apilium",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "tsx esbuild.config.mts",
+    "watch": "tsx esbuild.config.mts --watch",
+    "test": "vitest run",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.96.0",
+    "esbuild": "^0.24.0",
+    "vitest": "^3.0.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mayros",
+          "title": "Mayros",
+          "icon": "assets/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mayros": [
+        {
+          "id": "mayros.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "mayros.agents",
+          "name": "Agents"
+        },
+        {
+          "id": "mayros.skills",
+          "name": "Skills"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "mayros.connect",
+        "title": "Mayros: Connect to Gateway"
+      },
+      {
+        "command": "mayros.disconnect",
+        "title": "Mayros: Disconnect"
+      },
+      {
+        "command": "mayros.refresh",
+        "title": "Mayros: Refresh"
+      },
+      {
+        "command": "mayros.openChat",
+        "title": "Mayros: Open Chat"
+      },
+      {
+        "command": "mayros.openPlan",
+        "title": "Mayros: Open Plan Mode"
+      },
+      {
+        "command": "mayros.openTrace",
+        "title": "Mayros: Open Trace Viewer"
+      },
+      {
+        "command": "mayros.openKg",
+        "title": "Mayros: Open Knowledge Graph"
+      },
+      {
+        "command": "mayros.explainCode",
+        "title": "Mayros: Explain Code"
+      },
+      {
+        "command": "mayros.sendSelection",
+        "title": "Mayros: Send Selection"
+      },
+      {
+        "command": "mayros.sendMarker",
+        "title": "Mayros: Analyze Marker"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mayros.explainCode",
+          "group": "mayros",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mayros.sendSelection",
+          "group": "mayros",
+          "when": "editorHasSelection"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mayros.sendMarker",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Mayros",
+      "properties": {
+        "mayros.gatewayUrl": {
+          "type": "string",
+          "default": "ws://127.0.0.1:18789",
+          "description": "WebSocket URL for the Mayros gateway"
+        },
+        "mayros.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-connect to gateway on activation"
+        },
+        "mayros.reconnectDelayMs": {
+          "type": "number",
+          "default": 3000,
+          "description": "Delay between reconnection attempts (ms)"
+        },
+        "mayros.maxReconnectAttempts": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum reconnection attempts"
+        },
+        "mayros.gatewayToken": {
+          "type": "string",
+          "default": "",
+          "description": "Auth token for the Mayros gateway (from `mayros config get gateway.auth.token`)"
+        }
+      }
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.96.0"
+  }
+}

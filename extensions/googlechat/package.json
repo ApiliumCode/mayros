@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-googlechat",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Mayros Google Chat channel plugin",
   "type": "module",
@@ -11,7 +11,7 @@
     "@apilium/mayros": "workspace:*"
   },
   "peerDependencies": {
-    "@apilium/mayros": ">=2026.1.26"
+    "@apilium/mayros": ">=0.1.0"
   },
   "mayros": {
     "extensions": [

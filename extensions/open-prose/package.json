@@ -1,9 +1,12 @@
 {
   "name": "@apilium/mayros-open-prose",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "OpenProse VM skill pack plugin (slash command + telemetry).",
   "type": "module",
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
   "mayros": {
     "extensions": [
       "./index.ts"

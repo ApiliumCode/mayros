@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mayros Trace Viewer</title>
+  <link rel="stylesheet" href="./trace.css">
+  <style>
+    body {
+      font-family: var(--vscode-font-family, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+      color: var(--vscode-foreground);
+      background: var(--vscode-editor-background);
+      margin: 0;
+      padding: 8px;
+    }
+    #app { height: 100vh; display: flex; flex-direction: column; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="./trace.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "@apilium/mayros-lsp-bridge",
+  "version": "0.1.4",
+  "description": "Cortex-backed language server bridge for Mayros — hover, diagnostics, go-to-definition",
+  "type": "module",
+  "dependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

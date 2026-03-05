@@ -1,0 +1,14 @@
+{
+  "name": "@apilium/mayros-ci-plugin",
+  "version": "0.1.4",
+  "description": "CI/CD pipeline integration for Mayros — GitHub Actions and GitLab CI providers",
+  "type": "module",
+  "dependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

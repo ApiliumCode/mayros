@@ -7,6 +7,7 @@ import {
   parseAgentSessionKey,
 } from "../routing/session-key.js";
 import { resolveUserPath } from "../utils.js";
+import { discoverMarkdownAgents, type MarkdownAgent } from "./markdown-agents.js";
 import { normalizeSkillFilter } from "./skills/filter.js";
 import { resolveDefaultAgentWorkspaceDir } from "./workspace.js";
 
@@ -40,8 +41,35 @@ export function listAgentEntries(cfg: MayrosConfig): AgentEntry[] {
   return list.filter((entry): entry is AgentEntry => Boolean(entry && typeof entry === "object"));
 }
 
+/**
+ * Convert a MarkdownAgent to an AgentEntry for use in the config system.
+ */
+function markdownAgentToEntry(md: MarkdownAgent): AgentEntry {
+  return {
+    id: md.id,
+    name: md.name,
+    default: md.isDefault || undefined,
+    model: md.model,
+    workspace: md.workspace,
+  };
+}
+
+/**
+ * List all agent entries including those discovered from .mayros/agents/.
+ * Config agents take priority over markdown agents with the same id.
+ */
+export function listAllAgentEntries(cfg: MayrosConfig): AgentEntry[] {
+  const configEntries = listAgentEntries(cfg);
+  const configIds = new Set(configEntries.map((e) => normalizeAgentId(e.id)));
+
+  const mdAgents = discoverMarkdownAgents();
+  const mdEntries = mdAgents.filter((md) => !configIds.has(md.id)).map(markdownAgentToEntry);
+
+  return [...configEntries, ...mdEntries];
+}
+
 export function listAgentIds(cfg: MayrosConfig): string[] {
-  const agents = listAgentEntries(cfg);
+  const agents = listAllAgentEntries(cfg);
   if (agents.length === 0) {
     return [DEFAULT_AGENT_ID];
   }
@@ -93,7 +121,17 @@ export function resolveSessionAgentId(params: {
 
 function resolveAgentEntry(cfg: MayrosConfig, agentId: string): AgentEntry | undefined {
   const id = normalizeAgentId(agentId);
-  return listAgentEntries(cfg).find((entry) => normalizeAgentId(entry.id) === id);
+  // Config agents take priority
+  const configEntry = listAgentEntries(cfg).find((entry) => normalizeAgentId(entry.id) === id);
+  if (configEntry) {
+    return configEntry;
+  }
+  // Fall back to markdown agents
+  const mdAgent = discoverMarkdownAgents().find((md) => md.id === id);
+  if (mdAgent) {
+    return markdownAgentToEntry(mdAgent);
+  }
+  return undefined;
 }
 
 export function resolveAgentConfig(

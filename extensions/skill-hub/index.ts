@@ -12,12 +12,15 @@ import { join } from "node:path";
 import { Type } from "@sinclair/typebox";
 import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { CortexClient } from "../shared/cortex-client.js";
+import { SKILL_CATEGORIES, getCategoryById, formatCategoryList } from "./category-registry.js";
 import { skillHubConfigSchema, tierFromScore, meetsTier } from "./config.js";
+import { DependencyAuditor } from "./dependency-audit.js";
 import { DependencyResolver, type ResolvedSkill } from "./dependency-resolver.js";
 import { HubClient } from "./hub-client.js";
 import { Keystore } from "./keystore.js";
 import { readLockfile, writeLockfile, mergeLockfile, createLockEntry } from "./lockfile.js";
-import { ReputationClient } from "./reputation.js";
+import { ReputationClient, formatTrustBadge, enrichSearchResults } from "./reputation.js";
+import { UpdateChecker } from "./update-checker.js";
 import {
   createSkillSignature,
   signMessage,
@@ -417,29 +420,93 @@ const skillHubPlugin = {
       { name: "hub_verify" },
     );
 
+    api.registerTool(
+      {
+        name: "hub_rate",
+        label: "Hub Rate",
+        description: "Rate a skill on the Apilium Hub (1-5 stars).",
+        parameters: Type.Object({
+          slug: Type.String({ description: "Skill slug" }),
+          score: Type.Number({ description: "Rating (1-5)" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { slug, score } = params as { slug: string; score: number };
+          if (!cfg.rating.enabled) {
+            return {
+              content: [{ type: "text", text: "Ratings are disabled in config." }],
+              details: { error: "disabled" },
+            };
+          }
+          if (score < cfg.rating.minScore || score > cfg.rating.maxScore) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Score must be between ${cfg.rating.minScore} and ${cfg.rating.maxScore}.`,
+                },
+              ],
+              details: { error: "invalid-score" },
+            };
+          }
+          try {
+            const result = await hubClient.rate(slug, score);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Rated ${slug}: ${result.averageRating.toFixed(1)}/5 (${result.totalRatings} ratings)`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Rating failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "hub_rate" },
+    );
+
     // ========================================================================
     // Hooks
     // ========================================================================
 
+    // Hook: session_start — check for skill updates
+    api.on("session_start", async (_event, _ctx) => {
+      if (!cfg.notifications.checkOnSessionStart) return;
+      try {
+        const skillsDir = api.resolvePath("skills");
+        const checker = new UpdateChecker(cortexAvailable ? cortex : undefined, cfg.agentNamespace);
+        const updates = await checker.checkForUpdates(skillsDir, hubClient);
+        const outdated = updates.filter((u) => u.hasUpdate);
+        if (outdated.length > 0) {
+          api.logger.info(
+            `skill-hub: ${outdated.length} update(s) available: ${outdated.map((u) => `${u.slug} ${u.currentVersion} -> ${u.latestVersion}`).join(", ")}`,
+          );
+        }
+      } catch {
+        // Silently ignore update check failures
+      }
+    });
+
     // Hook: before_agent_start — warn or block unsigned skills
-    api.on("before_agent_start", async (event) => {
+    api.on("before_agent_start", async (event, _ctx) => {
       if (!cfg.verification.requireSignature && !cfg.verification.blockUnsigned) return;
 
-      const skills = (event as Record<string, unknown>).skills;
-      if (!Array.isArray(skills)) return;
+      const skills = event.skills;
+      if (!skills || skills.length === 0) return;
 
       const unsigned: string[] = [];
       for (const skill of skills) {
-        if (!skill || typeof skill !== "object") continue;
-        const skillObj = skill as Record<string, unknown>;
-        const name = skillObj.name as string;
-        const dir = skillObj.dir as string;
-        if (!dir) continue;
+        if (!skill.dir) continue;
 
         try {
-          await readFile(join(dir, "SKILL.sig"), "utf-8");
+          await readFile(join(skill.dir, "SKILL.sig"), "utf-8");
         } catch {
-          unsigned.push(name);
+          unsigned.push(skill.name);
         }
       }
 
@@ -758,6 +825,125 @@ const skillHubPlugin = {
               }
             } catch (err) {
               console.error(`Error: ${String(err)}`);
+            }
+          });
+
+        hub
+          .command("rate")
+          .description("Rate a skill on the Hub (1-5 stars)")
+          .argument("<slug>", "Skill slug")
+          .argument("<score>", "Rating (1-5)")
+          .action(async (slug, scoreStr) => {
+            const score = parseInt(scoreStr, 10);
+            if (!cfg.rating.enabled) {
+              console.log("Ratings are disabled in config.");
+              return;
+            }
+            if (isNaN(score) || score < cfg.rating.minScore || score > cfg.rating.maxScore) {
+              console.error(
+                `Score must be a number between ${cfg.rating.minScore} and ${cfg.rating.maxScore}.`,
+              );
+              return;
+            }
+            try {
+              const result = await hubClient.rate(slug, score);
+              console.log(
+                `Rated ${slug}: ${result.averageRating.toFixed(1)}/5 (${result.totalRatings} ratings)`,
+              );
+            } catch (err) {
+              console.error(`Rating failed: ${String(err)}`);
+            }
+          });
+
+        hub
+          .command("audit")
+          .description("Audit dependencies for security issues")
+          .argument("[slug]", "Specific skill slug (or --all)")
+          .option("--all", "Audit all installed skills")
+          .action(async (slug, opts) => {
+            const auditor = new DependencyAuditor(
+              cortexAvailable ? cortex : undefined,
+              cfg.agentNamespace,
+            );
+            const skillsDir = api.resolvePath("skills");
+
+            try {
+              if (opts.all || !slug) {
+                const reports = await auditor.auditAll(skillsDir, hubClient);
+                if (reports.length === 0) {
+                  console.log("No skills found to audit.");
+                  return;
+                }
+                let totalFindings = 0;
+                for (const report of reports) {
+                  const status = report.passed ? "PASS" : "FAIL";
+                  console.log(
+                    `${status} ${report.slug} v${report.version} — ${report.findings.length} finding(s), ${report.totalDependencies} dep(s)`,
+                  );
+                  for (const f of report.findings) {
+                    console.log(`  [${f.severity}] ${f.rule}: ${f.message} (${f.file ?? "N/A"})`);
+                  }
+                  totalFindings += report.findings.length;
+                }
+                console.log(
+                  `\nAudited ${reports.length} skill(s), ${totalFindings} total finding(s).`,
+                );
+              } else {
+                const skillDir = join(skillsDir, slug);
+                const report = await auditor.auditSkill(slug, skillDir, hubClient);
+                const status = report.passed ? "PASS" : "FAIL";
+                console.log(
+                  `${status} ${report.slug} v${report.version} — ${report.findings.length} finding(s), ${report.totalDependencies} dep(s)`,
+                );
+                for (const f of report.findings) {
+                  console.log(`  [${f.severity}] ${f.rule}: ${f.message} (${f.file ?? "N/A"})`);
+                }
+              }
+            } catch (err) {
+              console.error(`Audit failed: ${String(err)}`);
+            }
+          });
+
+        hub
+          .command("categories")
+          .description("List available skill categories")
+          .action(() => {
+            console.log("Skill Categories:\n");
+            console.log(formatCategoryList());
+          });
+
+        hub
+          .command("browse")
+          .description("Browse skills by category")
+          .argument("<category>", "Category ID")
+          .option("--limit <n>", "Max results", "10")
+          .action(async (category, opts) => {
+            const cat = getCategoryById(category);
+            if (!cat) {
+              console.error(
+                `Unknown category: "${category}". Run 'mayros hub categories' for available categories.`,
+              );
+              return;
+            }
+
+            try {
+              const result = await hubClient.search("", {
+                category,
+                limit: parseInt(opts.limit),
+              });
+              if (result.skills.length === 0) {
+                console.log(`No skills found in category "${cat.name}".`);
+                return;
+              }
+              console.log(`[${cat.icon}] ${cat.name} — ${result.total} skill(s):\n`);
+              for (const s of result.skills) {
+                console.log(`  ${s.slug} v${s.version} — ${s.description}`);
+                console.log(
+                  `    author: ${s.author} | downloads: ${s.downloads} | rating: ${s.rating}`,
+                );
+              }
+            } catch (err) {
+              console.error(`Browse failed: ${String(err)}`);
             }
           });
 

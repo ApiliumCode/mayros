@@ -29,20 +29,23 @@ import {
   triplesToMemory,
   type SemanticMemoryEntry,
 } from "./rdf-mapper.js";
+import { INJECTION_PATTERNS } from "../semantic-skills/enrichment-sanitizer.js";
 import { TitansClient } from "./titans-client.js";
+import {
+  ProjectMemory,
+  detectProjectKnowledge,
+  formatConventionsForPrompt,
+  formatFindingsForPrompt,
+} from "./project-memory.js";
+import { CompactionExtractor } from "./compaction-extractor.js";
+import { RulesEngine } from "./rules-engine.js";
+import { AgentMemory } from "./agent-memory.js";
+import { ContextualAwareness } from "./contextual-awareness.js";
+import { findMarkdownAgent } from "../../src/agents/markdown-agents.js";
 
 // ============================================================================
 // Safety
 // ============================================================================
-
-const PROMPT_INJECTION_PATTERNS = [
-  /ignore\b.{0,30}\binstructions/i,
-  /do not follow (the )?(system|developer)/i,
-  /system prompt/i,
-  /developer message/i,
-  /<\s*(system|assistant|developer|tool|function|relevant-memories)\b/i,
-  /\b(run|execute|call|invoke)\b.{0,40}\b(tool|command)\b/i,
-];
 
 const PROMPT_ESCAPE_MAP: Record<string, string> = {
   "&": "&amp;",
@@ -55,7 +58,7 @@ const PROMPT_ESCAPE_MAP: Record<string, string> = {
 export function looksLikePromptInjection(text: string): boolean {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) return false;
-  return PROMPT_INJECTION_PATTERNS.some((p) => p.test(normalized));
+  return INJECTION_PATTERNS.some((p) => p.test(normalized));
 }
 
 export function escapeMemoryForPrompt(text: string): string {
@@ -548,6 +551,270 @@ const semanticMemoryPlugin = {
     );
 
     // ========================================================================
+    // Project Memory Tools
+    // ========================================================================
+
+    api.registerTool(
+      {
+        name: "project_convention_store",
+        label: "Project Convention Store",
+        description:
+          "Store a project convention or architecture decision in the knowledge graph with provenance.",
+        parameters: Type.Object({
+          text: Type.String({ description: "Convention or decision description" }),
+          category: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["naming", "architecture", "testing", "security", "style", "tooling"],
+            }),
+          ),
+          source: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["user", "auto-detected", "claude.md"],
+            }),
+          ),
+          context: Type.Optional(
+            Type.String({ description: "Reasoning or context for this convention" }),
+          ),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["convention", "decision"],
+            }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            text,
+            category = "style",
+            source = "user",
+            context = "",
+            type = "convention",
+          } = params as {
+            text: string;
+            category?: string;
+            source?: string;
+            context?: string;
+            type?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Convention not stored." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedCategory = category as import("./project-memory.js").ConventionCategory;
+          const typedSource = source as import("./project-memory.js").ProjectKnowledgeSource;
+
+          const id =
+            type === "decision"
+              ? await projectMemory.storeDecision({
+                  text,
+                  category: typedCategory,
+                  source: typedSource,
+                  context,
+                })
+              : await projectMemory.storeConvention({
+                  text,
+                  category: typedCategory,
+                  source: typedSource,
+                  context,
+                });
+
+          return {
+            content: [{ type: "text", text: `Stored ${type}: "${text.slice(0, 100)}"` }],
+            details: { action: "created", id, type, category },
+          };
+        },
+      },
+      { name: "project_convention_store" },
+    );
+
+    api.registerTool(
+      {
+        name: "project_convention_query",
+        label: "Project Convention Query",
+        description: "Query project conventions and decisions by category or keyword.",
+        parameters: Type.Object({
+          query: Type.Optional(Type.String({ description: "Search keyword" })),
+          category: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["naming", "architecture", "testing", "security", "style", "tooling"],
+            }),
+          ),
+          limit: Type.Optional(Type.Number({ description: "Max results (default: 10)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            query,
+            category,
+            limit = 10,
+          } = params as {
+            query?: string;
+            category?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable." }],
+              details: { count: 0, reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedCategory = category as
+            | import("./project-memory.js").ConventionCategory
+            | undefined;
+
+          const results = query
+            ? await projectMemory.queryConventions(query, { category: typedCategory, limit })
+            : await projectMemory.listActive({ category: typedCategory, limit });
+
+          if (results.length === 0) {
+            return {
+              content: [{ type: "text", text: "No matching conventions found." }],
+              details: { count: 0 },
+            };
+          }
+
+          const text = results
+            .map((c, i) => `${i + 1}. [${c.category}] ${c.text} (${c.source}, ${c.confidence})`)
+            .join("\n");
+
+          return {
+            content: [{ type: "text", text: `Found ${results.length} conventions:\n\n${text}` }],
+            details: { count: results.length, results },
+          };
+        },
+      },
+      { name: "project_convention_query" },
+    );
+
+    // ========================================================================
+    // Agent Memory Tools
+    // ========================================================================
+
+    api.registerTool(
+      {
+        name: "agent_memory_store",
+        label: "Agent Memory Store",
+        description:
+          "Store a persistent memory entry for the current agent. Memories persist across sessions and are scoped per agent.",
+        parameters: Type.Object({
+          content: Type.String({ description: "Memory content to store" }),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pattern", "convention", "insight", "decision"],
+            }),
+          ),
+          project: Type.Optional(
+            Type.String({ description: 'Project name or "global" (default: "global")' }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            content,
+            type: memType = "insight",
+            project = "global",
+          } = params as {
+            content: string;
+            type?: string;
+            project?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Memory not stored." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedType = memType as import("./agent-memory.js").AgentMemoryType;
+          const id = await agentMemory.store(agentId, {
+            content,
+            type: typedType,
+            project,
+          });
+
+          return {
+            content: [{ type: "text", text: `Stored ${typedType}: "${content.slice(0, 100)}"` }],
+            details: { action: "created", id, memoryType: typedType },
+          };
+        },
+      },
+      { name: "agent_memory_store" },
+    );
+
+    api.registerTool(
+      {
+        name: "agent_memory_recall",
+        label: "Agent Memory Recall",
+        description:
+          "Recall persistent memories for the current agent, optionally filtered by type or keyword.",
+        parameters: Type.Object({
+          query: Type.Optional(Type.String({ description: "Search keyword" })),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pattern", "convention", "insight", "decision"],
+            }),
+          ),
+          limit: Type.Optional(Type.Number({ description: "Max results (default: 10)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            query,
+            type: memType,
+            limit = 10,
+          } = params as {
+            query?: string;
+            type?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable." }],
+              details: { count: 0, reason: "cortex_unavailable" },
+            };
+          }
+
+          const typedType = memType as import("./agent-memory.js").AgentMemoryType | undefined;
+          const memories = await agentMemory.recall(agentId, {
+            type: typedType,
+            query,
+            limit,
+          });
+
+          if (memories.length === 0) {
+            return {
+              content: [{ type: "text", text: "No matching agent memories found." }],
+              details: { count: 0 },
+            };
+          }
+
+          const text = memories
+            .map(
+              (m, i) =>
+                `${i + 1}. [${m.type}] ${m.content} (used: ${m.usageCount}x, confidence: ${m.confidence})`,
+            )
+            .join("\n");
+
+          return {
+            content: [{ type: "text", text: `Found ${memories.length} memories:\n\n${text}` }],
+            details: { count: memories.length, memories },
+          };
+        },
+      },
+      { name: "agent_memory_recall" },
+    );
+
+    // ========================================================================
     // Identity
     // ========================================================================
 
@@ -555,6 +822,16 @@ const semanticMemoryPlugin = {
     const identityLoader = new IdentityLoader(client, ns, mayrosMdPath);
     const identityProver = new IdentityProver(client, ns);
     const titansClient = new TitansClient(cfg.cortex);
+    const projectMemory = new ProjectMemory(client, ns);
+    const rulesEngine = new RulesEngine(client, ns);
+    const agentMemory = new AgentMemory(client, ns);
+    const contextualAwareness = new ContextualAwareness(
+      client,
+      ns,
+      rulesEngine,
+      projectMemory,
+      agentMemory,
+    );
     let titansAvailable = false;
 
     async function ensureTitans(): Promise<boolean> {
@@ -707,18 +984,81 @@ const semanticMemoryPlugin = {
       { name: "memory_stats" },
     );
 
-    // Identity injection into system prompt
+    // Identity + project context injection into system prompt
     api.on("before_prompt_build", async () => {
+      const parts: string[] = [];
+
+      // 1. Identity (existing)
       try {
         const identity = await identityLoader.loadIdentity(agentId);
-        // Only inject if we have meaningful identity data
         if (identity.name !== agentId || identity.capabilities.length > 0) {
-          return {
-            systemPrompt: identityLoader.formatForSystemPrompt(identity),
-          };
+          parts.push(identityLoader.formatForSystemPrompt(identity));
         }
       } catch (err) {
         api.logger.warn(`memory-semantic: identity load failed: ${String(err)}`);
+      }
+
+      // 2. Rules engine (if enabled and Cortex available)
+      if (cfg.rules.enabled && cfg.rules.injectIntoPrompt && (await ensureCortex())) {
+        try {
+          const rules = await rulesEngine.resolveRules({ scope: "global" });
+          if (rules.length > 0) {
+            parts.push(rulesEngine.formatRulesForPrompt(rules));
+          }
+        } catch {
+          // Non-fatal: rules unavailable
+        }
+      }
+
+      // 3. Project conventions (if enabled and Cortex available)
+      if (cfg.projectMemory.enabled && (await ensureCortex())) {
+        try {
+          const conventions = await projectMemory.listActive({ limit: 5 });
+          if (conventions.length > 0) {
+            parts.push(formatConventionsForPrompt(conventions));
+          }
+        } catch {
+          // Non-fatal: conventions unavailable
+        }
+
+        // 4. Recent findings from previous sessions
+        try {
+          const findings = await projectMemory.recentFindings({ limit: 3 });
+          if (findings.length > 0) {
+            parts.push(formatFindingsForPrompt(findings));
+          }
+        } catch {
+          // Non-fatal: findings unavailable
+        }
+      }
+
+      // 5. Agent persistent memory (if enabled and Cortex available)
+      if (cfg.agentMemory.enabled && (await ensureCortex())) {
+        try {
+          const memories = await agentMemory.recall(agentId, { limit: 5 });
+          if (memories.length > 0) {
+            parts.push(agentMemory.formatForPrompt(memories));
+          }
+        } catch {
+          // Non-fatal: agent memory unavailable
+        }
+      }
+
+      // 6. Contextual awareness notifications
+      if (cfg.contextualAwareness.enabled && (await ensureCortex())) {
+        try {
+          const notifications = await contextualAwareness.gatherNotifications(agentId);
+          if (notifications.length > 0) {
+            const limited = notifications.slice(0, cfg.contextualAwareness.maxNotifications);
+            parts.push(contextualAwareness.formatNotifications(limited));
+          }
+        } catch {
+          // Non-fatal: awareness unavailable
+        }
+      }
+
+      if (parts.length > 0) {
+        return { systemPrompt: parts.join("\n\n") };
       }
     });
 
@@ -1046,6 +1386,39 @@ const semanticMemoryPlugin = {
           }
         }
 
+        // Detect project-level knowledge (conventions, decisions) first
+        if (cfg.projectMemory.enabled && cfg.projectMemory.autoDetect && (await ensureCortex())) {
+          let projectStored = 0;
+          for (const text of texts.slice(0, 5)) {
+            const knowledge = detectProjectKnowledge(text);
+            if (!knowledge) continue;
+
+            try {
+              if (knowledge.type === "decision") {
+                await projectMemory.storeDecision({
+                  text: knowledge.text,
+                  category: knowledge.category,
+                  source: "auto-detected",
+                });
+              } else {
+                await projectMemory.storeConvention({
+                  text: knowledge.text,
+                  category: knowledge.category,
+                  source: "auto-detected",
+                });
+              }
+              projectStored++;
+            } catch {
+              // Non-fatal: project knowledge storage failed
+            }
+          }
+          if (projectStored > 0) {
+            api.logger.info(
+              `memory-semantic: auto-detected ${projectStored} project knowledge items`,
+            );
+          }
+        }
+
         const toCapture = texts.filter(shouldCapture);
         if (toCapture.length === 0) return;
 
@@ -1096,17 +1469,89 @@ const semanticMemoryPlugin = {
         if (stored > 0) {
           api.logger.info(`memory-semantic: auto-captured ${stored} memories`);
         }
+
+        // Agent persistent memory: auto-capture key learnings
+        // Only capture if global config allows AND agent has memory:true in frontmatter
+        const agentDef = findMarkdownAgent(agentId);
+        const agentMemoryEnabled = agentDef?.memory ?? false;
+        if (
+          cfg.agentMemory.enabled &&
+          cfg.agentMemory.autoCapture &&
+          agentMemoryEnabled &&
+          (await ensureCortex())
+        ) {
+          let agentStored = 0;
+          for (const text of texts.slice(0, 3)) {
+            const knowledge = detectProjectKnowledge(text);
+            if (!knowledge) continue;
+
+            try {
+              await agentMemory.store(agentId, {
+                content: text,
+                type: knowledge.type === "decision" ? "decision" : "convention",
+                project: "auto-capture",
+              });
+              agentStored++;
+            } catch {
+              // Non-fatal: agent memory storage failed
+            }
+          }
+          if (agentStored > 0) {
+            api.logger.info(
+              `memory-semantic: auto-captured ${agentStored} agent memories for ${agentId}`,
+            );
+          }
+        }
       } catch (err) {
         api.logger.warn(`memory-semantic: capture failed: ${String(err)}`);
       }
     });
 
-    // Before compaction: extract facts before context is truncated + consolidate Titans
-    api.on("before_compaction", async (event) => {
+    // Before compaction: extract structured knowledge + consolidate Titans
+    api.on("before_compaction", async (event, _ctx) => {
       try {
-        const messages = (event as Record<string, unknown>).messages;
+        const messages = event.messages;
         if (!Array.isArray(messages)) return;
 
+        // Smart extraction: structured knowledge from both user and assistant
+        const extraction = CompactionExtractor.extract(messages as Array<Record<string, unknown>>);
+
+        let stored = 0;
+
+        if (extraction.items.length > 0 && (await ensureCortex())) {
+          for (const item of extraction.items) {
+            try {
+              if (item.kind === "convention") {
+                await projectMemory.storeConvention({
+                  text: item.text,
+                  category: item.category,
+                  source: "auto-detected",
+                  confidence: 0.6,
+                });
+                stored++;
+              } else if (item.kind === "decision") {
+                await projectMemory.storeDecision({
+                  text: item.text,
+                  category: item.category,
+                  source: "auto-detected",
+                  confidence: 0.6,
+                });
+                stored++;
+              } else {
+                // change, finding, error → store as session finding
+                const finding = CompactionExtractor.toFindings([item])[0];
+                if (finding) {
+                  await projectMemory.storeSessionFinding(finding);
+                  stored++;
+                }
+              }
+            } catch {
+              // Non-fatal: individual item storage failed
+            }
+          }
+        }
+
+        // Legacy: also capture user messages matching shouldCapture for personal memory
         const texts: string[] = [];
         for (const msg of messages) {
           if (!msg || typeof msg !== "object") continue;
@@ -1117,9 +1562,7 @@ const semanticMemoryPlugin = {
         }
 
         const toCapture = texts.filter(shouldCapture);
-        let stored = 0;
-
-        if (await ensureCortex()) {
+        if (toCapture.length > 0 && (await ensureCortex())) {
           for (const text of toCapture.slice(0, 5)) {
             const category = detectCategory(text);
             const triples = memoryToTriples(ns, agentId, {
@@ -1157,10 +1600,61 @@ const semanticMemoryPlugin = {
         }
 
         if (stored > 0) {
-          api.logger.info(`memory-semantic: extracted ${stored} memories before compaction`);
+          api.logger.info(
+            `memory-semantic: extracted ${stored} items before compaction (${extraction.items.length} structured)`,
+          );
         }
       } catch (err) {
         api.logger.warn(`memory-semantic: pre-compaction extract failed: ${String(err)}`);
+      }
+    });
+
+    // Before tool call: rules engine can block tool usage
+    api.on("before_tool_call", async (event, ctx) => {
+      if (!cfg.rules.enabled) return;
+      if (!(await ensureCortex())) return;
+
+      try {
+        const scope = ctx.agentId ? "agent" : "global";
+        const target = ctx.agentId ?? undefined;
+        const rules = await rulesEngine.resolveRules({ scope, target });
+
+        for (const rule of rules) {
+          const lower = rule.content.toLowerCase();
+          const toolLower = event.toolName.toLowerCase();
+          // Check if rule explicitly blocks this tool
+          if (
+            (lower.includes("block") || lower.includes("deny") || lower.includes("forbid")) &&
+            lower.includes(toolLower)
+          ) {
+            api.logger.warn(
+              `memory-semantic: tool "${event.toolName}" blocked by rule: ${rule.content}`,
+            );
+            return {
+              block: true,
+              blockReason: `Blocked by rule [${rule.scope}]: ${rule.content}`,
+            };
+          }
+        }
+      } catch {
+        // Non-fatal: rules check failed, allow tool
+      }
+    });
+
+    // Session start: contextual awareness notifications
+    api.on("session_start", async () => {
+      if (!cfg.contextualAwareness.enabled || !cfg.contextualAwareness.showOnSessionStart) return;
+      if (!(await ensureCortex())) return;
+
+      try {
+        const notifications = await contextualAwareness.gatherNotifications(agentId);
+        const limited = notifications.slice(0, cfg.contextualAwareness.maxNotifications);
+        for (const n of limited) {
+          const prefix = n.priority === "high" ? "[!]" : n.priority === "medium" ? "[*]" : "[-]";
+          api.logger.info(`memory-semantic: ${prefix} ${n.message}`);
+        }
+      } catch (err) {
+        api.logger.warn(`memory-semantic: session notifications failed: ${String(err)}`);
       }
     });
 

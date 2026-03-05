@@ -124,6 +124,7 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   ) {
     defaultRuntime.error('Invalid --ws-log (use "auto", "full", "compact")');
     defaultRuntime.exit(1);
+    return;
   }
   setGatewayWsLogStyle(wsLogStyle);
 
@@ -144,11 +145,13 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   if (opts.port !== undefined && portOverride === null) {
     defaultRuntime.error("Invalid port");
     defaultRuntime.exit(1);
+    return;
   }
   const port = portOverride ?? resolveGatewayPort(cfg);
   if (!Number.isFinite(port) || port <= 0) {
     defaultRuntime.error("Invalid port");
     defaultRuntime.exit(1);
+    return;
   }
   if (opts.force) {
     try {

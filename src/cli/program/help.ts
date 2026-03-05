@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { defaultRuntime } from "../../runtime.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { isRich, theme } from "../../terminal/theme.js";
 import { escapeRegExp } from "../../utils.js";
@@ -39,7 +40,11 @@ const EXAMPLES = [
   ],
 ] as const;
 
-export function configureProgramHelp(program: Command, ctx: ProgramContext) {
+export function configureProgramHelp(
+  program: Command,
+  ctx: ProgramContext,
+  argv: string[] = process.argv,
+) {
   program
     .name(CLI_NAME)
     .description("")
@@ -95,13 +100,9 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     outputError: (str, write) => write(theme.error(str)),
   });
 
-  if (
-    hasFlag(process.argv, "-V") ||
-    hasFlag(process.argv, "--version") ||
-    hasRootVersionAlias(process.argv)
-  ) {
+  if (hasFlag(argv, "-V") || hasFlag(argv, "--version") || hasRootVersionAlias(argv)) {
     console.log(ctx.programVersion);
-    process.exit(0);
+    defaultRuntime.exit(0);
   }
 
   program.addHelpText("beforeAll", () => {

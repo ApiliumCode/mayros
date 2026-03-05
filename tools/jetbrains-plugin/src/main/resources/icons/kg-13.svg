@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13">
+  <!-- Graph/nodes knowledge graph icon -->
+  <circle cx="3" cy="3.5" r="1.5" fill="none" stroke="#6366F1" stroke-width="1.1"/>
+  <circle cx="10" cy="3.5" r="1.5" fill="none" stroke="#6366F1" stroke-width="1.1"/>
+  <circle cx="6.5" cy="10" r="1.5" fill="none" stroke="#6366F1" stroke-width="1.1"/>
+  <line x1="4.3" y1="4.2" x2="5.7" y2="8.8" stroke="#6366F1" stroke-width="1"/>
+  <line x1="8.7" y1="4.2" x2="7.3" y2="8.8" stroke="#6366F1" stroke-width="1"/>
+  <line x1="4.5" y1="3.5" x2="8.5" y2="3.5" stroke="#6366F1" stroke-width="1"/>
+</svg>

@@ -41,4 +41,24 @@ describe("ChatLog", () => {
 
     expect(chatLog.children.length).toBe(20);
   });
+
+  it("tracks last finalized assistant text", () => {
+    const chatLog = new ChatLog();
+    expect(chatLog.getLastAssistantText()).toBe("");
+
+    chatLog.startAssistant("streaming...", "r1");
+    chatLog.finalizeAssistant("final answer", "r1");
+    expect(chatLog.getLastAssistantText()).toBe("final answer");
+
+    // A second finalization overwrites
+    chatLog.finalizeAssistant("second answer");
+    expect(chatLog.getLastAssistantText()).toBe("second answer");
+  });
+
+  it("returns empty for getLastAssistantText when no assistant finalized", () => {
+    const chatLog = new ChatLog();
+    chatLog.startAssistant("streaming...", "r1");
+    // Not finalized → still empty
+    expect(chatLog.getLastAssistantText()).toBe("");
+  });
 });
