@@ -10,17 +10,20 @@ import {
 } from "@mariozechner/pi-tui";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
+import { isLoopbackHost } from "../gateway/net.js";
 import {
   buildAgentMainSessionKey,
   normalizeAgentId,
   normalizeMainKey,
   parseAgentSessionKey,
 } from "../routing/session-key.js";
+import { captureClipboardImage } from "./clipboard-image.js";
 import { getSlashCommands } from "./commands.js";
 import { createEnrichedProvider } from "./enriched-autocomplete.js";
 import { applyKeybindingsFromConfig, createTuiResolver } from "./keybinding-resolver.js";
 import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
+import { WelcomeScreen } from "./components/welcome-screen.js";
 import { GatewayChatClient } from "./gateway-chat.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
@@ -34,6 +37,7 @@ import { createOverlayHandlers } from "./tui-overlays.js";
 import { createSessionActions } from "./tui-session-actions.js";
 import type {
   AgentSummary,
+  PendingImage,
   SessionInfo,
   SessionScope,
   TuiOptions,
@@ -202,10 +206,23 @@ export function resolveTuiSessionKey(params: {
   return `agent:${params.currentAgentId}:${trimmed}`;
 }
 
+async function tryInlinePairingApproval(): Promise<boolean> {
+  try {
+    const { listDevicePairing, approveDevicePairing } = await import("../infra/device-pairing.js");
+    const list = await listDevicePairing();
+    if (!list.pending.length) return false;
+    const latest = list.pending.reduce((a, b) => (b.ts > a.ts ? b : a));
+    return (await approveDevicePairing(latest.requestId)) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function resolveGatewayDisconnectState(reason?: string): {
   connectionStatus: string;
   activityStatus: string;
   pairingHint?: string;
+  gatewayDownHint?: string;
 } {
   const reasonLabel = reason?.trim() ? reason.trim() : "closed";
   if (/pairing required/i.test(reasonLabel)) {
@@ -214,6 +231,14 @@ export function resolveGatewayDisconnectState(reason?: string): {
       activityStatus: "pairing required: run mayros devices list",
       pairingHint:
         "Pairing required. Run `mayros devices list`, approve your request ID, then reconnect.",
+    };
+  }
+  if (/ECONNREFUSED|connect failed/i.test(reasonLabel)) {
+    return {
+      connectionStatus: "gateway not running",
+      activityStatus: "start gateway with: mayros gateway run",
+      gatewayDownHint:
+        "Gateway is not responding. Start it with `mayros gateway run` or `mayros onboard`.",
     };
   }
   return {
@@ -266,12 +291,14 @@ export async function runTui(opts: TuiOptions) {
   let toolsExpanded = false;
   let showThinking = false;
   let pairingHintShown = false;
+  let gatewayDownHintShown = false;
   let outputStyle: string | undefined;
   let permissionMode: "auto" | "ask" | "deny" = "auto";
   let fastMode = false;
   let previousThinkingLevel: string | undefined;
   let vimEnabled = config.ui?.vim ?? false;
   const vimHandler = new VimHandler();
+  const pendingImages = new Map<string, PendingImage>();
   const localRunIds = new Set<string>();
 
   const deliverDefault = opts.deliver ?? false;
@@ -439,6 +466,9 @@ export async function runTui(opts: TuiOptions) {
     set previousThinkingLevel(value) {
       previousThinkingLevel = value;
     },
+    get pendingImages() {
+      return pendingImages;
+    },
   };
 
   const noteLocalRunId = (runId: string) => {
@@ -486,15 +516,19 @@ export async function runTui(opts: TuiOptions) {
   const editor = new CustomEditor(tui, editorTheme);
   editor.tuiResolver = tuiResolver;
   editor.vimHandler = vimHandler;
+  editor.captureClipboardImage = captureClipboardImage;
+  editor.onImagePaste = (img) => {
+    pendingImages.set(img.marker, { base64: img.base64, mimeType: img.mimeType });
+  };
   if (vimEnabled) {
     vimHandler.enable();
   }
   const root = new Container();
   root.addChild(header);
   root.addChild(chatLog);
+  root.addChild(editor);
   root.addChild(statusContainer);
   root.addChild(footer);
-  root.addChild(editor);
 
   const updateAutocompleteProvider = () => {
     const base = new CombinedAutocompleteProvider(
@@ -754,6 +788,8 @@ export async function runTui(opts: TuiOptions) {
     return parsed ? normalizeAgentId(parsed.agentId) : null;
   })();
 
+  const createWelcomeScreen = () => new WelcomeScreen({ version: "0.1.4", getState: () => state });
+
   const sessionActions = createSessionActions({
     client,
     chatLog,
@@ -769,6 +805,7 @@ export async function runTui(opts: TuiOptions) {
     updateAutocompleteProvider,
     setActivityStatus,
     clearLocalRunIds,
+    createWelcomeScreen,
   });
   const {
     refreshAgents,
@@ -896,13 +933,21 @@ export async function runTui(opts: TuiOptions) {
   client.onConnected = () => {
     isConnected = true;
     pairingHintShown = false;
+    gatewayDownHintShown = false;
     const reconnected = wasDisconnected;
     wasDisconnected = false;
     setConnectionStatus("connected");
     void (async () => {
       await refreshAgents();
       updateHeader();
-      await loadHistory();
+      if (opts.cleanStart && !reconnected) {
+        chatLog.clearAll();
+        chatLog.addWelcome(createWelcomeScreen());
+        historyLoaded = true;
+        await refreshSessionInfo();
+      } else {
+        await loadHistory();
+      }
       setConnectionStatus(reconnected ? "gateway reconnected" : "gateway connected", 4000);
       tui.requestRender();
       if (!autoMessageSent && autoMessage) {
@@ -923,7 +968,22 @@ export async function runTui(opts: TuiOptions) {
     setActivityStatus(disconnectState.activityStatus);
     if (disconnectState.pairingHint && !pairingHintShown) {
       pairingHintShown = true;
-      chatLog.addSystem(disconnectState.pairingHint);
+      if (isLoopbackHost(new URL(client.connection.url).hostname)) {
+        void tryInlinePairingApproval().then((ok) => {
+          if (ok) {
+            chatLog.addSystem("Device paired. Reconnecting...");
+          } else {
+            chatLog.addSystem(disconnectState.pairingHint!);
+          }
+          tui.requestRender();
+        });
+      } else {
+        chatLog.addSystem(disconnectState.pairingHint);
+      }
+    }
+    if (disconnectState.gatewayDownHint && !gatewayDownHintShown) {
+      gatewayDownHintShown = true;
+      chatLog.addSystem(disconnectState.gatewayDownHint);
     }
     updateFooter();
     tui.requestRender();

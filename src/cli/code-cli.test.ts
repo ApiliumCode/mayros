@@ -5,7 +5,17 @@ const { runTui } = vi.hoisted(() => ({ runTui: vi.fn() }));
 
 vi.mock("../tui/tui.js", () => ({ runTui }));
 vi.mock("../terminal/links.js", () => ({ formatDocsLink: (p: string) => p }));
-vi.mock("../terminal/theme.js", () => ({ theme: { muted: (s: string) => s } }));
+vi.mock("../terminal/theme.js", () => ({
+  theme: { muted: (s: string) => s, accent: (s: string) => s },
+}));
+vi.mock("../config/paths.js", () => ({
+  resolveStateDir: () => "/tmp/mayros-test-state",
+  resolveConfigPath: () => "/tmp/mayros-test-state/mayros.json",
+}));
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, default: { ...actual, existsSync: () => true } };
+});
 
 import { registerCodeCli } from "./code-cli.js";
 
