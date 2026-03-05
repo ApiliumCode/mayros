@@ -7,6 +7,7 @@ export type TuiOptions = {
   thinking?: string;
   timeoutMs?: number;
   historyLimit?: number;
+  cleanStart?: boolean;
   message?: string;
 };
 
@@ -16,6 +17,7 @@ export type ChatEvent = {
   state: "delta" | "final" | "aborted" | "error";
   message?: unknown;
   errorMessage?: string;
+  isHeartbeat?: boolean;
 };
 
 export type AgentEvent = {
@@ -28,6 +30,8 @@ export type SessionInfo = {
   thinkingLevel?: string;
   verboseLevel?: string;
   reasoningLevel?: string;
+  elevatedLevel?: string;
+  groupActivation?: string;
   model?: string;
   modelProvider?: string;
   contextTokens?: number | null;
@@ -84,6 +88,11 @@ export type GatewayStatusSummary = {
   };
 };
 
+export type PendingImage = {
+  base64: string;
+  mimeType: string;
+};
+
 export type TuiStateAccess = {
   agentDefaultId: string;
   sessionMainKey: string;
@@ -104,4 +113,10 @@ export type TuiStateAccess = {
   activityStatus: string;
   statusTimeout: ReturnType<typeof setTimeout> | null;
   lastCtrlCAt: number;
+  outputStyle?: string;
+  vimEnabled?: boolean;
+  permissionMode?: "auto" | "ask" | "deny";
+  fastMode?: boolean;
+  previousThinkingLevel?: string;
+  pendingImages: Map<string, PendingImage>;
 };

@@ -149,18 +149,26 @@ export class KnowledgeFusion {
           );
           break;
 
-        case "conflict-flag":
+        case "conflict-flag": {
           // Add with a conflict marker
+          const suffix = sourceTriple.predicate.split(":").pop()!;
           await this.client.createTriple({
             subject: sourceTriple.subject,
-            predicate: `${this.ns}:conflict:${sourceTriple.predicate.split(":").pop()}`,
+            predicate: `${this.ns}:conflict:${suffix}`,
             object: sourceTriple.object,
+          });
+          // Store companion triple with the full original predicate for unambiguous resolution
+          await this.client.createTriple({
+            subject: sourceTriple.subject,
+            predicate: `${this.ns}:conflictOrigPred:${suffix}`,
+            object: sourceTriple.predicate,
           });
           conflicts++;
           details.push(
             `Flagged conflict: ${sourceTriple.subject} ${sourceTriple.predicate} (values: "${existingVal}" vs "${sourceVal}")`,
           );
           break;
+        }
 
         case "newest-wins": {
           // Compare timestamps if available, fallback to source-wins
@@ -306,15 +314,28 @@ export class KnowledgeFusion {
     const conflictTriples = allTriples.filter((t) => t.predicate.startsWith(conflictPrefix));
     if (conflictTriples.length === 0) return resolutions;
 
+    const companionPrefix = `${this.ns}:conflictOrigPred:`;
+
     for (const ct of conflictTriples) {
       const originalPredSuffix = ct.predicate.slice(conflictPrefix.length);
-      // Find the original triple with matching subject
-      const originalPred = allTriples.find(
+
+      // Look up the companion triple for the exact original predicate
+      const companionTriple = allTriples.find(
         (t) =>
-          t.subject === ct.subject &&
-          t.predicate.endsWith(`:${originalPredSuffix}`) &&
-          !t.predicate.startsWith(conflictPrefix),
+          t.subject === ct.subject && t.predicate === `${companionPrefix}${originalPredSuffix}`,
       );
+      const exactOrigPred = companionTriple ? this.objectToString(companionTriple.object) : null;
+
+      // Find the original triple: prefer exact match via companion, fallback to endsWith for legacy
+      const originalPred = exactOrigPred
+        ? allTriples.find((t) => t.subject === ct.subject && t.predicate === exactOrigPred)
+        : allTriples.find(
+            (t) =>
+              t.subject === ct.subject &&
+              t.predicate.endsWith(`:${originalPredSuffix}`) &&
+              !t.predicate.startsWith(conflictPrefix) &&
+              !t.predicate.startsWith(companionPrefix),
+          );
 
       const conflictVal = this.objectToString(ct.object);
       const originalVal = originalPred ? this.objectToString(originalPred.object) : undefined;
@@ -355,6 +376,10 @@ export class KnowledgeFusion {
       // Remove conflict marker
       if (ct.id) {
         await this.client.deleteTriple(ct.id);
+      }
+      // Remove companion triple if present
+      if (companionTriple?.id) {
+        await this.client.deleteTriple(companionTriple.id);
       }
 
       resolutions.push({

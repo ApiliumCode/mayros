@@ -23,6 +23,13 @@ export type GatewayConnectionOptions = {
   password?: string;
 };
 
+export type ChatAttachmentInput = {
+  type?: string;
+  mimeType: string;
+  fileName?: string;
+  content: string;
+};
+
 export type ChatSendOptions = {
   sessionKey: string;
   message: string;
@@ -30,6 +37,7 @@ export type ChatSendOptions = {
   deliver?: boolean;
   timeoutMs?: number;
   runId?: string;
+  attachments?: ChatAttachmentInput[];
 };
 
 export type GatewayEvent = {
@@ -170,6 +178,7 @@ export class GatewayChatClient {
       deliver: opts.deliver,
       timeoutMs: opts.timeoutMs,
       idempotencyKey: runId,
+      ...(opts.attachments && opts.attachments.length > 0 ? { attachments: opts.attachments } : {}),
     });
     return { runId };
   }

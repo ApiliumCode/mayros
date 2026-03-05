@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-zalouser",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Mayros Zalo Personal Account plugin via zca-cli",
   "license": "MIT",
   "type": "module",

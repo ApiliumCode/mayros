@@ -290,31 +290,32 @@ export function registerNodesInvokeCommands(nodes: Command) {
             }
           }
 
+          const params: Record<string, unknown> = {
+            command: argv,
+            cwd: opts.cwd,
+            env: nodeEnv,
+            timeoutMs,
+            needsScreenRecording: opts.needsScreenRecording === true,
+            approved: approvedByAsk,
+          };
+          if (agentId) {
+            params.agentId = agentId;
+          }
+          if (rawCommand) {
+            params.rawCommand = rawCommand;
+          }
+          if (approvalDecision) {
+            params.approvalDecision = approvalDecision;
+          }
+          if (approvedByAsk && approvalId) {
+            params.runId = approvalId;
+          }
           const invokeParams: Record<string, unknown> = {
             nodeId,
             command: "system.run",
-            params: {
-              command: argv,
-              cwd: opts.cwd,
-              env: nodeEnv,
-              timeoutMs,
-              needsScreenRecording: opts.needsScreenRecording === true,
-            },
+            params,
             idempotencyKey: String(opts.idempotencyKey ?? randomIdempotencyKey()),
           };
-          if (agentId) {
-            (invokeParams.params as Record<string, unknown>).agentId = agentId;
-          }
-          if (rawCommand) {
-            (invokeParams.params as Record<string, unknown>).rawCommand = rawCommand;
-          }
-          (invokeParams.params as Record<string, unknown>).approved = approvedByAsk;
-          if (approvalDecision) {
-            (invokeParams.params as Record<string, unknown>).approvalDecision = approvalDecision;
-          }
-          if (approvedByAsk && approvalId) {
-            (invokeParams.params as Record<string, unknown>).runId = approvalId;
-          }
           if (invokeTimeout !== undefined) {
             invokeParams.timeoutMs = invokeTimeout;
           }

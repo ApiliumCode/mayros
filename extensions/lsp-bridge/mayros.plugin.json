@@ -1,0 +1,33 @@
+{
+  "id": "lsp-bridge",
+  "kind": "integration",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "authToken": { "type": "string" }
+        }
+      },
+      "namespace": { "type": "string" },
+      "servers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "language": { "type": "string" },
+            "command": { "type": "string" },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "rootUri": { "type": "string" }
+          },
+          "required": ["language", "command"]
+        }
+      },
+      "diagnosticSyncIntervalMs": { "type": "integer" }
+    }
+  }
+}

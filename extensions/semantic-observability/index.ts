@@ -15,6 +15,7 @@ import { DecisionGraph } from "./decision-graph.js";
 import { ObservabilityFormatter } from "./formatters.js";
 import { MetricsExporter } from "./metrics-exporter.js";
 import { ObservabilityQueryEngine } from "./query-engine.js";
+import { SessionForkManager } from "./session-fork.js";
 import { TraceEmitter } from "./trace-emitter.js";
 
 // ============================================================================
@@ -65,6 +66,8 @@ const semanticObservabilityPlugin = {
       },
     });
 
+    const forkMgr = new SessionForkManager(client, emitter, ns);
+
     // Metrics exporter
     const metrics = new MetricsExporter();
     if (cfg.metrics.enabled) {
@@ -80,16 +83,6 @@ const semanticObservabilityPlugin = {
       `semantic-observability: plugin registered (ns: ${ns}, agent: ${agentId}, tracing: ${cfg.tracing.enabled}, metrics: ${cfg.metrics.enabled})`,
     );
 
-    // Set mayros_active_skills gauge when agent starts
-    if (cfg.metrics.enabled) {
-      api.on("before_agent_start", async (event) => {
-        const skills = (event as Record<string, unknown>).skills;
-        if (Array.isArray(skills)) {
-          metrics.setGauge("mayros_active_skills", {}, skills.length);
-        }
-      });
-    }
-
     // Cortex tool names for metrics tracking
     const CORTEX_TOOLS = new Set([
       "skill_graph_query",
@@ -103,15 +96,13 @@ const semanticObservabilityPlugin = {
       "trace_stats",
     ]);
 
-    // Track per-tool-call timing for before/after hooks
-    const toolCallTimers = new Map<string, { toolName: string; input: unknown; startMs: number }>();
     // Track per-LLM-call timing
-    const llmCallTimers = new Map<
-      string,
-      { model: string; promptTokens: number; startMs: number }
-    >();
+    const llmCallTimers = new Map<string, { model: string; startMs: number; session?: string }>();
     // Track subagent runs
-    const subagentRuns = new Map<string, { childId: string; task: string; startMs: number }>();
+    const subagentRuns = new Map<
+      string,
+      { childId: string; task: string; startMs: number; session?: string }
+    >();
 
     // ========================================================================
     // Tools
@@ -253,95 +244,143 @@ const semanticObservabilityPlugin = {
       { name: "trace_stats" },
     );
 
+    api.registerTool(
+      {
+        name: "trace_session_fork",
+        label: "Session Fork",
+        description: "Fork the current session into a new session, copying all trace events.",
+        parameters: Type.Object({
+          sessionKey: Type.Optional(Type.String({ description: "Source session key" })),
+          newSessionKey: Type.Optional(Type.String({ description: "Name for the forked session" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, newSessionKey } = params as {
+            sessionKey?: string;
+            newSessionKey?: string;
+          };
+
+          const sourceKey = sessionKey ?? "default";
+
+          try {
+            const result = await forkMgr.fork(sourceKey, newSessionKey);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session forked: ${result.originalSession} → ${result.forkedSession}\n  events copied: ${result.eventsCopied}\n  forkedAt: ${result.forkedAt}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Fork failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_fork" },
+    );
+
+    api.registerTool(
+      {
+        name: "trace_session_rewind",
+        label: "Session Rewind",
+        description: "Rewind a session to a specific timestamp, marking later events as inactive.",
+        parameters: Type.Object({
+          sessionKey: Type.String({ description: "Session key to rewind" }),
+          toTimestamp: Type.String({ description: "ISO 8601 timestamp to rewind to" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, toTimestamp } = params as {
+            sessionKey: string;
+            toTimestamp: string;
+          };
+
+          try {
+            const result = await forkMgr.rewind(sessionKey, toTimestamp);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session rewound: ${result.sessionKey}\n  rewindPoint: ${result.rewindPoint}\n  events removed: ${result.eventsRemoved}\n  events retained: ${result.eventsRetained}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Rewind failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_rewind" },
+    );
+
     // ========================================================================
     // Hooks
     // ========================================================================
 
     if (cfg.tracing.enabled && cfg.tracing.captureToolCalls) {
-      api.on("before_tool_call", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const toolCallId = String(evt.toolCallId ?? evt.id ?? "");
-        const toolName = String(evt.toolName ?? evt.name ?? "unknown");
-        const input = evt.input ?? evt.params ?? {};
+      api.on("after_tool_call", async (event, ctx) => {
+        const durationMs = event.durationMs ?? 0;
+        emitter.emitToolCall(
+          agentId,
+          event.toolName,
+          event.params,
+          event.result ?? {},
+          durationMs,
+          ctx.sessionKey,
+        );
 
-        if (toolCallId) {
-          toolCallTimers.set(toolCallId, {
-            toolName,
-            input,
-            startMs: Date.now(),
-          });
-        }
-      });
+        if (cfg.metrics.enabled) {
+          metrics.incrementCounter("mayros_tool_calls_total", { tool_name: event.toolName });
 
-      api.on("after_tool_call", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const toolCallId = String(evt.toolCallId ?? evt.id ?? "");
-        const output = evt.output ?? evt.result ?? {};
+          if (event.toolName === "skill_graph_query") {
+            metrics.incrementCounter("mayros_skill_queries_total", { tool: "skill_graph_query" });
+          }
 
-        const timer = toolCallTimers.get(toolCallId);
-        if (timer) {
-          toolCallTimers.delete(toolCallId);
-          const durationMs = Date.now() - timer.startMs;
-          emitter.emitToolCall(agentId, timer.toolName, timer.input, output, durationMs);
-
-          if (cfg.metrics.enabled) {
-            metrics.incrementCounter("mayros_tool_calls_total", { tool_name: timer.toolName });
-
-            if (timer.toolName === "skill_graph_query") {
-              metrics.incrementCounter("mayros_skill_queries_total", { tool: "skill_graph_query" });
-            }
-
-            if (CORTEX_TOOLS.has(timer.toolName)) {
-              const status =
-                output && typeof output === "object" && (output as Record<string, unknown>).error
-                  ? "error"
-                  : "success";
-              metrics.incrementCounter("mayros_cortex_requests_total", { status });
-            }
+          if (CORTEX_TOOLS.has(event.toolName)) {
+            const status = event.error ? "error" : "success";
+            metrics.incrementCounter("mayros_cortex_requests_total", { status });
           }
         }
       });
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureLLMCalls) {
-      api.on("llm_input", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const callId = String(evt.callId ?? evt.id ?? `llm-${Date.now()}`);
-        const model = String(evt.model ?? "unknown");
-        const promptTokens = typeof evt.promptTokens === "number" ? evt.promptTokens : 0;
+      api.on("llm_input", async (event, ctx) => {
+        const runId = event.runId;
+        const model = event.model;
 
-        llmCallTimers.set(callId, {
+        llmCallTimers.set(runId, {
           model,
-          promptTokens,
           startMs: Date.now(),
+          session: ctx.sessionKey,
         });
       });
 
-      api.on("llm_output", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const callId = String(evt.callId ?? evt.id ?? "");
-        const completionTokens =
-          typeof evt.completionTokens === "number" ? evt.completionTokens : 0;
+      api.on("llm_output", async (event, _ctx) => {
+        const runId = event.runId;
+        const promptTokens = event.usage?.input ?? 0;
+        const completionTokens = event.usage?.output ?? 0;
 
-        // Try to match by callId, fall back to most recent
-        let timer = llmCallTimers.get(callId);
-        if (!timer && llmCallTimers.size > 0) {
-          // Pop the most recent entry
-          const lastKey = [...llmCallTimers.keys()].pop()!;
-          timer = llmCallTimers.get(lastKey);
-          if (timer) llmCallTimers.delete(lastKey);
-        } else if (timer) {
-          llmCallTimers.delete(callId);
-        }
-
+        const timer = llmCallTimers.get(runId);
         if (timer) {
+          llmCallTimers.delete(runId);
           const durationMs = Date.now() - timer.startMs;
           emitter.emitLLMCall(
             agentId,
             timer.model,
-            timer.promptTokens,
+            promptTokens,
             completionTokens,
             durationMs,
+            timer.session,
           );
 
           if (cfg.metrics.enabled) {
@@ -349,7 +388,7 @@ const semanticObservabilityPlugin = {
             metrics.incrementCounter(
               "mayros_llm_tokens_total",
               { direction: "prompt" },
-              timer.promptTokens,
+              promptTokens,
             );
             metrics.incrementCounter(
               "mayros_llm_tokens_total",
@@ -362,43 +401,42 @@ const semanticObservabilityPlugin = {
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureDelegations) {
-      api.on("subagent_spawned", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const runId = String(evt.runId ?? evt.id ?? `run-${Date.now()}`);
-        const childId = String(evt.childId ?? evt.agentId ?? "unknown");
-        const task = String(evt.task ?? evt.description ?? "");
+      api.on("subagent_spawned", async (event, ctx) => {
+        const runId = event.runId;
+        const childId = event.agentId ?? "unknown";
+        const task = event.label ?? "";
+        const session = ctx.requesterSessionKey;
 
         subagentRuns.set(runId, {
           childId,
           task,
           startMs: Date.now(),
+          session,
         });
 
-        emitter.emitDelegation(agentId, childId, task, runId);
+        emitter.emitDelegation(agentId, childId, task, runId, session);
       });
 
-      api.on("subagent_ended", async (event) => {
-        const evt = event as Record<string, unknown>;
-        const runId = String(evt.runId ?? evt.id ?? "");
-        const success = evt.success !== false;
+      api.on("subagent_ended", async (event, _ctx) => {
+        const runId = event.runId ?? "";
+        const success = event.outcome === "ok";
 
         const run = subagentRuns.get(runId);
         if (run) {
           subagentRuns.delete(runId);
           if (!success) {
-            const error = String(evt.error ?? "Subagent run failed");
-            emitter.emitError(run.childId, error, `delegation run: ${runId}`);
+            const error = String(event.error ?? "Subagent run failed");
+            emitter.emitError(run.childId, error, `delegation run: ${runId}`, run.session);
           }
         }
       });
     }
 
     if (cfg.tracing.enabled) {
-      api.on("agent_end", async (event) => {
-        const evt = event as Record<string, unknown>;
-        if (evt.success === false) {
-          const error = String(evt.error ?? "Agent run failed");
-          emitter.emitError(agentId, error, "agent_end");
+      api.on("agent_end", async (event, ctx) => {
+        if (event.success === false) {
+          const error = String(event.error ?? "Agent run failed");
+          emitter.emitError(agentId, error, "agent_end", ctx.sessionKey);
         }
       });
     }

@@ -1,3 +1,4 @@
+import { DEFAULT_GATEWAY_PORT } from "../../config/paths.js";
 import type { GatewayBonjourBeacon } from "../../infra/bonjour-discovery.js";
 import { colorize, theme } from "../../terminal/theme.js";
 
@@ -38,8 +39,8 @@ export function pickBeaconHost(beacon: GatewayBonjourBeacon): string | null {
 
 export function pickGatewayPort(beacon: GatewayBonjourBeacon): number {
   // Security: TXT records are unauthenticated. Prefer the resolved service port over TXT gatewayPort.
-  const port = beacon.port ?? beacon.gatewayPort ?? 18789;
-  return port > 0 ? port : 18789;
+  const port = beacon.port ?? beacon.gatewayPort ?? DEFAULT_GATEWAY_PORT;
+  return port > 0 ? port : DEFAULT_GATEWAY_PORT;
 }
 
 export function dedupeBeacons(beacons: GatewayBonjourBeacon[]): GatewayBonjourBeacon[] {
@@ -104,7 +105,8 @@ export function renderBeaconLines(beacon: GatewayBonjourBeacon, rich: boolean): 
     lines.push(`  ${colorize(rich, theme.muted, "tls")}: ${fingerprint}`);
   }
   if (typeof beacon.sshPort === "number" && beacon.sshPort > 0 && host) {
-    const ssh = `ssh -N -L 18789:127.0.0.1:18789 <user>@${host} -p ${beacon.sshPort}`;
+    const gwPort = pickGatewayPort(beacon);
+    const ssh = `ssh -N -L ${gwPort}:127.0.0.1:${gwPort} <user>@${host} -p ${beacon.sshPort}`;
     lines.push(`  ${colorize(rich, theme.muted, "ssh")}: ${colorize(rich, theme.command, ssh)}`);
   }
   return lines;

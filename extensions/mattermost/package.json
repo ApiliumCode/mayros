@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-mattermost",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Mayros Mattermost channel plugin",
   "type": "module",

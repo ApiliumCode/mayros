@@ -6,11 +6,15 @@
  *
  * Tools: mesh_share_knowledge, mesh_request_knowledge, mesh_create_shared_space,
  *        mesh_list_agents, mesh_delegate, mesh_merge, mesh_conflicts,
- *        mesh_grant_access, mesh_revoke_access
+ *        mesh_grant_access, mesh_revoke_access,
+ *        mesh_create_team, mesh_team_status, mesh_run_workflow,
+ *        agent_send_message, agent_check_inbox, mesh_team_dashboard,
+ *        agent_track_background_task, agent_list_background_tasks
  *
  * Hooks: subagent_spawning, subagent_ended, before_agent_start, agent_end
  *
- * CLI: mayros mesh status, mayros mesh agents, mayros mesh namespaces, mayros mesh share
+ * CLI: mayros mesh status, mayros mesh agents, mayros mesh namespaces, mayros mesh share,
+ *      mayros mesh team create|status|list|merge
  */
 
 import { randomUUID } from "node:crypto";
@@ -31,6 +35,12 @@ import {
   type MeshMessage,
 } from "./mesh-protocol.js";
 import { NamespaceManager } from "./namespace-manager.js";
+import { AgentMailbox } from "./agent-mailbox.js";
+import { BackgroundTracker } from "./background-tracker.js";
+import { TeamDashboardService } from "./team-dashboard.js";
+import { TeamManager } from "./team-manager.js";
+import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
+import { listWorkflows as listWorkflowDefs } from "./workflows/registry.js";
 
 // ============================================================================
 // Plugin Definition
@@ -52,6 +62,15 @@ const agentMeshPlugin = {
     const nsMgr = new NamespaceManager(client, ns, cfg.mesh.maxSharedNamespaces);
     const delegationEngine = new DelegationEngine(client, ns, nsMgr);
     const fusion = new KnowledgeFusion(client, ns);
+    const teamMgr = new TeamManager(client, ns, nsMgr, fusion, {
+      maxTeamSize: cfg.teams.maxTeamSize,
+      defaultStrategy: cfg.teams.defaultStrategy,
+      workflowTimeout: cfg.teams.workflowTimeout,
+    });
+    const orchestrator = new WorkflowOrchestrator(client, ns, teamMgr, fusion, nsMgr);
+    const mailbox = new AgentMailbox(client, ns);
+    const dashboard = new TeamDashboardService(teamMgr, mailbox, null, ns);
+    const bgTracker = new BackgroundTracker(client, ns);
     let cortexAvailable = false;
     const healthMonitor = new HealthMonitor(client, {
       onHealthy: () => {
@@ -65,7 +84,24 @@ const agentMeshPlugin = {
     });
 
     // Message bus for mesh messages (in-process for now)
+    const MESSAGE_LOG_MAX = 1000;
     const messageLog: MeshMessage[] = [];
+
+    function appendToMessageLog(msg: MeshMessage): void {
+      messageLog.push(msg);
+      if (messageLog.length > MESSAGE_LOG_MAX) {
+        messageLog.splice(0, messageLog.length - MESSAGE_LOG_MAX);
+      }
+    }
+
+    /**
+     * Ensure a value carries the namespace prefix. If it already starts with
+     * `${nsPrefix}:` it is returned as-is; otherwise the prefix is prepended.
+     */
+    function ensureNsPrefix(value: string, nsPrefix: string): string {
+      if (value.startsWith(`${nsPrefix}:`)) return value;
+      return `${nsPrefix}:${value}`;
+    }
 
     api.logger.info(`agent-mesh: plugin registered (ns: ${ns}, agent: ${agentId})`);
 
@@ -134,8 +170,8 @@ const agentMeshPlugin = {
           let stored = 0;
           for (const t of triples) {
             await client.createTriple({
-              subject: t.subject,
-              predicate: t.predicate,
+              subject: ensureNsPrefix(t.subject, ns),
+              predicate: ensureNsPrefix(t.predicate, ns),
               object: t.object,
             });
             stored++;
@@ -144,7 +180,7 @@ const agentMeshPlugin = {
           const msg = createMeshMessage("knowledge-share", agentId, toAgent, targetNs, {
             tripleCount: stored,
           });
-          messageLog.push(msg);
+          appendToMessageLog(msg);
 
           return {
             content: [
@@ -204,21 +240,45 @@ const agentMeshPlugin = {
             };
           }
 
-          const result = await client.patternQuery({
-            subject,
-            predicate,
+          // Step 1: find memory subjects owned by this namespace
+          const ownershipResult = await client.patternQuery({
+            predicate: `${ns}:memory:ownedBy`,
             object: { node: sourceNs },
-            limit,
+            limit: 200,
           });
 
-          if (result.matches.length === 0) {
+          if (ownershipResult.matches.length === 0) {
             return {
               content: [{ type: "text", text: "No matching knowledge found." }],
               details: { count: 0, namespace: sourceNs },
             };
           }
 
-          const text = result.matches
+          // Step 2: for each owned subject, fetch its triples respecting caller filters
+          type SimpleTriple = { subject: string; predicate: string; object: unknown };
+          const collected: SimpleTriple[] = [];
+          for (const match of ownershipResult.matches) {
+            if (collected.length >= limit) break;
+            const triples = await client.listTriples({
+              subject: match.subject,
+              predicate,
+              limit: 20,
+            });
+            for (const t of triples.triples) {
+              if (subject && t.subject !== subject) continue;
+              collected.push(t);
+              if (collected.length >= limit) break;
+            }
+          }
+
+          if (collected.length === 0) {
+            return {
+              content: [{ type: "text", text: "No matching knowledge found." }],
+              details: { count: 0, namespace: sourceNs },
+            };
+          }
+
+          const text = collected
             .map((t) => `${t.subject} ${t.predicate} ${JSON.stringify(t.object)}`)
             .join("\n");
 
@@ -226,10 +286,10 @@ const agentMeshPlugin = {
             content: [
               {
                 type: "text",
-                text: `Found ${result.matches.length} triples from ${fromAgent}:\n\n${text}`,
+                text: `Found ${collected.length} triples from ${fromAgent}:\n\n${text}`,
               },
             ],
-            details: { count: result.matches.length, namespace: sourceNs },
+            details: { count: collected.length, namespace: sourceNs },
           };
         },
       },
@@ -391,7 +451,7 @@ const agentMeshPlugin = {
               tripleCount: ctx.relevantTriples.length,
               memoryCount: ctx.relatedMemories.length,
             });
-            messageLog.push(msg);
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -475,7 +535,7 @@ const agentMeshPlugin = {
               conflicts: report.conflicts,
               resolutions: report.resolutions?.length ?? 0,
             });
-            messageLog.push(msg);
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -537,14 +597,12 @@ const agentMeshPlugin = {
               )
               .join("\n");
 
-            if (conflicts.length > 0) {
-              const msg = createMeshMessage("conflict-alert", agentId, "mesh", ns, {
-                ns1,
-                ns2,
-                conflictCount: conflicts.length,
-              });
-              messageLog.push(msg);
-            }
+            const msg = createMeshMessage("conflict-alert", agentId, "mesh", ns, {
+              ns1,
+              ns2,
+              conflictCount: conflicts.length,
+            });
+            appendToMessageLog(msg);
 
             return {
               content: [
@@ -719,6 +777,530 @@ const agentMeshPlugin = {
       { name: "mesh_revoke_access" },
     );
 
+    // 10. mesh_create_team
+    api.registerTool(
+      {
+        name: "mesh_create_team",
+        label: "Mesh Create Team",
+        description: "Create a team of agents with a shared namespace for coordinated work.",
+        parameters: Type.Object({
+          name: Type.String({ description: "Team name" }),
+          strategy: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["additive", "replace", "conflict-flag", "newest-wins", "majority-wins"],
+              description: "Merge strategy (default: from config)",
+            }),
+          ),
+          members: Type.Array(
+            Type.Object({
+              agentId: Type.String({ description: "Agent ID" }),
+              role: Type.String({ description: "Agent role" }),
+              task: Type.String({ description: "Task description" }),
+            }),
+            { description: "Team members" },
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const { name, strategy, members } = params as {
+            name: string;
+            strategy?: MergeStrategy;
+            members: Array<{ agentId: string; role: string; task: string }>;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot create team." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const team = await teamMgr.createTeam({
+              name,
+              strategy: strategy ?? cfg.teams.defaultStrategy,
+              members,
+            });
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Team "${team.name}" created (id: ${team.id}, members: ${team.members.length}, strategy: ${team.strategy}, sharedNs: ${team.sharedNs})`,
+                },
+              ],
+              details: { action: "created", team },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Team creation failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_create_team" },
+    );
+
+    // 11. mesh_team_status
+    api.registerTool(
+      {
+        name: "mesh_team_status",
+        label: "Mesh Team Status",
+        description: "Get the status of a team and its members.",
+        parameters: Type.Object({
+          teamId: Type.String({ description: "Team ID" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { teamId } = params as { teamId: string };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot get team status." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          const team = await teamMgr.getTeam(teamId);
+          if (!team) {
+            return {
+              content: [{ type: "text", text: `Team ${teamId} not found.` }],
+              details: { action: "not_found" },
+            };
+          }
+
+          const memberLines = team.members
+            .map(
+              (m) => `  - ${m.agentId} (${m.role}): ${m.status}${m.result ? ` — ${m.result}` : ""}`,
+            )
+            .join("\n");
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Team "${team.name}" (${team.id}):\n  status: ${team.status}\n  strategy: ${team.strategy}\n  sharedNs: ${team.sharedNs}\n  members:\n${memberLines}`,
+              },
+            ],
+            details: { team },
+          };
+        },
+      },
+      { name: "mesh_team_status" },
+    );
+
+    // 12. mesh_run_workflow
+    api.registerTool(
+      {
+        name: "mesh_run_workflow",
+        label: "Mesh Run Workflow",
+        description:
+          "Start a pre-defined multi-agent workflow (code-review, feature-dev, security-review).",
+        parameters: Type.Object({
+          workflow: Type.String({ description: "Workflow name" }),
+          path: Type.Optional(
+            Type.String({ description: "Target path (default: current directory)" }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const { workflow, path: targetPath } = params as {
+            workflow: string;
+            path?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot run workflow." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const entry = await orchestrator.startWorkflow({
+              workflowName: workflow,
+              path: targetPath,
+            });
+
+            const phaseNames = entry.phases.map((p) => p.name).join(" → ");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Workflow "${entry.name}" started (id: ${entry.id})\n  path: ${entry.path}\n  phases: ${phaseNames}\n  current: ${entry.currentPhase}\n  team: ${entry.teamId}`,
+                },
+              ],
+              details: { action: "started", workflow: entry },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Workflow start failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_run_workflow" },
+    );
+
+    // 13. agent_send_message
+    api.registerTool(
+      {
+        name: "agent_send_message",
+        label: "Agent Send Message",
+        description: "Send a persistent message to another agent via the Cortex-backed mailbox.",
+        parameters: Type.Object({
+          to: Type.String({ description: "Recipient agent ID" }),
+          content: Type.String({ description: "Message content" }),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: [
+                "task",
+                "finding",
+                "question",
+                "status",
+                "knowledge-share",
+                "delegation-context",
+              ],
+              description: "Message type (default: task)",
+            }),
+          ),
+          replyTo: Type.Optional(Type.String({ description: "Parent message ID for threading" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { to, content, type, replyTo } = params as {
+            to: string;
+            content: string;
+            type?: string;
+            replyTo?: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot send message." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const msg = await mailbox.send({
+              from: agentId,
+              to,
+              content,
+              type: type as "task" | undefined,
+              replyTo,
+            });
+
+            // Also bridge to in-memory message log for backward compat
+            const meshMsg = createMeshMessage(
+              isValidMessageType(type ?? "task") ? (type as "task") : "knowledge-share",
+              agentId,
+              to,
+              ns,
+              { mailboxMessageId: msg.id, content },
+            );
+            appendToMessageLog(meshMsg);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Message sent to ${to} (id: ${msg.id}, type: ${msg.type})`,
+                },
+              ],
+              details: { action: "sent", message: msg },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Send failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_send_message" },
+    );
+
+    // 14. agent_check_inbox
+    api.registerTool(
+      {
+        name: "agent_check_inbox",
+        label: "Agent Check Inbox",
+        description: "Check the current agent's mailbox for persistent messages from other agents.",
+        parameters: Type.Object({
+          status: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["unread", "read", "archived"],
+              description: "Filter by status (default: all)",
+            }),
+          ),
+          type: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: [
+                "task",
+                "finding",
+                "question",
+                "status",
+                "knowledge-share",
+                "delegation-context",
+              ],
+              description: "Filter by message type",
+            }),
+          ),
+          limit: Type.Optional(
+            Type.Number({ description: "Max messages to return (default: 20)" }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            status,
+            type,
+            limit = 20,
+          } = params as {
+            status?: string;
+            type?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot check inbox." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const messages = await mailbox.inbox({
+              agent: agentId,
+              status: status as "unread" | undefined,
+              type: type as "task" | undefined,
+              limit,
+            });
+
+            if (messages.length === 0) {
+              return {
+                content: [{ type: "text", text: "No messages in inbox." }],
+                details: { count: 0 },
+              };
+            }
+
+            const text = messages
+              .map(
+                (m) =>
+                  `- [${m.status}] ${m.id} from ${m.from} (${m.type}): ${m.content.slice(0, 100)}${m.content.length > 100 ? "…" : ""}`,
+              )
+              .join("\n");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Inbox (${messages.length} message${messages.length === 1 ? "" : "s"}):\n\n${text}`,
+                },
+              ],
+              details: { count: messages.length, messages },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Inbox check failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_check_inbox" },
+    );
+
+    // 15. mesh_team_dashboard
+    api.registerTool(
+      {
+        name: "mesh_team_dashboard",
+        label: "Team Dashboard",
+        description:
+          "Get an aggregated dashboard view of team status, member activity, mailbox stats, and trace metrics.",
+        parameters: Type.Object({
+          teamId: Type.Optional(
+            Type.String({ description: "Team ID (omit for summary of all teams)" }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const { teamId } = params as { teamId?: string };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot load dashboard." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            if (teamId) {
+              const d = await dashboard.getTeamDashboard(teamId);
+              if (!d) {
+                return {
+                  content: [{ type: "text", text: `Team ${teamId} not found.` }],
+                  details: { action: "not_found", teamId },
+                };
+              }
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Dashboard: "${d.teamName}" [${d.teamStatus}]\n  members: ${d.members.length}\n  mail: ${d.mailboxSummary.total} total, ${d.mailboxSummary.unread} unread`,
+                  },
+                ],
+                details: d,
+              };
+            }
+
+            const s = await dashboard.getSummary();
+            const teamLines = s.teams
+              .map((t) => `  - ${t.teamId}: "${t.teamName}" [${t.teamStatus}]`)
+              .join("\n");
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Dashboard Summary:\n  active teams: ${s.activeTeams}\n  total agents: ${s.totalAgents}\n  total unread: ${s.totalUnread}\n  total errors: ${s.totalErrors}\n${teamLines}`,
+                },
+              ],
+              details: s,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Dashboard failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_team_dashboard" },
+    );
+
+    // 16. agent_track_background_task
+    api.registerTool(
+      {
+        name: "agent_track_background_task",
+        label: "Track Background Task",
+        description: "Track a new background agent task in the Cortex-backed task tracker.",
+        parameters: Type.Object({
+          agentId: Type.String({ description: "Agent ID running the task" }),
+          description: Type.String({ description: "Description of the background task" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { agentId: taskAgentId, description: taskDesc } = params as {
+            agentId: string;
+            description: string;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot track task." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const task = await bgTracker.track({ agentId: taskAgentId, description: taskDesc });
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Background task tracked: ${task.id}\n  agent: ${task.agentId}\n  status: ${task.status}`,
+                },
+              ],
+              details: { action: "tracked", task },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Track failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_track_background_task" },
+    );
+
+    // 17. agent_list_background_tasks
+    api.registerTool(
+      {
+        name: "agent_list_background_tasks",
+        label: "List Background Tasks",
+        description: "List background agent tasks with optional filtering by status and agent.",
+        parameters: Type.Object({
+          status: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["pending", "running", "completed", "failed", "cancelled"],
+              description: "Filter by task status",
+            }),
+          ),
+          agentId: Type.Optional(Type.String({ description: "Filter by agent ID" })),
+          limit: Type.Optional(Type.Number({ description: "Max tasks to return (default: 20)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            status,
+            agentId: filterAgentId,
+            limit = 20,
+          } = params as {
+            status?: string;
+            agentId?: string;
+            limit?: number;
+          };
+
+          if (!(await ensureCortex())) {
+            return {
+              content: [{ type: "text", text: "Cortex unavailable. Cannot list tasks." }],
+              details: { action: "skipped", reason: "cortex_unavailable" },
+            };
+          }
+
+          try {
+            const tasks = await bgTracker.listTasks({
+              status: status as "running" | undefined,
+              agentId: filterAgentId,
+              limit,
+            });
+
+            if (tasks.length === 0) {
+              return {
+                content: [{ type: "text", text: "No background tasks found." }],
+                details: { count: 0 },
+              };
+            }
+
+            const text = tasks
+              .map(
+                (t) =>
+                  `- [${t.status}] ${t.id} (${t.agentId}): ${t.description.slice(0, 80)}${t.description.length > 80 ? "…" : ""}`,
+              )
+              .join("\n");
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Background tasks (${tasks.length}):\n\n${text}`,
+                },
+              ],
+              details: { count: tasks.length, tasks },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `List failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "agent_list_background_tasks" },
+    );
+
     // ========================================================================
     // Lifecycle Hooks
     // ========================================================================
@@ -728,8 +1310,8 @@ const agentMeshPlugin = {
       if (!(await ensureCortex())) return;
 
       try {
-        const childId = (event as Record<string, unknown>).childAgentId as string | undefined;
-        const task = (event as Record<string, unknown>).task as string | undefined;
+        const childId = event.agentId;
+        const task = event.label ?? `subagent-${event.childSessionKey}`;
 
         if (!childId || !task) return;
 
@@ -738,10 +1320,9 @@ const agentMeshPlugin = {
         const ctx = await delegationEngine.prepareContext(task, agentId);
 
         if (ctx.relevantTriples.length > 0) {
-          const sessionKey = `subagent-${childId}-${Date.now()}`;
-          delegationEngine.injectContext(sessionKey, ctx);
+          delegationEngine.injectContext(event.childSessionKey, ctx);
           api.logger.info(
-            `agent-mesh: injected ${ctx.relevantTriples.length} triples for child ${childId} (session: ${sessionKey})`,
+            `agent-mesh: injected ${ctx.relevantTriples.length} triples for child ${childId} (session: ${event.childSessionKey})`,
           );
         }
       } catch (err) {
@@ -750,20 +1331,24 @@ const agentMeshPlugin = {
     });
 
     // Hook: subagent_ended — merge child results back if autoMerge is enabled
-    api.on("subagent_ended", async (event) => {
+    api.on("subagent_ended", async (event, _ctx) => {
+      const childSessionKey = event.targetSessionKey;
+
+      // Always clean up injected context for this child session
+      delegationEngine.removeInjectedContext(childSessionKey);
+
       if (!cfg.mesh.autoMerge) return;
       if (!(await ensureCortex())) return;
 
       try {
-        const childId = (event as Record<string, unknown>).childAgentId as string | undefined;
-        const success = (event as Record<string, unknown>).success as boolean | undefined;
+        const success = event.outcome === "ok";
 
-        if (!childId || !success) return;
+        if (!childSessionKey || !success) return;
 
-        api.logger.info(`agent-mesh: auto-merging results from child ${childId}`);
+        api.logger.info(`agent-mesh: auto-merging results from child ${childSessionKey}`);
 
-        const runId = `run-${Date.now()}`;
-        const report = await delegationEngine.mergeResults(runId, agentId, childId);
+        const runId = event.runId ?? `run-${Date.now()}`;
+        const report = await delegationEngine.mergeResults(runId, agentId, childSessionKey);
 
         api.logger.info(
           `agent-mesh: merge complete — added: ${report.added}, skipped: ${report.skipped}, conflicts: ${report.conflicts}`,
@@ -773,8 +1358,8 @@ const agentMeshPlugin = {
       }
     });
 
-    // Hook: before_agent_start — register this agent in the mesh
-    api.on("before_agent_start", async (event) => {
+    // Hook: before_agent_start — register this agent in the mesh + track background agents
+    api.on("before_agent_start", async (_event, _ctx) => {
       if (!(await ensureCortex())) return;
 
       try {
@@ -794,17 +1379,32 @@ const agentMeshPlugin = {
         });
 
         api.logger.info(`agent-mesh: agent ${agentId} registered in mesh`);
+
+        // If the agent is a background agent, track it automatically
+        try {
+          const { findMarkdownAgent } = await import("../../src/agents/markdown-agents.js");
+          const mdAgent = findMarkdownAgent(agentId);
+          if (mdAgent?.background) {
+            await bgTracker.track({
+              agentId,
+              description: `Background agent: ${mdAgent.name}`,
+            });
+            api.logger.info(`agent-mesh: background task tracked for ${agentId}`);
+          }
+        } catch {
+          // Markdown agent not found — not a background agent, skip
+        }
       } catch (err) {
         api.logger.warn(`agent-mesh: agent registration failed: ${String(err)}`);
       }
     });
 
-    // Hook: agent_end — update agent status and persist mesh state
-    api.on("agent_end", async (event) => {
+    // Hook: agent_end — update agent status, persist mesh state, emit task_completed
+    api.on("agent_end", async (event, _ctx) => {
       if (!(await ensureCortex())) return;
 
       try {
-        const success = (event as Record<string, unknown>).success as boolean | undefined;
+        const success = event.success;
 
         const agentNode = nsMgr.getPrivateNs(agentId);
 
@@ -825,6 +1425,18 @@ const agentMeshPlugin = {
           api.logger.info(
             `agent-mesh: session ended with ${messageLog.length} mesh messages exchanged`,
           );
+        }
+
+        // Mark running background tasks as completed/failed
+        try {
+          const tasks = await bgTracker.listTasks({ agentId, status: "running" });
+          for (const task of tasks) {
+            const newStatus = success ? "completed" : "failed";
+            const result = success ? "agent session ended" : (event.error ?? "unknown error");
+            await bgTracker.updateStatus(task.id, newStatus, result);
+          }
+        } catch {
+          // Background tracker may not have tasks for this agent
         }
       } catch (err) {
         api.logger.warn(`agent-mesh: agent end tracking failed: ${String(err)}`);
@@ -942,15 +1554,173 @@ const agentMeshPlugin = {
 
             const targetNs = target.includes(":") ? target : nsMgr.getPrivateNs(target);
 
+            // Check write access before writing
+            const hasAccess = await nsMgr.checkAccess(agentId, targetNs, "write");
+            if (!hasAccess) {
+              console.error(`No write access to namespace ${targetNs}.`);
+              return;
+            }
+
+            const prefixedSubject = ensureNsPrefix(subject, targetNs);
+
             try {
               await client.createTriple({
-                subject,
+                subject: prefixedSubject,
                 predicate,
                 object,
               });
 
               console.log(`Shared triple to ${targetNs}:`);
-              console.log(`  ${subject} ${predicate} "${object}"`);
+              console.log(`  ${prefixedSubject} ${predicate} "${object}"`);
+            } catch (err) {
+              console.error(`Error: ${String(err)}`);
+            }
+          });
+
+        // ---- Team subcommands ----
+
+        const team = mesh.command("team").description("Team coordination commands");
+
+        team
+          .command("create")
+          .description("Create a new agent team")
+          .argument("<name>", "Team name")
+          .option("--strategy <strategy>", "Merge strategy", cfg.teams.defaultStrategy)
+          .option("--member <members...>", "Members as agentId:role:task")
+          .action(async (name, opts) => {
+            const healthy = await client.isHealthy();
+            if (!healthy) {
+              console.log("Cortex offline. Cannot create team.");
+              return;
+            }
+
+            const rawMembers: string[] = opts.member ?? [];
+            const members = rawMembers
+              .map((m: string) => {
+                const parts = m.split(":");
+                if (parts.length < 3) {
+                  console.error(`Invalid member format: ${m} (expected agentId:role:task)`);
+                  process.exitCode = 1;
+                  return null;
+                }
+                return {
+                  agentId: parts[0],
+                  role: parts[1],
+                  task: parts.slice(2).join(":"),
+                };
+              })
+              .filter((m): m is NonNullable<typeof m> => m !== null);
+
+            if (members.length === 0) {
+              console.error("At least one --member is required");
+              return;
+            }
+
+            try {
+              const created = await teamMgr.createTeam({
+                name,
+                strategy: opts.strategy,
+                members,
+              });
+
+              console.log(`Team created:`);
+              console.log(`  id: ${created.id}`);
+              console.log(`  name: ${created.name}`);
+              console.log(`  strategy: ${created.strategy}`);
+              console.log(`  sharedNs: ${created.sharedNs}`);
+              console.log(`  members: ${created.members.length}`);
+              for (const m of created.members) {
+                console.log(`    - ${m.agentId} (${m.role})`);
+              }
+            } catch (err) {
+              console.error(`Error: ${String(err)}`);
+            }
+          });
+
+        team
+          .command("status")
+          .description("Show team status and members")
+          .argument("<teamId>", "Team ID")
+          .action(async (teamId) => {
+            const healthy = await client.isHealthy();
+            if (!healthy) {
+              console.log("Cortex offline. Cannot get team status.");
+              return;
+            }
+
+            const entry = await teamMgr.getTeam(teamId);
+            if (!entry) {
+              console.log(`Team ${teamId} not found.`);
+              return;
+            }
+
+            console.log(`Team "${entry.name}" (${entry.id}):`);
+            console.log(`  status: ${entry.status}`);
+            console.log(`  strategy: ${entry.strategy}`);
+            console.log(`  sharedNs: ${entry.sharedNs}`);
+            console.log(`  created: ${entry.createdAt}`);
+            console.log(`  updated: ${entry.updatedAt}`);
+            console.log(`  members:`);
+            for (const m of entry.members) {
+              const extra = m.result ? ` — ${m.result}` : "";
+              console.log(`    - ${m.agentId} (${m.role}): ${m.status}${extra}`);
+            }
+            if (entry.result) {
+              console.log(`  result: ${entry.result.summary}`);
+            }
+          });
+
+        team
+          .command("list")
+          .description("List all teams")
+          .option("--format <format>", "Output format (terminal|json)", "terminal")
+          .action(async (opts) => {
+            const healthy = await client.isHealthy();
+            if (!healthy) {
+              console.log("Cortex offline. Cannot list teams.");
+              return;
+            }
+
+            const teams = await teamMgr.listTeams();
+
+            if (opts.format === "json") {
+              console.log(JSON.stringify(teams, null, 2));
+              return;
+            }
+
+            if (teams.length === 0) {
+              console.log("No teams found.");
+              return;
+            }
+
+            console.log(`Teams (${teams.length}):`);
+            for (const t of teams) {
+              console.log(`  - ${t.id}: ${t.name} [${t.status}] (updated: ${t.updatedAt})`);
+            }
+          });
+
+        team
+          .command("merge")
+          .description("Merge team results using configured strategy")
+          .argument("<teamId>", "Team ID")
+          .option("--strategy <strategy>", "Override merge strategy")
+          .action(async (teamId) => {
+            const healthy = await client.isHealthy();
+            if (!healthy) {
+              console.log("Cortex offline. Cannot merge team results.");
+              return;
+            }
+
+            try {
+              const result = await teamMgr.mergeTeamResults(teamId);
+
+              console.log(`Merge result:`);
+              console.log(`  summary: ${result.summary}`);
+              console.log(`  conflicts: ${result.conflicts}`);
+              console.log(`  member results:`);
+              for (const mr of result.memberResults) {
+                console.log(`    - ${mr.agentId} (${mr.role}): ${mr.findings} findings`);
+              }
             } catch (err) {
               console.error(`Error: ${String(err)}`);
             }

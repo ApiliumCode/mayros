@@ -3,6 +3,7 @@ import type { Command } from "commander";
 import { buildGatewayConnectionDetails } from "../gateway/call.js";
 import { parseLogLine } from "../logging/parse-log-line.js";
 import { formatLocalIsoWithOffset } from "../logging/timestamps.js";
+import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { clearActiveProgressLine } from "../terminal/progress-line.js";
 import { createSafeStreamWriter } from "../terminal/stream-writer.js";
@@ -233,7 +234,7 @@ export function registerLogsCli(program: Command) {
         payload = await fetchLogs(opts, cursor, showProgress);
       } catch (err) {
         emitGatewayError(err, opts, jsonMode ? "json" : "text", rich, emitJsonLine, errorLine);
-        process.exit(1);
+        defaultRuntime.exit(1);
         return;
       }
       const lines = Array.isArray(payload.lines) ? payload.lines : [];

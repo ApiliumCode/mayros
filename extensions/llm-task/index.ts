@@ -1,4 +1,4 @@
-import type { AnyAgentTool, MayrosPluginApi } from "../../src/plugins/types.js";
+import type { AnyAgentTool, MayrosPluginApi } from "mayros/plugin-sdk";
 import { createLlmTaskTool } from "./src/llm-task-tool.js";
 
 export default function register(api: MayrosPluginApi) {

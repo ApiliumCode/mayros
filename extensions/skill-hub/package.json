@@ -1,11 +1,12 @@
 {
   "name": "@apilium/mayros-skill-hub",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Apilium Hub marketplace — publish, install, sign, and verify semantic skills",
   "type": "module",
   "dependencies": {
-    "@sinclair/typebox": "0.34.48"
+    "@sinclair/typebox": "0.34.48",
+    "semver": "^7.6.0"
   },
   "devDependencies": {
     "@apilium/mayros": "workspace:*"
