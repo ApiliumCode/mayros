@@ -19,6 +19,7 @@ describe("tui command handlers", () => {
         currentSessionKey: "agent:main:main",
         activeChatRunId: null,
         sessionInfo: {},
+        pendingImages: new Map(),
       } as never,
       deliverDefault: false,
       openOverlay: vi.fn(),
@@ -323,6 +324,7 @@ describe("tui command handlers", () => {
           currentSessionKey: "agent:main:main",
           activeChatRunId: null,
           sessionInfo: {},
+          pendingImages: new Map(),
         } as never,
         deliverDefault: false,
         openOverlay: vi.fn(),
@@ -408,6 +410,162 @@ describe("tui command handlers", () => {
       expect(addSystem).toHaveBeenCalledWith(
         "Run 'mayros onboard' from the terminal to start the setup wizard",
       );
+    });
+  });
+
+  describe("interactive selectors (no-arg commands)", () => {
+    function setupOverlay() {
+      const addSystem = vi.fn();
+      const requestRender = vi.fn();
+      const openOverlay = vi.fn();
+      const closeOverlay = vi.fn();
+      const patchSession = vi.fn().mockResolvedValue({});
+      const applySessionInfoFromPatch = vi.fn();
+      const refreshSessionInfo = vi.fn().mockResolvedValue(undefined);
+      const loadHistory = vi.fn().mockResolvedValue(undefined);
+      const stateObj = {
+        currentSessionKey: "agent:main:main",
+        activeChatRunId: null,
+        sessionInfo: {
+          modelProvider: "openai",
+          model: "gpt-4",
+          thinkingLevel: "medium",
+          verboseLevel: "off",
+          reasoningLevel: "off",
+          elevatedLevel: "off",
+          groupActivation: "mention",
+        },
+        outputStyle: "standard",
+        permissionMode: "auto",
+      };
+      const { handleCommand } = createCommandHandlers({
+        client: { patchSession } as never,
+        chatLog: { addSystem, getLastAssistantText: () => "" } as never,
+        tui: { requestRender } as never,
+        opts: {},
+        state: stateObj as never,
+        deliverDefault: false,
+        openOverlay,
+        closeOverlay,
+        refreshSessionInfo,
+        loadHistory,
+        setSession: vi.fn(),
+        refreshAgents: vi.fn(),
+        abortActive: vi.fn(),
+        setActivityStatus: vi.fn(),
+        formatSessionKey: vi.fn(),
+        applySessionInfoFromPatch,
+        noteLocalRunId: vi.fn(),
+      });
+      return {
+        handleCommand,
+        addSystem,
+        openOverlay,
+        closeOverlay,
+        requestRender,
+        patchSession,
+        applySessionInfoFromPatch,
+        refreshSessionInfo,
+        loadHistory,
+        stateObj,
+      };
+    }
+
+    it("/style without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/style");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+      const selector = openOverlay.mock.calls[0][0];
+      expect(selector).toBeDefined();
+      expect(typeof selector.onSelect).toBe("function");
+      expect(typeof selector.onCancel).toBe("function");
+    });
+
+    it("/style with valid arg still sets directly", async () => {
+      const { handleCommand, addSystem, openOverlay, stateObj } = setupOverlay();
+      await handleCommand("/style learning");
+      expect(openOverlay).not.toHaveBeenCalled();
+      expect(stateObj.outputStyle).toBe("learning");
+      expect(addSystem).toHaveBeenCalledWith("output style set to learning");
+    });
+
+    it("/theme without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/theme");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("/theme with invalid arg shows error", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/theme nope");
+      expect(openOverlay).not.toHaveBeenCalled();
+      expect(addSystem).toHaveBeenCalledWith(expect.stringContaining("unknown theme"));
+    });
+
+    it("/think without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/think");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("/verbose without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/verbose");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("/reasoning without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/reasoning");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("/elevated without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/elevated");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("/activation without args opens select overlay", async () => {
+      const { handleCommand, openOverlay, addSystem } = setupOverlay();
+      await handleCommand("/activation");
+      expect(openOverlay).toHaveBeenCalledTimes(1);
+      expect(addSystem).not.toHaveBeenCalled();
+    });
+
+    it("onCancel closes overlay", async () => {
+      const { handleCommand, openOverlay, closeOverlay, requestRender } = setupOverlay();
+      await handleCommand("/style");
+      const selector = openOverlay.mock.calls[0][0];
+      selector.onCancel();
+      expect(closeOverlay).toHaveBeenCalledTimes(1);
+      expect(requestRender).toHaveBeenCalled();
+    });
+
+    it("/style onSelect applies value and closes overlay", async () => {
+      const { handleCommand, openOverlay, closeOverlay, addSystem, stateObj } = setupOverlay();
+      await handleCommand("/style");
+      const selector = openOverlay.mock.calls[0][0];
+      selector.onSelect({ value: "explanatory", label: "explanatory" });
+      expect(stateObj.outputStyle).toBe("explanatory");
+      expect(addSystem).toHaveBeenCalledWith("output style set to explanatory");
+      expect(closeOverlay).toHaveBeenCalled();
+    });
+
+    it("/think onSelect patches session", async () => {
+      const { handleCommand, openOverlay, patchSession } = setupOverlay();
+      await handleCommand("/think");
+      const selector = openOverlay.mock.calls[0][0];
+      selector.onSelect({ value: "high", label: "high" });
+      // async — wait for microtask
+      await new Promise((r) => setTimeout(r, 10));
+      expect(patchSession).toHaveBeenCalledWith(expect.objectContaining({ thinkingLevel: "high" }));
     });
   });
 });

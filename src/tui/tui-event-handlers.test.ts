@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEventHandlers } from "./tui-event-handlers.js";
+import { filterHeartbeatMessages } from "./tui-session-actions.js";
 import type { AgentEvent, ChatEvent, TuiStateAccess } from "./tui-types.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -43,6 +44,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     activityStatus: "idle",
     statusTimeout: null,
     lastCtrlCAt: 0,
+    pendingImages: new Map(),
     ...overrides,
   });
 
@@ -432,5 +434,116 @@ describe("tui-event-handlers: handleAgentEvent", () => {
 
     expect(chatLog.dropAssistant).toHaveBeenCalledWith("run-silent");
     expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
+  });
+
+  it("ignores heartbeat delta events", () => {
+    const { state, chatLog, tui, handleChatEvent } = createHandlersHarness({
+      state: { activeChatRunId: null },
+    });
+
+    handleChatEvent({
+      runId: "heartbeat-run",
+      sessionKey: state.currentSessionKey,
+      state: "delta",
+      isHeartbeat: true,
+      message: { content: [{ type: "text", text: "HEARTBEAT_OK" }] },
+    });
+
+    expect(chatLog.updateAssistant).not.toHaveBeenCalled();
+    expect(tui.requestRender).not.toHaveBeenCalled();
+  });
+
+  it("ignores heartbeat final events and does not reload history", () => {
+    const { state, chatLog, loadHistory, handleChatEvent } = createHandlersHarness({
+      state: { activeChatRunId: null },
+    });
+
+    handleChatEvent({
+      runId: "heartbeat-run",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      isHeartbeat: true,
+    });
+
+    expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
+    expect(chatLog.dropAssistant).not.toHaveBeenCalled();
+    expect(loadHistory).not.toHaveBeenCalled();
+  });
+
+  it("ignores heartbeat error events", () => {
+    const { state, chatLog, handleChatEvent } = createHandlersHarness({
+      state: { activeChatRunId: null },
+    });
+
+    handleChatEvent({
+      runId: "heartbeat-run",
+      sessionKey: state.currentSessionKey,
+      state: "error",
+      isHeartbeat: true,
+      errorMessage: "timeout",
+    });
+
+    expect(chatLog.addSystem).not.toHaveBeenCalled();
+  });
+});
+
+describe("filterHeartbeatMessages", () => {
+  it("removes pure HEARTBEAT_OK assistant messages and preceding user prompts", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "reply HEARTBEAT_OK." }] },
+      { role: "assistant", content: [{ type: "text", text: "HEARTBEAT_OK" }] },
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+      { role: "assistant", content: [{ type: "text", text: "hi there" }] },
+    ];
+    const filtered = filterHeartbeatMessages(messages);
+    expect(filtered).toHaveLength(2);
+    expect((filtered[0] as Record<string, unknown>).role).toBe("user");
+    expect((filtered[1] as Record<string, unknown>).role).toBe("assistant");
+  });
+
+  it("keeps assistant messages with alert content beyond HEARTBEAT_OK", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "reply HEARTBEAT_OK." }] },
+      { role: "assistant", content: [{ type: "text", text: "HEARTBEAT_OK. Disk space at 95%." }] },
+    ];
+    const filtered = filterHeartbeatMessages(messages);
+    expect(filtered).toHaveLength(2);
+  });
+
+  it("handles HEARTBEAT_OK wrapped in markdown", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "Check status. reply HEARTBEAT_OK." }] },
+      { role: "assistant", content: [{ type: "text", text: "**HEARTBEAT_OK**" }] },
+    ];
+    const filtered = filterHeartbeatMessages(messages);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("returns original array when no heartbeat messages present", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "What is the weather?" }] },
+      { role: "assistant", content: [{ type: "text", text: "It's sunny." }] },
+    ];
+    const filtered = filterHeartbeatMessages(messages);
+    expect(filtered).toBe(messages); // Same reference — no copy
+  });
+
+  it("handles empty array", () => {
+    expect(filterHeartbeatMessages([])).toEqual([]);
+  });
+
+  it("removes interleaved toolResult messages in heartbeat exchanges", () => {
+    const messages = [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Read HOPE.md if it exists. reply HEARTBEAT_OK." }],
+      },
+      { role: "toolResult", toolCallId: "tc1", content: [] },
+      { role: "assistant", content: [{ type: "text", text: "HEARTBEAT_OK" }] },
+      { role: "user", content: [{ type: "text", text: "real question" }] },
+      { role: "assistant", content: [{ type: "text", text: "real answer" }] },
+    ];
+    const filtered = filterHeartbeatMessages(messages);
+    expect(filtered).toHaveLength(2);
   });
 });

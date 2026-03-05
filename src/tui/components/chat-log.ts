@@ -52,6 +52,10 @@ export class ChatLog extends Container {
     this.streamingRuns.clear();
   }
 
+  addWelcome(component: Component) {
+    this.append(component);
+  }
+
   addSystem(text: string) {
     this.append(new Spacer(1));
     this.append(new Text(theme.system(text), 1, 0));

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@mariozechner/pi-tui";
 import {
   formatThinkingLevels,
+  listThinkingLevelLabels,
   normalizeUsageDisplay,
   resolveResponseUsageMode,
 } from "../auto-reply/thinking.js";
@@ -23,9 +24,10 @@ import type { ChatLog } from "./components/chat-log.js";
 import {
   createFilterableSelectList,
   createSearchableSelectList,
+  createSelectList,
   createSettingsList,
 } from "./components/selectors.js";
-import type { GatewayChatClient } from "./gateway-chat.js";
+import type { ChatAttachmentInput, GatewayChatClient } from "./gateway-chat.js";
 import { formatStatusSummary } from "./tui-status-summary.js";
 import type {
   AgentSummary,
@@ -290,26 +292,23 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       case "agent":
+      case "agents":
         if (!args) {
           await openAgentSelector();
         } else {
           await setAgent(args);
         }
         break;
-      case "agents":
-        await openAgentSelector();
-        break;
       case "session":
+      case "sessions":
         if (!args) {
           await openSessionSelector();
         } else {
           await setSession(args);
         }
         break;
-      case "sessions":
-        await openSessionSelector();
-        break;
       case "model":
+      case "models":
         if (!args) {
           await openModelSelector();
         } else {
@@ -326,17 +325,41 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
         }
         break;
-      case "models":
-        await openModelSelector();
-        break;
       case "think":
         if (!args) {
-          const levels = formatThinkingLevels(
+          const levels = listThinkingLevelLabels(
             state.sessionInfo.modelProvider,
             state.sessionInfo.model,
-            "|",
           );
-          chatLog.addSystem(`usage: /think <${levels}>`);
+          const currentThink = state.sessionInfo.thinkingLevel ?? "medium";
+          const thinkItems = levels.map((l) => ({
+            value: l,
+            label: l === currentThink ? `${l} (current)` : l,
+          }));
+          const thinkSelector = createSelectList(thinkItems, thinkItems.length);
+          thinkSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  thinkingLevel: item.value,
+                });
+                chatLog.addSystem(`thinking set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`think failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          thinkSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(thinkSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -351,9 +374,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`think failed: ${String(err)}`);
         }
         break;
-      case "verbose":
+      case "verbose": {
         if (!args) {
-          chatLog.addSystem("usage: /verbose <on|off>");
+          const verboseOpts = ["on", "off"];
+          const currentVerbose = state.sessionInfo.verboseLevel ?? "off";
+          const verboseItems = verboseOpts.map((v) => ({
+            value: v,
+            label: v === currentVerbose ? `${v} (current)` : v,
+          }));
+          const verboseSelector = createSelectList(verboseItems, verboseItems.length);
+          verboseSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  verboseLevel: item.value,
+                });
+                chatLog.addSystem(`verbose set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await loadHistory();
+              } catch (err) {
+                chatLog.addSystem(`verbose failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          verboseSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(verboseSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -368,9 +420,39 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`verbose failed: ${String(err)}`);
         }
         break;
-      case "reasoning":
+      }
+      case "reasoning": {
         if (!args) {
-          chatLog.addSystem("usage: /reasoning <on|off>");
+          const reasoningOpts = ["on", "off"];
+          const currentReasoning = state.sessionInfo.reasoningLevel ?? "off";
+          const reasoningItems = reasoningOpts.map((r) => ({
+            value: r,
+            label: r === currentReasoning ? `${r} (current)` : r,
+          }));
+          const reasoningSelector = createSelectList(reasoningItems, reasoningItems.length);
+          reasoningSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  reasoningLevel: item.value,
+                });
+                chatLog.addSystem(`reasoning set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`reasoning failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          reasoningSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(reasoningSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -385,6 +467,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`reasoning failed: ${String(err)}`);
         }
         break;
+      }
       case "usage": {
         const normalized = args ? normalizeUsageDisplay(args) : undefined;
         if (args && !normalized) {
@@ -408,9 +491,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
-      case "elevated":
+      case "elevated": {
         if (!args) {
-          chatLog.addSystem("usage: /elevated <on|off|ask|full>");
+          const elevatedOpts = ["on", "off", "ask", "full"];
+          const currentElevated = state.sessionInfo.elevatedLevel ?? "off";
+          const elevatedItems = elevatedOpts.map((e) => ({
+            value: e,
+            label: e === currentElevated ? `${e} (current)` : e,
+          }));
+          const elevatedSelector = createSelectList(elevatedItems, elevatedItems.length);
+          elevatedSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  elevatedLevel: item.value,
+                });
+                chatLog.addSystem(`elevated set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`elevated failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          elevatedSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(elevatedSelector);
+          tui.requestRender();
           break;
         }
         if (!["on", "off", "ask", "full"].includes(args)) {
@@ -429,9 +541,39 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`elevated failed: ${String(err)}`);
         }
         break;
-      case "activation":
+      }
+      case "activation": {
         if (!args) {
-          chatLog.addSystem("usage: /activation <mention|always>");
+          const activationOpts = ["mention", "always"];
+          const currentActivation = state.sessionInfo.groupActivation ?? "mention";
+          const activationItems = activationOpts.map((a) => ({
+            value: a,
+            label: a === currentActivation ? `${a} (current)` : a,
+          }));
+          const activationSelector = createSelectList(activationItems, activationItems.length);
+          activationSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  groupActivation: item.value === "always" ? "always" : "mention",
+                });
+                chatLog.addSystem(`activation set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`activation failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          activationSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(activationSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -446,6 +588,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      }
       case "context": {
         const used = state.sessionInfo.totalTokens ?? 0;
         const max = state.sessionInfo.contextTokens ?? 0;
@@ -483,10 +626,24 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "style": {
         const styleName = args.toLowerCase();
         if (!styleName) {
-          const current = state.outputStyle ?? "standard";
-          chatLog.addSystem(
-            `current style: ${current}. usage: /style <${OUTPUT_STYLE_NAMES.join("|")}>`,
-          );
+          const currentStyle = state.outputStyle ?? "standard";
+          const styleItems = OUTPUT_STYLE_NAMES.map((s) => ({
+            value: s,
+            label: s === currentStyle ? `${s} (current)` : s,
+          }));
+          const styleSelector = createSelectList(styleItems, styleItems.length);
+          styleSelector.onSelect = (item) => {
+            state.outputStyle = item.value as OutputStyle;
+            chatLog.addSystem(`output style set to ${item.value}`);
+            closeOverlay();
+            tui.requestRender();
+          };
+          styleSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(styleSelector);
+          tui.requestRender();
           break;
         }
         if (!isValidOutputStyle(styleName)) {
@@ -499,10 +656,29 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       }
       case "theme": {
         const preset = args.toLowerCase();
-        if (!preset || !THEME_PRESETS.includes(preset as ThemePreset)) {
-          chatLog.addSystem(
-            `current theme: ${getThemePreset()}. usage: /theme <${THEME_PRESETS.join("|")}>`,
-          );
+        if (!preset) {
+          const currentTheme = getThemePreset();
+          const themeItems = THEME_PRESETS.map((t) => ({
+            value: t,
+            label: t === currentTheme ? `${t} (current)` : t,
+          }));
+          const themeSelector = createSelectList(themeItems, themeItems.length);
+          themeSelector.onSelect = (item) => {
+            setThemePreset(item.value as ThemePreset);
+            chatLog.addSystem(`theme set to ${item.value}`);
+            closeOverlay();
+            tui.requestRender();
+          };
+          themeSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(themeSelector);
+          tui.requestRender();
+          break;
+        }
+        if (!THEME_PRESETS.includes(preset as ThemePreset)) {
+          chatLog.addSystem(`unknown theme. usage: /theme <${THEME_PRESETS.join("|")}>`);
           break;
         }
         setThemePreset(preset as ThemePreset);
@@ -731,6 +907,23 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       noteLocalRunId(runId);
       state.activeChatRunId = runId;
       setActivityStatus("sending");
+
+      // Collect pending images as attachments
+      let attachments: ChatAttachmentInput[] | undefined;
+      if (state.pendingImages.size > 0) {
+        attachments = [];
+        let idx = 0;
+        for (const [, img] of state.pendingImages) {
+          idx++;
+          attachments.push({
+            mimeType: img.mimeType,
+            fileName: `paste-${idx}.png`,
+            content: img.base64,
+          });
+        }
+        state.pendingImages.clear();
+      }
+
       await client.sendChat({
         sessionKey: state.currentSessionKey,
         message: styledText,
@@ -738,6 +931,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         deliver: deliverDefault,
         timeoutMs: opts.timeoutMs,
         runId,
+        attachments,
       });
       setActivityStatus("waiting");
     } catch (err) {
