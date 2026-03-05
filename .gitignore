@@ -145,3 +145,6 @@ tools/jetbrains-plugin/build/
 tools/vscode-extension/dist/
 tools/vscode-extension/*.vsix
 tools/vscode-extension/.claude/
+
+# IDE workspace settings (may contain tokens)
+.vscode/
