@@ -5,9 +5,17 @@
 /*  webview bundles don't pull in Node/vscode dependencies.            */
 /* ------------------------------------------------------------------ */
 
+/** Image attachment sent with a chat message. */
+export type ChatAttachmentView = {
+  name: string;
+  mimeType: string;
+  /** Base64-encoded image data. */
+  dataBase64: string;
+};
+
 /** Messages sent from the webview to the extension host. */
 export type WebviewMessage =
-  | { type: "send"; sessionId: string; content: string }
+  | { type: "send"; sessionId: string; content: string; attachments?: ChatAttachmentView[] }
   | { type: "history"; sessionId: string }
   | { type: "abort"; sessionId: string }
   | { type: "sessions" }
@@ -22,7 +30,14 @@ export type ExtensionMessage =
   | { type: "sessions"; sessions: SessionView[] }
   | { type: "history"; messages: ChatMessageView[] }
   | { type: "message"; message: ChatMessageView }
+  | {
+      type: "stream";
+      runId: string;
+      state: "delta" | "final" | "aborted" | "error";
+      content: string;
+    }
   | { type: "error"; text: string }
+  | { type: "connectionStatus"; connected: boolean }
   | { type: "plan.data"; plan: PlanView | null }
   | { type: "trace.data"; events: TraceEventView[] }
   | { type: "kg.results"; entries: KgEntryView[] };
@@ -42,6 +57,7 @@ export type ChatMessageView = {
   content: string;
   timestamp: string;
   toolCalls?: Array<{ name: string; id: string }>;
+  attachments?: ChatAttachmentView[];
 };
 
 export type PlanView = {

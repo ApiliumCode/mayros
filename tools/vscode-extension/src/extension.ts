@@ -8,14 +8,18 @@ import { ChatPanel } from "./panels/chat-panel.js";
 import { PlanPanel } from "./panels/plan-panel.js";
 import { TracePanel } from "./panels/trace-panel.js";
 import { KgPanel } from "./panels/kg-panel.js";
+import { explainCode, sendSelection } from "./editor/code-actions.js";
+import { MayrosCodeLensProvider, sendMarker } from "./editor/gutter-markers.js";
 
 let client: MayrosClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = getConfig();
+
   client = new MayrosClient(config.gatewayUrl, {
     maxReconnectAttempts: config.maxReconnectAttempts,
     reconnectDelayMs: config.reconnectDelayMs,
+    token: config.gatewayToken || undefined,
   });
 
   // Sidebar tree-view providers
@@ -68,6 +72,25 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("mayros.openKg", () => {
       KgPanel.createOrShow(context.extensionUri, client!);
     }),
+
+    // Editor context actions
+    vscode.commands.registerCommand("mayros.explainCode", () => {
+      explainCode(client!);
+    }),
+
+    vscode.commands.registerCommand("mayros.sendSelection", () => {
+      sendSelection(client!);
+    }),
+
+    vscode.commands.registerCommand(
+      "mayros.sendMarker",
+      (file: string, line: number, text: string) => {
+        sendMarker(client!, file, line, text);
+      },
+    ),
+
+    // CodeLens provider for gutter markers
+    vscode.languages.registerCodeLensProvider({ scheme: "file" }, new MayrosCodeLensProvider()),
   );
 
   // React to configuration changes
@@ -80,6 +103,7 @@ export function activate(context: vscode.ExtensionContext): void {
             client = new MayrosClient(newConfig.gatewayUrl, {
               maxReconnectAttempts: newConfig.maxReconnectAttempts,
               reconnectDelayMs: newConfig.reconnectDelayMs,
+              token: newConfig.gatewayToken || undefined,
             });
             // Re-wire tree providers
             sessionsProvider.setClient(client!);
@@ -94,6 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
         client = new MayrosClient(newConfig.gatewayUrl, {
           maxReconnectAttempts: newConfig.maxReconnectAttempts,
           reconnectDelayMs: newConfig.reconnectDelayMs,
+          token: newConfig.gatewayToken || undefined,
         });
         sessionsProvider.setClient(client!);
         agentsProvider.setClient(client!);
@@ -102,11 +127,21 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // Auto-connect on activation
+  // Auto-connect on activation (retry once after short delay on failure)
   if (config.autoConnect) {
-    client.connect().catch(() => {
-      /* silent on startup — user can manually connect */
-    });
+    client
+      .connect()
+      .then(() => {
+        refreshAll();
+      })
+      .catch(() => {
+        setTimeout(() => {
+          client
+            ?.connect()
+            .then(() => refreshAll())
+            .catch(() => {});
+        }, 2000);
+      });
   }
 
   function refreshAll(): void {

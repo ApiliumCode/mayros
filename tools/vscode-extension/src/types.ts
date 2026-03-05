@@ -45,11 +45,19 @@ export type SkillInfo = {
   lastUsedAt?: string;
 };
 
+export type ChatAttachment = {
+  name: string;
+  mimeType: string;
+  /** Base64-encoded image data. */
+  dataBase64: string;
+};
+
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: string;
   toolCalls?: Array<{ name: string; id: string }>;
+  attachments?: ChatAttachment[];
 };
 
 export type PlanPhase = "idle" | "explore" | "assert" | "approve" | "execute" | "done";
@@ -98,7 +106,7 @@ export type MayrosClientEvents = {
 /* ------------------------------------------------------------------ */
 
 export type WebviewToExtension =
-  | { type: "send"; sessionId: string; content: string }
+  | { type: "send"; sessionId: string; content: string; attachments?: ChatAttachment[] }
   | { type: "history"; sessionId: string }
   | { type: "abort"; sessionId: string }
   | { type: "sessions" }
@@ -113,6 +121,7 @@ export type ExtensionToWebview =
   | { type: "history"; messages: ChatMessage[] }
   | { type: "message"; message: ChatMessage }
   | { type: "error"; text: string }
+  | { type: "connectionStatus"; connected: boolean }
   | { type: "plan.data"; plan: PlanInfo | null }
   | { type: "trace.data"; events: TraceEvent[] }
   | { type: "kg.results"; entries: KgEntry[] };

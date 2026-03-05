@@ -196,7 +196,24 @@ describe("ChatPanel", () => {
       content: "hello world",
     });
 
-    expect(client.sendMessage).toHaveBeenCalledWith("s1", "hello world");
+    expect(client.sendMessage).toHaveBeenCalledWith("s1", "hello world", undefined);
+  });
+
+  it("handles 'send' with attachments", async () => {
+    const client = createMockClient();
+    const extensionUri = "file:///ext" as unknown as import("vscode").Uri;
+
+    ChatPanel.createOrShow(extensionUri, client);
+
+    const attachments = [{ name: "photo.png", mimeType: "image/png", dataBase64: "iVBOR..." }];
+    await messageCallback!({
+      type: "send",
+      sessionId: "s1",
+      content: "look at this",
+      attachments,
+    });
+
+    expect(client.sendMessage).toHaveBeenCalledWith("s1", "look at this", attachments);
   });
 
   it("handles 'abort' message from webview", async () => {
@@ -252,7 +269,7 @@ describe("ChatPanel", () => {
 
     ChatPanel.createOrShow(extensionUri, client);
 
-    expect(client.on).toHaveBeenCalledWith("event:chat.message", expect.any(Function));
+    expect(client.on).toHaveBeenCalledWith("event:chat", expect.any(Function));
   });
 
   it("unsubscribes from events on dispose", () => {
@@ -265,6 +282,75 @@ describe("ChatPanel", () => {
 
     fireDispose();
 
-    expect(client.off).toHaveBeenCalledWith("event:chat.message", expect.any(Function));
+    expect(client.off).toHaveBeenCalledWith("event:chat", expect.any(Function));
+  });
+
+  it("sends initial connection status on show", () => {
+    const client = createMockClient({ connected: true });
+    const extensionUri = "file:///ext" as unknown as import("vscode").Uri;
+
+    ChatPanel.createOrShow(extensionUri, client);
+
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: "connectionStatus",
+      connected: true,
+    });
+  });
+
+  it("subscribes to connected and disconnected events", () => {
+    const client = createMockClient();
+    const extensionUri = "file:///ext" as unknown as import("vscode").Uri;
+
+    ChatPanel.createOrShow(extensionUri, client);
+
+    expect(client.on).toHaveBeenCalledWith("connected", expect.any(Function));
+    expect(client.on).toHaveBeenCalledWith("disconnected", expect.any(Function));
+  });
+
+  it("forwards connection status changes to webview", () => {
+    const client = createMockClient();
+    const extensionUri = "file:///ext" as unknown as import("vscode").Uri;
+
+    ChatPanel.createOrShow(extensionUri, client);
+
+    // Find the connected handler
+    const onCalls = (client.on as ReturnType<typeof vi.fn>).mock.calls;
+    const connectedHandler = onCalls.find(
+      (c: unknown[]) => c[0] === "connected",
+    )?.[1] as () => void;
+    const disconnectedHandler = onCalls.find(
+      (c: unknown[]) => c[0] === "disconnected",
+    )?.[1] as () => void;
+
+    expect(connectedHandler).toBeDefined();
+    expect(disconnectedHandler).toBeDefined();
+
+    postMessageSpy.mockClear();
+
+    connectedHandler();
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: "connectionStatus",
+      connected: true,
+    });
+
+    postMessageSpy.mockClear();
+
+    disconnectedHandler();
+    expect(postMessageSpy).toHaveBeenCalledWith({
+      type: "connectionStatus",
+      connected: false,
+    });
+  });
+
+  it("unsubscribes connection listeners on dispose", () => {
+    const client = createMockClient();
+    const extensionUri = "file:///ext" as unknown as import("vscode").Uri;
+
+    ChatPanel.createOrShow(extensionUri, client);
+
+    fireDispose();
+
+    expect(client.off).toHaveBeenCalledWith("connected", expect.any(Function));
+    expect(client.off).toHaveBeenCalledWith("disconnected", expect.any(Function));
   });
 });
