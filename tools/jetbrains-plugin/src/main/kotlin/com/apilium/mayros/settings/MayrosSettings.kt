@@ -24,7 +24,8 @@ class MayrosSettings : PersistentStateComponent<MayrosSettings.State> {
         var gatewayUrl: String = "ws://127.0.0.1:18789",
         var autoConnect: Boolean = true,
         var reconnectDelayMs: Long = 3000,
-        var maxReconnectAttempts: Int = 5
+        var maxReconnectAttempts: Int = 5,
+        var gatewayToken: String = ""
     )
 
     private var state = State()
@@ -51,6 +52,10 @@ class MayrosSettings : PersistentStateComponent<MayrosSettings.State> {
         get() = state.maxReconnectAttempts
         set(value) { state.maxReconnectAttempts = value }
 
+    var gatewayToken: String
+        get() = state.gatewayToken
+        set(value) { state.gatewayToken = value }
+
     companion object {
         fun getInstance(): MayrosSettings {
             return ApplicationManager.getApplication().getService(MayrosSettings::class.java)
@@ -68,6 +73,7 @@ class MayrosConfigurable : Configurable {
     private var autoConnectBox: JCheckBox? = null
     private var reconnectDelayField: JTextField? = null
     private var maxAttemptsField: JTextField? = null
+    private var tokenField: JPasswordField? = null
 
     override fun getDisplayName(): String = "Mayros"
 
@@ -78,8 +84,9 @@ class MayrosConfigurable : Configurable {
         autoConnectBox = JCheckBox("Auto-connect on startup", settings.autoConnect)
         reconnectDelayField = JTextField(settings.reconnectDelayMs.toString(), 10)
         maxAttemptsField = JTextField(settings.maxReconnectAttempts.toString(), 10)
+        tokenField = JPasswordField(settings.gatewayToken, 30)
 
-        val formPanel = JPanel(GridLayout(4, 2, 8, 8)).apply {
+        val formPanel = JPanel(GridLayout(5, 2, 8, 8)).apply {
             add(JLabel("Gateway URL:"))
             add(urlField)
             add(JLabel("Auto-connect:"))
@@ -88,6 +95,8 @@ class MayrosConfigurable : Configurable {
             add(reconnectDelayField)
             add(JLabel("Max reconnect attempts:"))
             add(maxAttemptsField)
+            add(JLabel("Gateway Token:"))
+            add(tokenField)
         }
 
         panel = JPanel(BorderLayout()).apply {
@@ -102,7 +111,8 @@ class MayrosConfigurable : Configurable {
         return urlField?.text != settings.gatewayUrl ||
             autoConnectBox?.isSelected != settings.autoConnect ||
             reconnectDelayField?.text != settings.reconnectDelayMs.toString() ||
-            maxAttemptsField?.text != settings.maxReconnectAttempts.toString()
+            maxAttemptsField?.text != settings.maxReconnectAttempts.toString() ||
+            String(tokenField?.password ?: charArrayOf()) != settings.gatewayToken
     }
 
     override fun apply() {
@@ -111,6 +121,7 @@ class MayrosConfigurable : Configurable {
         settings.autoConnect = autoConnectBox?.isSelected ?: settings.autoConnect
         settings.reconnectDelayMs = reconnectDelayField?.text?.toLongOrNull() ?: settings.reconnectDelayMs
         settings.maxReconnectAttempts = maxAttemptsField?.text?.toIntOrNull() ?: settings.maxReconnectAttempts
+        settings.gatewayToken = String(tokenField?.password ?: charArrayOf())
     }
 
     override fun reset() {
@@ -119,6 +130,7 @@ class MayrosConfigurable : Configurable {
         autoConnectBox?.isSelected = settings.autoConnect
         reconnectDelayField?.text = settings.reconnectDelayMs.toString()
         maxAttemptsField?.text = settings.maxReconnectAttempts.toString()
+        tokenField?.text = settings.gatewayToken
     }
 
     override fun disposeUIResources() {
@@ -127,5 +139,6 @@ class MayrosConfigurable : Configurable {
         autoConnectBox = null
         reconnectDelayField = null
         maxAttemptsField = null
+        tokenField = null
     }
 }

@@ -25,6 +25,8 @@ class TracesPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
     private val tableModel = DefaultTableModel(columnNames, 0)
     private val traceTable = JTable(tableModel)
     private val clearButton = JButton("Clear")
+    private val filterField = JTextField(12)
+    private val filterButton = JButton("Filter")
     private val statusLabel = JLabel("Not connected")
     private val service = MayrosService.getInstance()
     private var maxEvents = 500
@@ -49,15 +51,58 @@ class TracesPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
         add(scrollPane, BorderLayout.CENTER)
 
         // Top bar
+        val buttonsPanel = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0)).apply {
+            add(JLabel("Agent:"))
+            add(filterField)
+            add(filterButton)
+            add(clearButton)
+        }
         val topPanel = JPanel(BorderLayout()).apply {
             add(statusLabel, BorderLayout.CENTER)
-            add(clearButton, BorderLayout.EAST)
+            add(buttonsPanel, BorderLayout.EAST)
         }
         add(topPanel, BorderLayout.NORTH)
 
         clearButton.addActionListener {
             tableModel.rowCount = 0
+            filterField.text = ""
         }
+
+        filterButton.addActionListener { fetchFilteredEvents() }
+    }
+
+    private fun fetchFilteredEvents() {
+        val client = service.getClient() ?: return
+        if (!client.isConnected) return
+
+        val agentId = filterField.text.trim().takeIf { it.isNotEmpty() }
+        statusLabel.text = "Fetching..."
+
+        Thread {
+            try {
+                val events = client.getTraceEvents(agentId, maxEvents)
+                SwingUtilities.invokeLater {
+                    tableModel.rowCount = 0
+                    for (event in events) {
+                        val time = event.get("timestamp")?.asString?.takeLast(12) ?: ""
+                        val type = event.get("type")?.asString ?: ""
+                        val agent = event.get("agentId")?.asString ?: ""
+                        val fields = event.get("fields")?.asJsonObject
+                        val details = fields?.entrySet()?.joinToString(", ") {
+                            val v = try { it.value.asString } catch (_: Exception) { it.value.toString() }
+                            "${it.key}=$v"
+                        } ?: ""
+                        tableModel.addRow(arrayOf(time, type, agent, details))
+                    }
+                    val label = if (agentId != null) "Filtered: $agentId" else "All events"
+                    statusLabel.text = "$label — ${events.size} event(s)"
+                }
+            } catch (e: Exception) {
+                SwingUtilities.invokeLater {
+                    statusLabel.text = "Error: ${e.message}"
+                }
+            }
+        }.start()
     }
 
     private fun clearRegisteredListeners() {
