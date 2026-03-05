@@ -16,20 +16,10 @@
         <applicationService
             serviceImplementation="com.apilium.mayros.MayrosService"/>
 
-        <!-- Tool Windows -->
-        <toolWindow id="Mayros Chat"
+        <!-- Unified tool window with tabbed panels -->
+        <toolWindow id="Mayros"
                     anchor="right"
-                    factoryClass="com.apilium.mayros.ui.ChatPanelFactory"
-                    icon="/icons/mayros-13.svg"/>
-
-        <toolWindow id="Mayros Agents"
-                    anchor="right"
-                    factoryClass="com.apilium.mayros.ui.AgentsPanelFactory"
-                    icon="/icons/mayros-13.svg"/>
-
-        <toolWindow id="Mayros Traces"
-                    anchor="bottom"
-                    factoryClass="com.apilium.mayros.ui.TracesPanelFactory"
+                    factoryClass="com.apilium.mayros.ui.MayrosMainPanelFactory"
                     icon="/icons/mayros-13.svg"/>
 
         <!-- Settings -->

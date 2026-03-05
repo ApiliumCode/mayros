@@ -48,7 +48,7 @@ class ExplainCodeAction : AnAction() {
                     MayrosClient.ChatMessage(
                         sessionKey = sessionKey,
                         message = message,
-                        runId = UUID.randomUUID().toString()
+                        idempotencyKey = "jb-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
                     )
                 )
             } catch (_: Exception) {

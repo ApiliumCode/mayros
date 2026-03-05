@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13">
+  <!-- Clipboard / plan icon -->
+  <rect x="2.5" y="2" width="8" height="9.5" rx="1" fill="none" stroke="#6366F1" stroke-width="1.2"/>
+  <path d="M5 1.5h3v1.5H5z" fill="#6366F1"/>
+  <line x1="4.5" y1="5.5" x2="8.5" y2="5.5" stroke="#6366F1" stroke-width="1"/>
+  <line x1="4.5" y1="7.5" x2="7.5" y2="7.5" stroke="#6366F1" stroke-width="1"/>
+  <line x1="4.5" y1="9.5" x2="6.5" y2="9.5" stroke="#6366F1" stroke-width="1"/>
+</svg>

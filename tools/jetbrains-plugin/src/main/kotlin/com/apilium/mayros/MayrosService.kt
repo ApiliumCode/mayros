@@ -53,7 +53,8 @@ class MayrosService : Disposable {
             options = MayrosClient.ClientOptions(
                 maxReconnectAttempts = settings.maxReconnectAttempts,
                 reconnectDelayMs = settings.reconnectDelayMs,
-                requestTimeoutMs = 30000
+                requestTimeoutMs = 30000,
+                token = settings.gatewayToken.takeIf { it.isNotBlank() }
             )
         )
 
