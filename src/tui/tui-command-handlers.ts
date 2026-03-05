@@ -1,21 +1,32 @@
 import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@mariozechner/pi-tui";
 import {
-  formatThinkingLevels,
+  listThinkingLevelLabels,
   normalizeUsageDisplay,
   resolveResponseUsageMode,
 } from "../auto-reply/thinking.js";
+import { expandMarkdownCommand, findMarkdownCommand } from "../commands/markdown-commands.js";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
+import { execSync, spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { helpText, parseCommand } from "./commands.js";
+import { formatContextVisualization } from "./context-visualizer.js";
+import { renderDiff, renderDiffStats } from "./diff-renderer.js";
+import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
+import type { OutputStyle } from "./output-styles.js";
+import { THEME_PRESETS } from "./theme/palettes.js";
+import type { ThemePreset } from "./theme/palettes.js";
+import { setThemePreset, getThemePreset } from "./theme/theme.js";
 import type { ChatLog } from "./components/chat-log.js";
 import {
   createFilterableSelectList,
   createSearchableSelectList,
+  createSelectList,
   createSettingsList,
 } from "./components/selectors.js";
-import type { GatewayChatClient } from "./gateway-chat.js";
+import type { ChatAttachmentInput, GatewayChatClient } from "./gateway-chat.js";
 import { formatStatusSummary } from "./tui-status-summary.js";
 import type {
   AgentSummary,
@@ -214,6 +225,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         currentValue: state.showThinking ? "on" : "off",
         values: ["off", "on"],
       },
+      {
+        id: "permission",
+        label: "Permission mode",
+        currentValue: state.permissionMode ?? "auto",
+        values: ["auto", "ask", "deny"],
+      },
     ];
     const settings = createSettingsList(
       items,
@@ -225,6 +242,9 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (id === "thinking") {
           state.showThinking = value === "on";
           void loadHistory();
+        }
+        if (id === "permission") {
+          state.permissionMode = value as "auto" | "ask" | "deny";
         }
         tui.requestRender();
       },
@@ -271,26 +291,23 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       case "agent":
+      case "agents":
         if (!args) {
           await openAgentSelector();
         } else {
           await setAgent(args);
         }
         break;
-      case "agents":
-        await openAgentSelector();
-        break;
       case "session":
+      case "sessions":
         if (!args) {
           await openSessionSelector();
         } else {
           await setSession(args);
         }
         break;
-      case "sessions":
-        await openSessionSelector();
-        break;
       case "model":
+      case "models":
         if (!args) {
           await openModelSelector();
         } else {
@@ -307,17 +324,41 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
         }
         break;
-      case "models":
-        await openModelSelector();
-        break;
       case "think":
         if (!args) {
-          const levels = formatThinkingLevels(
+          const levels = listThinkingLevelLabels(
             state.sessionInfo.modelProvider,
             state.sessionInfo.model,
-            "|",
           );
-          chatLog.addSystem(`usage: /think <${levels}>`);
+          const currentThink = state.sessionInfo.thinkingLevel ?? "medium";
+          const thinkItems = levels.map((l) => ({
+            value: l,
+            label: l === currentThink ? `${l} (current)` : l,
+          }));
+          const thinkSelector = createSelectList(thinkItems, thinkItems.length);
+          thinkSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  thinkingLevel: item.value,
+                });
+                chatLog.addSystem(`thinking set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`think failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          thinkSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(thinkSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -332,9 +373,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`think failed: ${String(err)}`);
         }
         break;
-      case "verbose":
+      case "verbose": {
         if (!args) {
-          chatLog.addSystem("usage: /verbose <on|off>");
+          const verboseOpts = ["on", "off"];
+          const currentVerbose = state.sessionInfo.verboseLevel ?? "off";
+          const verboseItems = verboseOpts.map((v) => ({
+            value: v,
+            label: v === currentVerbose ? `${v} (current)` : v,
+          }));
+          const verboseSelector = createSelectList(verboseItems, verboseItems.length);
+          verboseSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  verboseLevel: item.value,
+                });
+                chatLog.addSystem(`verbose set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await loadHistory();
+              } catch (err) {
+                chatLog.addSystem(`verbose failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          verboseSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(verboseSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -349,9 +419,39 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`verbose failed: ${String(err)}`);
         }
         break;
-      case "reasoning":
+      }
+      case "reasoning": {
         if (!args) {
-          chatLog.addSystem("usage: /reasoning <on|off>");
+          const reasoningOpts = ["on", "off"];
+          const currentReasoning = state.sessionInfo.reasoningLevel ?? "off";
+          const reasoningItems = reasoningOpts.map((r) => ({
+            value: r,
+            label: r === currentReasoning ? `${r} (current)` : r,
+          }));
+          const reasoningSelector = createSelectList(reasoningItems, reasoningItems.length);
+          reasoningSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  reasoningLevel: item.value,
+                });
+                chatLog.addSystem(`reasoning set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`reasoning failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          reasoningSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(reasoningSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -366,6 +466,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`reasoning failed: ${String(err)}`);
         }
         break;
+      }
       case "usage": {
         const normalized = args ? normalizeUsageDisplay(args) : undefined;
         if (args && !normalized) {
@@ -389,9 +490,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
-      case "elevated":
+      case "elevated": {
         if (!args) {
-          chatLog.addSystem("usage: /elevated <on|off|ask|full>");
+          const elevatedOpts = ["on", "off", "ask", "full"];
+          const currentElevated = state.sessionInfo.elevatedLevel ?? "off";
+          const elevatedItems = elevatedOpts.map((e) => ({
+            value: e,
+            label: e === currentElevated ? `${e} (current)` : e,
+          }));
+          const elevatedSelector = createSelectList(elevatedItems, elevatedItems.length);
+          elevatedSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  elevatedLevel: item.value,
+                });
+                chatLog.addSystem(`elevated set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`elevated failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          elevatedSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(elevatedSelector);
+          tui.requestRender();
           break;
         }
         if (!["on", "off", "ask", "full"].includes(args)) {
@@ -410,9 +540,39 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`elevated failed: ${String(err)}`);
         }
         break;
-      case "activation":
+      }
+      case "activation": {
         if (!args) {
-          chatLog.addSystem("usage: /activation <mention|always>");
+          const activationOpts = ["mention", "always"];
+          const currentActivation = state.sessionInfo.groupActivation ?? "mention";
+          const activationItems = activationOpts.map((a) => ({
+            value: a,
+            label: a === currentActivation ? `${a} (current)` : a,
+          }));
+          const activationSelector = createSelectList(activationItems, activationItems.length);
+          activationSelector.onSelect = (item) => {
+            void (async () => {
+              try {
+                const result = await client.patchSession({
+                  key: state.currentSessionKey,
+                  groupActivation: item.value === "always" ? "always" : "mention",
+                });
+                chatLog.addSystem(`activation set to ${item.value}`);
+                applySessionInfoFromPatch(result);
+                await refreshSessionInfo();
+              } catch (err) {
+                chatLog.addSystem(`activation failed: ${String(err)}`);
+              }
+              closeOverlay();
+              tui.requestRender();
+            })();
+          };
+          activationSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(activationSelector);
+          tui.requestRender();
           break;
         }
         try {
@@ -427,6 +587,103 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      }
+      case "context": {
+        const used = state.sessionInfo.totalTokens ?? 0;
+        const max = state.sessionInfo.contextTokens ?? 0;
+        const lines = formatContextVisualization({
+          usedTokens: used,
+          maxTokens: max,
+          inputTokens: state.sessionInfo.inputTokens,
+          outputTokens: state.sessionInfo.outputTokens,
+        });
+        for (const line of lines) {
+          chatLog.addSystem(line);
+        }
+        break;
+      }
+      case "diff": {
+        try {
+          const cmd = args ? `git diff -- ${args}` : "git diff";
+          const raw = execSync(cmd, { encoding: "utf-8", maxBuffer: 1024 * 1024 }).trim();
+          if (!raw) {
+            chatLog.addSystem("no changes");
+            break;
+          }
+          const stats = renderDiffStats(raw);
+          chatLog.addSystem(
+            `${stats.files} file(s) changed, +${stats.additions} -${stats.deletions}`,
+          );
+          for (const line of renderDiff(raw)) {
+            chatLog.addSystem(line);
+          }
+        } catch (err) {
+          chatLog.addSystem(`diff failed: ${String(err)}`);
+        }
+        break;
+      }
+      case "style": {
+        const styleName = args.toLowerCase();
+        if (!styleName) {
+          const currentStyle = state.outputStyle ?? "standard";
+          const styleItems = OUTPUT_STYLE_NAMES.map((s) => ({
+            value: s,
+            label: s === currentStyle ? `${s} (current)` : s,
+          }));
+          const styleSelector = createSelectList(styleItems, styleItems.length);
+          styleSelector.onSelect = (item) => {
+            state.outputStyle = item.value as OutputStyle;
+            chatLog.addSystem(`output style set to ${item.value}`);
+            closeOverlay();
+            tui.requestRender();
+          };
+          styleSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(styleSelector);
+          tui.requestRender();
+          break;
+        }
+        if (!isValidOutputStyle(styleName)) {
+          chatLog.addSystem(`unknown style. usage: /style <${OUTPUT_STYLE_NAMES.join("|")}>`);
+          break;
+        }
+        state.outputStyle = styleName;
+        chatLog.addSystem(`output style set to ${styleName}`);
+        break;
+      }
+      case "theme": {
+        const preset = args.toLowerCase();
+        if (!preset) {
+          const currentTheme = getThemePreset();
+          const themeItems = THEME_PRESETS.map((t) => ({
+            value: t,
+            label: t === currentTheme ? `${t} (current)` : t,
+          }));
+          const themeSelector = createSelectList(themeItems, themeItems.length);
+          themeSelector.onSelect = (item) => {
+            setThemePreset(item.value as ThemePreset);
+            chatLog.addSystem(`theme set to ${item.value}`);
+            closeOverlay();
+            tui.requestRender();
+          };
+          themeSelector.onCancel = () => {
+            closeOverlay();
+            tui.requestRender();
+          };
+          openOverlay(themeSelector);
+          tui.requestRender();
+          break;
+        }
+        if (!THEME_PRESETS.includes(preset as ThemePreset)) {
+          chatLog.addSystem(`unknown theme. usage: /theme <${THEME_PRESETS.join("|")}>`);
+          break;
+        }
+        setThemePreset(preset as ThemePreset);
+        chatLog.addSystem(`theme set to ${preset}`);
+        break;
+      }
       case "new":
       case "reset":
         try {
@@ -443,6 +700,98 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`reset failed: ${String(err)}`);
         }
         break;
+      case "vim": {
+        const enabled = !state.vimEnabled;
+        state.vimEnabled = enabled;
+        chatLog.addSystem(`vim mode ${enabled ? "enabled" : "disabled"}`);
+        break;
+      }
+      case "permission": {
+        const MODES = ["auto", "ask", "deny"] as const;
+        type PermMode = (typeof MODES)[number];
+        const mode = args.toLowerCase();
+        if (!mode) {
+          const current = state.permissionMode ?? "auto";
+          const idx = MODES.indexOf(current);
+          const next = MODES[(idx + 1) % MODES.length] as PermMode;
+          state.permissionMode = next;
+          chatLog.addSystem(`permission mode: ${next}`);
+        } else if (MODES.includes(mode as PermMode)) {
+          state.permissionMode = mode as PermMode;
+          chatLog.addSystem(`permission mode set to ${mode}`);
+        } else {
+          chatLog.addSystem("usage: /permission <auto|ask|deny>");
+        }
+        break;
+      }
+      case "fast": {
+        const isFast = !state.fastMode;
+        state.fastMode = isFast;
+        if (isFast) {
+          // Save current thinking level before switching
+          state.previousThinkingLevel = state.sessionInfo.thinkingLevel ?? "medium";
+          try {
+            const result = await client.patchSession({
+              key: state.currentSessionKey,
+              thinkingLevel: "off",
+            });
+            applySessionInfoFromPatch(result);
+          } catch {
+            // Best-effort — fast mode works locally even without gateway
+          }
+          state.outputStyle = "standard";
+          chatLog.addSystem("fast mode enabled (thinking: off, style: standard)");
+        } else {
+          // Restore previous thinking level
+          const prevLevel = state.previousThinkingLevel ?? "medium";
+          try {
+            const result = await client.patchSession({
+              key: state.currentSessionKey,
+              thinkingLevel: prevLevel,
+            });
+            applySessionInfoFromPatch(result);
+          } catch {
+            // Best-effort
+          }
+          chatLog.addSystem(`fast mode disabled (thinking: ${prevLevel})`);
+        }
+        break;
+      }
+      case "copy": {
+        const lastText = chatLog.getLastAssistantText();
+        if (!lastText) {
+          chatLog.addSystem("nothing to copy");
+          break;
+        }
+        try {
+          const proc = spawn(
+            process.platform === "darwin" ? "pbcopy" : "xclip",
+            process.platform === "darwin" ? [] : ["-selection", "clipboard"],
+            { stdio: ["pipe", "ignore", "ignore"] },
+          );
+          proc.stdin?.write(lastText);
+          proc.stdin?.end();
+          chatLog.addSystem("last response copied to clipboard");
+        } catch (err) {
+          chatLog.addSystem(`copy failed: ${String(err)}`);
+        }
+        break;
+      }
+      case "export": {
+        const lastText = chatLog.getLastAssistantText();
+        if (!lastText) {
+          chatLog.addSystem("nothing to export");
+          break;
+        }
+        const filePath = args || `mayros-export-${Date.now()}.md`;
+        try {
+          writeFileSync(filePath, lastText, "utf-8");
+          chatLog.addSystem(`exported to ${filePath}`);
+        } catch (err) {
+          chatLog.addSystem(`export failed: ${String(err)}`);
+        }
+        break;
+      }
       case "abort":
         await abortActive();
         break;
@@ -455,9 +804,94 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         tui.stop();
         process.exit(0);
         break;
-      default:
-        await sendMessage(raw);
+      // --- Mayros ecosystem ---
+      case "plan": {
+        const action = args || "show";
+        await sendMessage(`/plan ${action}`);
         break;
+      }
+      case "kg": {
+        if (!args) {
+          chatLog.addSystem("usage: /kg <query>");
+          break;
+        }
+        await sendMessage(`Search the knowledge graph for: ${args}`);
+        break;
+      }
+      case "trace": {
+        await sendMessage(`Show trace ${args || "events"} summary for the current session`);
+        break;
+      }
+      case "team": {
+        await sendMessage("Show the team dashboard with current agent status and activity");
+        break;
+      }
+      case "tasks": {
+        await sendMessage("Show background tasks status and summary");
+        break;
+      }
+      case "workflow": {
+        if (!args) {
+          await sendMessage("List available workflows and their status");
+        } else {
+          await sendMessage(`/workflow ${args}`);
+        }
+        break;
+      }
+      case "rules": {
+        await sendMessage(`Show active rules${args ? ` matching: ${args}` : ""}`);
+        break;
+      }
+      case "mailbox": {
+        if (!args) {
+          await sendMessage("Check my inbox for new messages and show unread count");
+        } else {
+          await sendMessage(`/mailbox ${args}`);
+        }
+        break;
+      }
+      case "batch": {
+        if (!args) {
+          chatLog.addSystem("usage: /batch <file> — run 'mayros batch run <file>' from terminal");
+        } else {
+          chatLog.addSystem(
+            `Run 'mayros batch run ${args}' from the terminal for batch processing`,
+          );
+        }
+        break;
+      }
+      case "teleport": {
+        const action = args || "export";
+        if (action === "export") {
+          chatLog.addSystem(
+            `Run 'mayros teleport export --session ${state.currentSessionKey}' from the terminal`,
+          );
+        } else if (action === "import") {
+          chatLog.addSystem("Run 'mayros teleport import <file>' from the terminal");
+        } else {
+          chatLog.addSystem("usage: /teleport [export|import]");
+        }
+        break;
+      }
+      case "sync": {
+        await sendMessage(`Show Cortex sync ${args || "status"}`);
+        break;
+      }
+      case "onboard": {
+        chatLog.addSystem("Run 'mayros onboard' from the terminal to start the setup wizard");
+        break;
+      }
+      default: {
+        // Check for user-defined markdown commands before sending raw
+        const mdCmd = findMarkdownCommand(name);
+        if (mdCmd) {
+          const expanded = expandMarkdownCommand(mdCmd, args);
+          await sendMessage(expanded);
+        } else {
+          await sendMessage(raw);
+        }
+        break;
+      }
     }
     tui.requestRender();
   };
@@ -466,17 +900,37 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     try {
       chatLog.addUser(text);
       tui.requestRender();
+      const style = (state.outputStyle ?? "standard") as OutputStyle;
+      const styledText = applyOutputStyle(text, style);
       const runId = randomUUID();
       noteLocalRunId(runId);
       state.activeChatRunId = runId;
       setActivityStatus("sending");
+
+      // Collect pending images as attachments
+      let attachments: ChatAttachmentInput[] | undefined;
+      if (state.pendingImages.size > 0) {
+        attachments = [];
+        let idx = 0;
+        for (const [, img] of state.pendingImages) {
+          idx++;
+          attachments.push({
+            mimeType: img.mimeType,
+            fileName: `paste-${idx}.png`,
+            content: img.base64,
+          });
+        }
+        state.pendingImages.clear();
+      }
+
       await client.sendChat({
         sessionKey: state.currentSessionKey,
-        message: text,
+        message: styledText,
         thinking: opts.thinking,
         deliver: deliverDefault,
         timeoutMs: opts.timeoutMs,
         runId,
+        attachments,
       });
       setActivityStatus("waiting");
     } catch (err) {

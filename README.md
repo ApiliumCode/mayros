@@ -114,6 +114,77 @@ Run `mayros doctor` to surface risky/misconfigured DM policies.
 - **[First-class tools](https://apilium.com/en/doc/mayros/tools)** — browser, canvas, nodes, cron, sessions, and Discord/Slack actions.
 - **[Companion apps](https://apilium.com/en/doc/mayros/platforms/macos)** — macOS menu bar app + iOS/Android [nodes](https://apilium.com/en/doc/mayros/nodes).
 - **[Onboarding](https://apilium.com/en/doc/mayros/start/wizard) + [skills](https://apilium.com/en/doc/mayros/tools/skills)** — wizard-driven setup with bundled/managed/workspace skills.
+- **Terminal UI** — interactive TUI with themes, vim mode, image paste, slash commands.
+- **IDE plugins** — VSCode + JetBrains extensions connected via Gateway WebSocket.
+- **Knowledge Graph** — project memory, code indexer, cross-session recall via Cortex.
+- **Multi-agent mesh** — teams, workflows, agent mailbox, background tasks.
+- **Semantic plan mode** — explore, assert, approve, execute with Cortex backing.
+- **50+ extensions** — security sandbox, permissions, MCP client, observability, 17 channels.
+
+## Terminal UI
+
+Mayros includes an interactive terminal interface for direct coding and conversation.
+
+**Entry points:**
+
+- `mayros code` — main interactive TUI session
+- `mayros tui` — alias for `mayros code`
+- `mayros -p "query"` — headless mode (non-interactive, streams response to stdout)
+
+**Features:**
+
+- Welcome screen with shield mascot and two-column info panel
+- 3 themes (dark, light, high-contrast) — switch with `/theme`
+- 3 output styles (standard, explanatory, learning) — switch with `/style`
+- Vim mode with motions, operators, and undo — toggle with `/vim`
+- `Ctrl+V` image paste from clipboard
+- `/copy` pipes last response to system clipboard; `/export [file]` writes to file
+- `/diff` inline diff viewer with stats
+- `/context` token usage bar chart
+- `/plan` semantic plan mode (Cortex-backed)
+
+**Key slash commands:**
+
+| Command          | Description                 |
+| ---------------- | --------------------------- |
+| `/help`          | List all available commands |
+| `/new`, `/reset` | Reset session               |
+| `/compact`       | Compact session context     |
+| `/think <level>` | Set thinking level          |
+| `/model <name>`  | Switch model                |
+| `/plan`          | Enter semantic plan mode    |
+| `/diff`          | Show pending changes        |
+| `/context`       | Visualize token usage       |
+| `/theme`         | Cycle themes                |
+| `/style`         | Cycle output styles         |
+| `/vim`           | Toggle vim mode             |
+| `/copy`          | Copy last response          |
+| `/export [file]` | Export session              |
+| `/permission`    | Set permission mode         |
+| `/fast`          | Toggle fast mode            |
+
+**Markdown-driven extensibility:**
+
+- Custom agents: `~/.mayros/agents/*.md` — define persona, tools, and behavior in markdown
+- Custom commands: `~/.mayros/commands/*.md` — define slash commands as markdown templates
+- Interactive selectors when commands run without required arguments
+
+## IDE Plugins
+
+Mayros provides IDE extensions that connect to the running Gateway via WebSocket.
+
+**VSCode** (`tools/vscode-extension/`):
+
+- Sidebar tree views: sessions, agents, skills
+- Webview panels: chat, plan mode, trace viewer, knowledge graph
+- Context menu actions and gutter markers
+
+**JetBrains** (`tools/jetbrains-plugin/`):
+
+- Unified tabbed panel with the same feature set
+- Protocol v3 compatibility
+
+Both plugins connect via WebSocket to `ws://127.0.0.1:18789` (the Gateway).
 
 ## Semantic Memory (AIngle Cortex)
 
@@ -131,6 +202,74 @@ Key design points:
 - **Skill access** — skills interact with memory through 6 semantic tools (`skill_graph_query`, `skill_assert`, `skill_memory_context`, etc.) inside the QuickJS WASM sandbox.
 
 Cortex version: **aingle_cortex 0.2.6** · AIngle crate: **0.0.101** · Zome types: **0.0.4**
+
+## Knowledge Graph & Code Indexer
+
+The code indexer scans your codebase and maps it to RDF triples stored in Cortex. Combined with project memory, this gives the assistant deep, persistent understanding of your project.
+
+- **Code indexer** — scans source files → RDF triples in Cortex (incremental, only re-indexes changed files)
+- **Project memory** — persists conventions, findings, and architecture decisions across sessions
+- **Smart compaction** — extracts key information before context pruning so nothing important is lost
+- **Cross-session recall** — injects relevant knowledge from previous sessions into new prompts
+
+CLI: `mayros kg search|explore|query|stats|triples|namespaces|export|import`
+
+## Multi-Agent Mesh
+
+Mayros supports coordinated multi-agent workflows where agents can form teams, delegate work, and communicate asynchronously.
+
+- **Team manager** — Cortex-backed lifecycle: create, assign roles, disband
+- **Workflow orchestrator** — built-in workflow definitions (code-review, research, refactor) + custom definitions via registry
+- **Agent mailbox** — persistent inter-agent messaging (send/inbox/outbox/archive)
+- **Background task tracker** — track long-running agent tasks with status and cancellation
+- **Git worktree isolation** — each agent can work in its own worktree to avoid conflicts
+
+CLI: `mayros workflow run|list`, `mayros dashboard team|summary|agent`, `mayros tasks list|status|cancel|summary`, `mayros mailbox list|read|send|archive|stats`
+
+## Plan Mode
+
+Cortex-backed semantic planning for complex multi-step tasks.
+
+- **Explore** — gather context from the codebase and Cortex graph
+- **Assert** — declare facts and constraints the plan must satisfy
+- **Approve** — review the plan before execution
+- **Execute** — run the approved plan with progress tracking
+
+CLI: `mayros plan start|explore|assert|show|approve|execute|done|list|status`
+TUI: `/plan` slash command
+
+## Extensions Ecosystem
+
+Mayros ships with 50+ extensions organized by category:
+
+| Category      | Extension                 | Purpose                                                                   |
+| ------------- | ------------------------- | ------------------------------------------------------------------------- |
+| Skills        | `semantic-skills`         | QuickJS WASM sandbox, 6 semantic tools, skill marketplace                 |
+| Agents        | `agent-mesh`              | Teams, workflows, delegation, mailbox, background tasks                   |
+| Memory        | `memory-semantic`         | Cortex integration, rules engine, agent memory, contextual awareness      |
+| Observability | `semantic-observability`  | Traces, decision graph, session fork/rewind                               |
+| Indexer       | `code-indexer`            | Codebase scanning + RDF mapping (incremental)                             |
+| Security      | `bash-sandbox`            | Command parsing, domain checker, blocklist, audit log                     |
+| Permissions   | `interactive-permissions` | Runtime permission dialogs, intent classification, policy store           |
+| Hooks         | `llm-hooks`               | Markdown-defined hook evaluation with safe condition parser               |
+| MCP           | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP transports)    |
+| Economy       | `token-economy`           | Budget tracking, prompt cache optimization                                |
+| Hub           | `skill-hub`               | Apilium Hub marketplace, Ed25519 signing, dependency audit                |
+| IoT           | `iot-bridge`              | IoT node fleet management                                                 |
+| Channels      | 17 channel plugins        | Discord, Telegram, WhatsApp, Slack, Signal, iMessage, Teams, Matrix, etc. |
+
+Extensions live in `extensions/` and are loaded as plugins at startup.
+
+## Hooks System
+
+Mayros exposes 29 hook types across the assistant lifecycle:
+
+- **Lifecycle hooks** — `before_prompt_build`, `after_response`, `before_compaction`, `agent_end`, etc.
+- **Security hooks** — `permission_request` (modifying: allow/deny/ask), `config_change`
+- **Coordination hooks** — `teammate_idle`, `task_completed`, `notification` (info/warn/error)
+- **HTTP webhook dispatcher** — POST delivery with HMAC-SHA256 signatures, retry + exponential backoff
+- **Async hook queue** — background execution with concurrency limits and dead-letter queue
+- **Markdown-defined hooks** — place `.md` files in `~/.mayros/hooks/` for custom hook logic
 
 ## Everything we built so far
 
@@ -176,6 +315,23 @@ Cortex version: **aingle_cortex 0.2.6** · AIngle crate: **0.0.101** · Zome typ
 - [Docker](https://apilium.com/en/doc/mayros/install/docker)-based installs.
 - [Doctor](https://apilium.com/en/doc/mayros/gateway/doctor) migrations, [logging](https://apilium.com/en/doc/mayros/logging).
 
+### Developer tools
+
+- Terminal UI (`mayros code`) with themes, vim mode, slash commands, image paste, and headless mode (`mayros -p`).
+- VSCode and JetBrains IDE plugins connected via Gateway WebSocket.
+- Trace CLI (`mayros trace`), plan CLI (`mayros plan`), knowledge graph CLI (`mayros kg`).
+
+### Agent coordination
+
+- Teams, workflows, agent mailbox, background task tracker.
+- Session fork/rewind for checkpoint-based exploration.
+- Rules engine with hierarchical Cortex-backed rules.
+- Agent persistent memory and contextual awareness notifications.
+
+### Security layers
+
+- 18-layer security architecture: QuickJS WASM sandbox, static scanner (16 rules), enrichment sanitizer, bash sandbox, interactive permissions, namespace isolation, tool allowlist (intersection model), rate limiter, query/write limits, enrichment timeout, hot-reload validation, path traversal protection, verify-then-promote, circuit breaker, audit logging, and more.
+
 ## How it works (short)
 
 ```
@@ -188,6 +344,8 @@ WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBu
 │     ws://127.0.0.1:18789      │
 └──────────────┬────────────────┘
                │
+               ├─ TUI (mayros code)
+               ├─ VSCode / JetBrains
                ├─ Pi agent (RPC)
                ├─ CLI (mayros …)
                ├─ WebChat UI
@@ -262,6 +420,8 @@ Skills Hub is a minimal skill registry. With Skills Hub enabled, the agent can s
 [Skills Hub](https://hub.apilium.com)
 
 ## Chat commands
+
+The Terminal UI (`mayros code`) supports 30+ slash commands — run `/help` for the full list.
 
 Send these in WhatsApp/Telegram/Slack/Google Chat/Microsoft Teams/WebChat (group commands are owner-only):
 

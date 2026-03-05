@@ -8,9 +8,27 @@ import { ensureMayrosCliOnPath } from "../infra/path-env.js";
 import { assertSupportedRuntime } from "../infra/runtime-guard.js";
 import { installUnhandledRejectionHandler } from "../infra/unhandled-rejections.js";
 import { enableConsoleCapture } from "../logging.js";
-import { getCommandPath, getPrimaryCommand, hasHelpOrVersion } from "./argv.js";
+import {
+  getCommandPath,
+  getFlagValue,
+  getPrimaryCommand,
+  hasFlag,
+  hasHelpOrVersion,
+} from "./argv.js";
 import { tryRouteCli } from "./route.js";
 import { normalizeWindowsArgv } from "./windows-argv.js";
+
+/**
+ * Determines the default command when no subcommand is provided.
+ * Returns "onboard" if the user has never completed onboarding, otherwise "code".
+ */
+export function resolveDefaultCommand(snapshot: {
+  exists: boolean;
+  config?: { wizard?: { lastRunAt?: string } };
+}): "onboard" | "code" {
+  const isOnboarded = snapshot.exists && Boolean(snapshot.config?.wizard?.lastRunAt);
+  return isOnboarded ? "code" : "onboard";
+}
 
 export function rewriteUpdateFlagArgv(argv: string[]): string[] {
   const index = argv.indexOf("--update");
@@ -72,6 +90,24 @@ export async function runCli(argv: string[] = process.argv) {
   // Enforce the minimum supported runtime before doing any work.
   assertSupportedRuntime();
 
+  // Headless mode: -p / --prompt bypasses TUI and Commander entirely.
+  const promptFlagValue =
+    getFlagValue(normalizedArgv, "-p") ?? getFlagValue(normalizedArgv, "--prompt");
+  if (promptFlagValue !== undefined) {
+    const { runHeadless } = await import("./headless-cli.js");
+    await runHeadless({
+      prompt: promptFlagValue ?? "",
+      json: hasFlag(normalizedArgv, "--json"),
+      session: getFlagValue(normalizedArgv, "--session") ?? undefined,
+      url: getFlagValue(normalizedArgv, "--url") ?? undefined,
+      token: getFlagValue(normalizedArgv, "--token") ?? undefined,
+      password: getFlagValue(normalizedArgv, "--password") ?? undefined,
+      thinking: getFlagValue(normalizedArgv, "--thinking") ?? undefined,
+      deliver: hasFlag(normalizedArgv, "--deliver"),
+    });
+    return;
+  }
+
   if (await tryRouteCli(normalizedArgv)) {
     return;
   }
@@ -95,6 +131,25 @@ export async function runCli(argv: string[] = process.argv) {
   // Register the primary command (builtin or subcli) so help and command parsing
   // are correct even with lazy command registration.
   const primary = getPrimaryCommand(parseArgv);
+
+  // No subcommand → first-run gate: onboard if needed, otherwise interactive session
+  if (!primary && !hasHelpOrVersion(parseArgv)) {
+    const { readConfigFileSnapshot } = await import("../config/config.js");
+    const snapshot = await readConfigFileSnapshot();
+    const defaultCmd = resolveDefaultCommand(snapshot);
+
+    if (defaultCmd === "onboard") {
+      const { registerOnboardCommand } = await import("./program/register.onboard.js");
+      registerOnboardCommand(program);
+      await program.parseAsync([...parseArgv.slice(0, 2), "onboard", ...parseArgv.slice(2)]);
+      return;
+    }
+
+    const { registerCodeCli } = await import("./code-cli.js");
+    registerCodeCli(program);
+    await program.parseAsync([...parseArgv.slice(0, 2), "code", ...parseArgv.slice(2)]);
+    return;
+  }
   if (primary && shouldRegisterPrimarySubcommand(parseArgv)) {
     const { getProgramContext } = await import("./program/program-context.js");
     const ctx = getProgramContext(program);

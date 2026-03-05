@@ -5,7 +5,15 @@
  * the configuration is invalid (e.g. doctor, help, health).
  */
 
-export const ALLOWED_INVALID_COMMANDS = new Set(["doctor", "logs", "health", "help", "status"]);
+export const ALLOWED_INVALID_COMMANDS = new Set([
+  "doctor",
+  "logs",
+  "health",
+  "help",
+  "status",
+  "onboard",
+  "code",
+]);
 
 export const ALLOWED_INVALID_GATEWAY_SUBCOMMANDS = new Set([
   "status",

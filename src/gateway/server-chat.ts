@@ -287,7 +287,9 @@ export function createAgentEventHandler({
       return;
     }
     chatRunState.buffers.set(clientRunId, text);
-    if (shouldHideHeartbeatChatOutput(clientRunId, sourceRunId)) {
+    const heartbeatContext = resolveHeartbeatContext(clientRunId, sourceRunId);
+    const isHeartbeat = heartbeatContext?.isHeartbeat === true;
+    if (isHeartbeat && shouldHideHeartbeatChatOutput(clientRunId, sourceRunId)) {
       return;
     }
     const now = Date.now();
@@ -301,6 +303,7 @@ export function createAgentEventHandler({
       sessionKey,
       seq,
       state: "delta" as const,
+      ...(isHeartbeat ? { isHeartbeat: true } : {}),
       message: {
         role: "assistant",
         content: [{ type: "text", text }],
@@ -330,12 +333,15 @@ export function createAgentEventHandler({
       normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
+    const heartbeatContext = resolveHeartbeatContext(clientRunId, sourceRunId);
+    const isHeartbeat = heartbeatContext?.isHeartbeat === true;
     if (jobState === "done") {
       const payload = {
         runId: clientRunId,
         sessionKey,
         seq,
         state: "final" as const,
+        ...(isHeartbeat ? { isHeartbeat: true } : {}),
         message:
           text && !shouldSuppressSilent
             ? {
@@ -354,6 +360,7 @@ export function createAgentEventHandler({
       sessionKey,
       seq,
       state: "error" as const,
+      ...(isHeartbeat ? { isHeartbeat: true } : {}),
       errorMessage: error ? formatForLog(error) : undefined,
     };
     broadcast("chat", payload);

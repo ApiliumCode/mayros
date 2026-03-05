@@ -1122,7 +1122,7 @@ export async function readConfigFileSnapshotForWrite(): Promise<ReadConfigFileSn
 
 export async function writeConfigFile(
   cfg: MayrosConfig,
-  options: ConfigWriteOptions = {},
+  options: ConfigWriteOptions & { changeSource?: string; changedKeys?: string[] } = {},
 ): Promise<void> {
   const io = createConfigIO();
   const sameConfigPath =
@@ -1130,4 +1130,24 @@ export async function writeConfigFile(
   await io.writeConfigFile(cfg, {
     envSnapshotForRestore: sameConfigPath ? options.envSnapshotForRestore : undefined,
   });
+
+  // Emit config_change hook if the global hook runner is available
+  if (options.changedKeys && options.changedKeys.length > 0) {
+    try {
+      const { getGlobalHookRunner } = await import("../plugins/hook-runner-global.js");
+      const runner = getGlobalHookRunner();
+      if (runner?.hasHooks("config_change")) {
+        void runner.runConfigChange(
+          {
+            changedKeys: options.changedKeys,
+            source: options.changeSource ?? "unknown",
+            timestamp: Date.now(),
+          },
+          {},
+        );
+      }
+    } catch {
+      // Hook runner not available — skip
+    }
+  }
 }

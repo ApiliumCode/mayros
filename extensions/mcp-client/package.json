@@ -1,0 +1,18 @@
+{
+  "name": "@apilium/mayros-mcp-client",
+  "version": "0.1.4",
+  "private": true,
+  "description": "MCP server client with multi-transport support and Cortex tool registry",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

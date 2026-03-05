@@ -1,0 +1,23 @@
+{
+  "id": "code-indexer",
+  "kind": "indexer",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string" },
+      "paths": { "type": "array", "items": { "type": "string" } },
+      "ignore": { "type": "array", "items": { "type": "string" } },
+      "maxFiles": { "type": "integer", "minimum": 1, "maximum": 50000 },
+      "extensions": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

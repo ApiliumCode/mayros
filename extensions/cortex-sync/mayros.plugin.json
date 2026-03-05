@@ -1,0 +1,100 @@
+{
+  "id": "cortex-sync",
+  "kind": "infrastructure",
+  "uiHints": {
+    "cortex.host": {
+      "label": "Cortex Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where AIngle Cortex is listening"
+    },
+    "cortex.port": {
+      "label": "Cortex Port",
+      "placeholder": "8080",
+      "advanced": true,
+      "help": "Port for Cortex REST API"
+    },
+    "cortex.authToken": {
+      "label": "Cortex Auth Token",
+      "sensitive": true,
+      "placeholder": "Bearer ...",
+      "help": "Optional authentication token for Cortex API"
+    },
+    "namespace": {
+      "label": "Namespace",
+      "placeholder": "mayros",
+      "help": "RDF namespace prefix for sync data"
+    },
+    "sync.intervalSeconds": {
+      "label": "Sync Interval",
+      "placeholder": "300",
+      "advanced": true,
+      "help": "Seconds between sync cycles (10–86400)"
+    },
+    "sync.autoSync": {
+      "label": "Auto-Sync",
+      "help": "Automatically sync on session end and config changes"
+    },
+    "sync.conflictStrategy": {
+      "label": "Conflict Strategy",
+      "placeholder": "last-writer-wins",
+      "help": "How to resolve triple conflicts: last-writer-wins, keep-both, local-priority, remote-priority"
+    },
+    "discovery.bonjourEnabled": {
+      "label": "Bonjour Discovery",
+      "advanced": true,
+      "help": "Enable local network peer discovery via Bonjour"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "number", "minimum": 1, "maximum": 65535 },
+          "authToken": { "type": "string" }
+        }
+      },
+      "namespace": { "type": "string" },
+      "sync": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intervalSeconds": { "type": "number", "minimum": 10, "maximum": 86400 },
+          "autoSync": { "type": "boolean" },
+          "conflictStrategy": {
+            "type": "string",
+            "enum": ["last-writer-wins", "keep-both", "local-priority", "remote-priority"]
+          },
+          "maxTriplesPerSync": { "type": "number", "minimum": 100, "maximum": 50000 },
+          "syncTimeoutMs": { "type": "number", "minimum": 5000, "maximum": 120000 }
+        }
+      },
+      "discovery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "bonjourEnabled": { "type": "boolean" },
+          "bonjourServiceType": { "type": "string" },
+          "manualPeers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "nodeId": { "type": "string" },
+                "endpoint": { "type": "string" },
+                "namespaces": { "type": "array", "items": { "type": "string" } },
+                "enabled": { "type": "boolean" }
+              },
+              "required": ["nodeId", "endpoint"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

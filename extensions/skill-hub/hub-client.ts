@@ -157,4 +157,23 @@ export class HubClient {
   async getSkillVersions(slug: string): Promise<{ versions: HubSkillEntry[] }> {
     return this.request("GET", `/api/v1/skills/${encodeURIComponent(slug)}/versions`);
   }
+
+  async rate(
+    slug: string,
+    score: number,
+  ): Promise<{ slug: string; averageRating: number; totalRatings: number }> {
+    return this.request("POST", `/api/v1/skills/${encodeURIComponent(slug)}/rate`, { score });
+  }
+
+  async getCategories(): Promise<{
+    categories: Array<{ id: string; name: string; skillCount: number }>;
+  }> {
+    return this.request("GET", "/api/v1/categories");
+  }
+
+  async checkUpdates(installed: Array<{ slug: string; version: string }>): Promise<{
+    updates: Array<{ slug: string; currentVersion: string; latestVersion: string }>;
+  }> {
+    return this.request("POST", "/api/v1/skills/check-updates", { installed });
+  }
 }
