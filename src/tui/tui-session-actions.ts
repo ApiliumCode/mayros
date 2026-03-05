@@ -1,4 +1,4 @@
-import type { TUI } from "@mariozechner/pi-tui";
+import type { Component, TUI } from "@mariozechner/pi-tui";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import {
   normalizeAgentId,
@@ -9,6 +9,84 @@ import type { ChatLog } from "./components/chat-log.js";
 import type { GatewayAgentsList, GatewayChatClient } from "./gateway-chat.js";
 import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
 import type { TuiOptions, TuiStateAccess } from "./tui-types.js";
+
+const HEARTBEAT_TOKEN = "HEARTBEAT_OK";
+
+/**
+ * Extract plain text from a message's content field.
+ * Handles both string content and array-of-blocks format.
+ */
+function extractPlainText(message: Record<string, unknown>): string {
+  const content = message.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const block of content) {
+    if (block && typeof block === "object" && !Array.isArray(block)) {
+      const rec = block as Record<string, unknown>;
+      if (rec.type === "text" && typeof rec.text === "string") {
+        parts.push(rec.text);
+      }
+    }
+  }
+  return parts.join("\n").trim();
+}
+
+/**
+ * Returns true if the text is a pure HEARTBEAT_OK response (no alert content).
+ * Strips HTML tags and markdown emphasis before checking.
+ */
+function isPureHeartbeatResponse(text: string): boolean {
+  const stripped = text
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/[*`~]/g, "")
+    .trim();
+  return /^HEARTBEAT_OK[.!?\s]*$/i.test(stripped);
+}
+
+/**
+ * Remove heartbeat prompt+response pairs from session history.
+ * A heartbeat exchange is identified by an assistant message that is pure
+ * "HEARTBEAT_OK" (no alert). When found, the preceding user message (the
+ * heartbeat prompt) is also removed.
+ */
+export function filterHeartbeatMessages(messages: unknown[]): unknown[] {
+  if (messages.length === 0) return messages;
+
+  // First pass: mark assistant indices that are pure heartbeat responses
+  const skipIndices = new Set<number>();
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i] as Record<string, unknown> | null;
+    if (!msg || msg.role !== "assistant") continue;
+    const text = extractPlainText(msg);
+    if (!text || !text.includes(HEARTBEAT_TOKEN)) continue;
+    if (!isPureHeartbeatResponse(text)) continue;
+    // Mark this assistant message for removal
+    skipIndices.add(i);
+    // Walk backwards to find and mark the preceding user message (heartbeat prompt).
+    // Skip over toolResult messages that might be interleaved.
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = messages[j] as Record<string, unknown> | null;
+      if (!prev) break;
+      if (prev.role === "toolResult") {
+        skipIndices.add(j);
+        continue;
+      }
+      if (prev.role === "user") {
+        const userText = extractPlainText(prev);
+        if (userText && userText.includes(HEARTBEAT_TOKEN)) {
+          skipIndices.add(j);
+        }
+        break;
+      }
+      break;
+    }
+  }
+
+  if (skipIndices.size === 0) return messages;
+  return messages.filter((_, i) => !skipIndices.has(i));
+}
 
 type SessionActionContext = {
   client: GatewayChatClient;
@@ -25,6 +103,7 @@ type SessionActionContext = {
   updateAutocompleteProvider: () => void;
   setActivityStatus: (text: string) => void;
   clearLocalRunIds?: () => void;
+  createWelcomeScreen?: () => Component;
 };
 
 type SessionInfoDefaults = {
@@ -66,9 +145,11 @@ export function createSessionActions(context: SessionActionContext) {
     updateAutocompleteProvider,
     setActivityStatus,
     clearLocalRunIds,
+    createWelcomeScreen,
   } = context;
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
   let lastSessionDefaults: SessionInfoDefaults | null = null;
+  let welcomeShown = false;
 
   const applyAgentsResult = (result: GatewayAgentsList) => {
     state.agentDefaultId = normalizeAgentId(result.defaultId);
@@ -310,8 +391,14 @@ export function createSessionActions(context: SessionActionContext) {
       state.sessionInfo.verboseLevel = record.verboseLevel ?? state.sessionInfo.verboseLevel;
       const showTools = (state.sessionInfo.verboseLevel ?? "off") !== "off";
       chatLog.clearAll();
-      chatLog.addSystem(`session ${state.currentSessionKey}`);
-      for (const entry of record.messages ?? []) {
+      if (!welcomeShown && createWelcomeScreen) {
+        welcomeShown = true;
+        chatLog.addWelcome(createWelcomeScreen());
+      } else {
+        chatLog.addSystem(`session ${state.currentSessionKey}`);
+      }
+      const historyMessages = filterHeartbeatMessages(record.messages ?? []);
+      for (const entry of historyMessages) {
         if (!entry || typeof entry !== "object") {
           continue;
         }

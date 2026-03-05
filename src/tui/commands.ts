@@ -46,15 +46,9 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
   const commands: SlashCommand[] = [
     { name: "help", description: "Show slash command help" },
     { name: "status", description: "Show gateway status summary" },
-    { name: "agent", description: "Switch agent (or open picker)" },
-    { name: "agents", description: "Open agent picker" },
-    { name: "session", description: "Switch session (or open picker)" },
-    { name: "sessions", description: "Open session picker" },
-    {
-      name: "model",
-      description: "Set model (or open picker)",
-    },
-    { name: "models", description: "Open model picker" },
+    { name: "agent", description: "Switch agent or open picker" },
+    { name: "session", description: "Switch session or open picker" },
+    { name: "model", description: "Set model or open picker" },
     {
       name: "think",
       description: "Set thinking level",
@@ -93,15 +87,6 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     {
       name: "elevated",
       description: "Set elevated on/off/ask/full",
-      getArgumentCompletions: (prefix) =>
-        ELEVATED_LEVELS.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
-          value,
-          label: value,
-        })),
-    },
-    {
-      name: "elev",
-      description: "Alias for /elevated",
       getArgumentCompletions: (prefix) =>
         ELEVATED_LEVELS.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
           value,
@@ -170,7 +155,6 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     },
     { name: "abort", description: "Abort active run" },
     { name: "new", description: "Reset the session" },
-    { name: "reset", description: "Reset the session" },
     { name: "settings", description: "Open settings" },
     // Mayros ecosystem
     { name: "plan", description: "Start or show semantic plan" },
@@ -186,7 +170,6 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     { name: "sync", description: "Cortex peer sync status" },
     { name: "onboard", description: "Run onboarding wizard" },
     { name: "exit", description: "Exit the TUI" },
-    { name: "quit", description: "Exit the TUI" },
   ];
 
   const seen = new Set(commands.map((command) => command.name));
@@ -225,15 +208,14 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/help",
     "/commands",
     "/status",
-    "/agent <id> (or /agents)",
-    "/session <key> (or /sessions)",
-    "/model <provider/model> (or /models)",
+    "/agent [id]",
+    "/session [key]",
+    "/model [provider/model]",
     `/think <${thinkLevels}>`,
     "/verbose <on|off>",
     "/reasoning <on|off>",
     "/usage <off|tokens|full>",
     "/elevated <on|off|ask|full>",
-    "/elev <on|off|ask|full>",
     "/activation <mention|always>",
     "/theme <dark|light|high-contrast>",
     "/diff [file]",
@@ -244,7 +226,7 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/fast",
     "/copy",
     "/export [file]",
-    "/new or /reset",
+    "/new",
     "/abort",
     "/settings",
     "",
