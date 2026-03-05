@@ -1,7 +1,7 @@
 import type { Component } from "@mariozechner/pi-tui";
 import { truncateToWidth } from "@mariozechner/pi-tui";
 import chalk from "chalk";
-import { stripAnsi, visibleWidth } from "../../terminal/ansi.js";
+import { visibleWidth } from "../../terminal/ansi.js";
 import type { TuiStateAccess } from "../tui-types.js";
 import { theme } from "../theme/theme.js";
 
