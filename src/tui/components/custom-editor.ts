@@ -1,6 +1,16 @@
 import { Editor, Key, matchesKey } from "@mariozechner/pi-tui";
+import type { ClipboardImage } from "../clipboard-image.js";
 import type { TuiKeybindingResolver } from "../keybinding-resolver.js";
 import type { VimHandler } from "../vim-handler.js";
+
+const BRACKET_PASTE_START = "\x1b[200~";
+const BRACKET_PASTE_END = "\x1b[201~";
+
+export type ImagePasteEvent = {
+  base64: string;
+  mimeType: string;
+  marker: string;
+};
 
 export class CustomEditor extends Editor {
   onEscape?: () => void;
@@ -13,10 +23,41 @@ export class CustomEditor extends Editor {
   onCtrlT?: () => void;
   onShiftTab?: () => void;
   onAltEnter?: () => void;
+  onImagePaste?: (image: ImagePasteEvent) => void;
   tuiResolver?: TuiKeybindingResolver;
   vimHandler?: VimHandler;
 
+  private imageCounter = 0;
+  captureClipboardImage: (() => ClipboardImage | null) | null = null;
+
   handleInput(data: string): void {
+    // Ctrl+V: primary image paste trigger.
+    // macOS terminals don't send any data for Cmd+V when clipboard has an image,
+    // so we use Ctrl+V as the explicit image paste shortcut.
+    if (this.captureClipboardImage && matchesKey(data, Key.ctrl("v"))) {
+      const image = this.captureClipboardImage();
+      if (image) {
+        this.imageCounter++;
+        const marker = `[Image #${this.imageCounter}]`;
+        this.insertTextAtCursor(`${marker} `);
+        this.onImagePaste?.({ base64: image.base64, mimeType: image.mimeType, marker });
+        return;
+      }
+      // No image on clipboard — fall through to let parent handle Ctrl+V normally
+    }
+    // Fallback: intercept empty bracketed paste — some terminals send this for image pastes
+    if (this.captureClipboardImage && this.isEmptyBracketedPaste(data)) {
+      const image = this.captureClipboardImage();
+      if (image) {
+        this.imageCounter++;
+        const marker = `[Image #${this.imageCounter}]`;
+        this.insertTextAtCursor(`${marker} `);
+        this.onImagePaste?.({ base64: image.base64, mimeType: image.mimeType, marker });
+        return;
+      }
+      // No image on clipboard — ignore the empty paste
+      return;
+    }
     // Vim mode intercept: if vim is in normal mode, consume keys there.
     if (this.vimHandler?.isNormalMode()) {
       if (this.vimHandler.handleKey(data)) {
@@ -97,5 +138,14 @@ export class CustomEditor extends Editor {
       return;
     }
     super.handleInput(data);
+  }
+
+  private isEmptyBracketedPaste(data: string): boolean {
+    const startIdx = data.indexOf(BRACKET_PASTE_START);
+    if (startIdx < 0) return false;
+    const endIdx = data.indexOf(BRACKET_PASTE_END, startIdx + BRACKET_PASTE_START.length);
+    if (endIdx < 0) return false;
+    const content = data.slice(startIdx + BRACKET_PASTE_START.length, endIdx);
+    return content.trim().length === 0;
   }
 }

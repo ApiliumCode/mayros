@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@mariozechner/pi-tui";
 import {
-  formatThinkingLevels,
   listThinkingLevelLabels,
   normalizeUsageDisplay,
   resolveResponseUsageMode,
