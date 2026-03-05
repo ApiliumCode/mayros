@@ -351,7 +351,7 @@ const entries: SubCliEntry[] = [
     },
   },
   {
-    name: "dashboard",
+    name: "team-dashboard",
     description: "Team dashboard — real-time agent status and activity",
     hasSubcommands: true,
     register: async (program) => {
@@ -378,7 +378,7 @@ const entries: SubCliEntry[] = [
     },
   },
   {
-    name: "doctor",
+    name: "diagnose",
     description: "Diagnostic checks — runtime, Cortex, plugins, security, config",
     hasSubcommands: true,
     register: async (program) => {

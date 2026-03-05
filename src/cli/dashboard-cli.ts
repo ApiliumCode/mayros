@@ -80,7 +80,7 @@ function resolveDashboard(client: CortexClient, ns: string): TeamDashboardServic
 
 export function registerDashboardCli(program: Command) {
   const db = program
-    .command("dashboard")
+    .command("team-dashboard")
     .description("Team dashboard — real-time agent status and activity")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
     .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")

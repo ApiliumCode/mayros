@@ -379,7 +379,7 @@ function resolveCortexClient(opts: { host?: string; port?: string; token?: strin
 
 export function registerDoctorCli(program: Command) {
   const doc = program
-    .command("doctor")
+    .command("diagnose")
     .description("Diagnostic checks — runtime, Cortex, plugins, security, config")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
     .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
