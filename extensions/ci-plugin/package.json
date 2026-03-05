@@ -4,7 +4,7 @@
   "description": "CI/CD pipeline integration for Mayros — GitHub Actions and GitLab CI providers",
   "type": "module",
   "dependencies": {
-    "mayros": "workspace:*"
+    "@apilium/mayros": "workspace:*"
   },
   "mayros": {
     "extensions": [

@@ -4,7 +4,7 @@
   "description": "Cortex-backed language server bridge for Mayros — hover, diagnostics, go-to-definition",
   "type": "module",
   "dependencies": {
-    "mayros": "workspace:*"
+    "@apilium/mayros": "workspace:*"
   },
   "mayros": {
     "extensions": [
