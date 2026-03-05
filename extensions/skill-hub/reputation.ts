@@ -61,3 +61,79 @@ export class ReputationClient {
     };
   }
 }
+
+// ============================================================================
+// Trust badges & enriched search results
+// ============================================================================
+
+export type TrustBadge = {
+  tier: "untrusted" | "basic" | "verified" | "trusted";
+  label: string;
+  symbol: string;
+};
+
+const TRUST_BADGES: Record<string, TrustBadge> = {
+  untrusted: { tier: "untrusted", label: "Untrusted", symbol: "-" },
+  basic: { tier: "basic", label: "Bronze", symbol: "B" },
+  verified: { tier: "verified", label: "Silver", symbol: "S" },
+  trusted: { tier: "trusted", label: "Gold", symbol: "G" },
+};
+
+/**
+ * Get a formatted trust badge for a given tier.
+ */
+export function formatTrustBadge(tier: "untrusted" | "basic" | "verified" | "trusted"): TrustBadge {
+  return TRUST_BADGES[tier] ?? TRUST_BADGES.untrusted;
+}
+
+export type EnrichedSearchResult = {
+  slug: string;
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  downloads: number;
+  rating: number;
+  badge: TrustBadge;
+  ratingStars: string;
+};
+
+/**
+ * Convert a numeric rating (0-5) to a star string like "****-" for 4/5.
+ */
+function ratingToStars(rating: number): string {
+  const clamped = Math.max(0, Math.min(5, Math.round(rating)));
+  return "*".repeat(clamped) + "-".repeat(5 - clamped);
+}
+
+/**
+ * Enrich raw search results with trust badges and rating stars.
+ */
+export function enrichSearchResults(
+  skills: Array<{
+    slug: string;
+    name: string;
+    description: string;
+    version: string;
+    author: string;
+    downloads: number;
+    rating: number;
+  }>,
+  trustScores: Map<string, { tier: "untrusted" | "basic" | "verified" | "trusted" }>,
+): EnrichedSearchResult[] {
+  return skills.map((s) => {
+    const trust = trustScores.get(s.author);
+    const badge = formatTrustBadge(trust?.tier ?? "untrusted");
+    return {
+      slug: s.slug,
+      name: s.name,
+      description: s.description,
+      version: s.version,
+      author: s.author,
+      downloads: s.downloads,
+      rating: s.rating,
+      badge,
+      ratingStars: ratingToStars(s.rating),
+    };
+  });
+}

@@ -1,6 +1,7 @@
 import type { SlashCommand } from "@mariozechner/pi-tui";
 import { listChatCommands, listChatCommandsForConfig } from "../auto-reply/commands-registry.js";
 import { formatThinkingLevels, listThinkingLevelLabels } from "../auto-reply/thinking.js";
+import { discoverMarkdownCommands } from "../commands/markdown-commands.js";
 import type { MayrosConfig } from "../config/types.js";
 
 const VERBOSE_LEVELS = ["on", "off"];
@@ -8,6 +9,9 @@ const REASONING_LEVELS = ["on", "off"];
 const ELEVATED_LEVELS = ["on", "off", "ask", "full"];
 const ACTIVATION_LEVELS = ["mention", "always"];
 const USAGE_FOOTER_LEVELS = ["off", "tokens", "full"];
+const THEME_PRESETS = ["dark", "light", "high-contrast"];
+const OUTPUT_STYLES = ["standard", "explanatory", "learning"];
+const PERMISSION_MODES = ["auto", "ask", "deny"];
 
 export type ParsedCommand = {
   name: string;
@@ -42,15 +46,9 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
   const commands: SlashCommand[] = [
     { name: "help", description: "Show slash command help" },
     { name: "status", description: "Show gateway status summary" },
-    { name: "agent", description: "Switch agent (or open picker)" },
-    { name: "agents", description: "Open agent picker" },
-    { name: "session", description: "Switch session (or open picker)" },
-    { name: "sessions", description: "Open session picker" },
-    {
-      name: "model",
-      description: "Set model (or open picker)",
-    },
-    { name: "models", description: "Open model picker" },
+    { name: "agent", description: "Switch agent or open picker" },
+    { name: "session", description: "Switch session or open picker" },
+    { name: "model", description: "Set model or open picker" },
     {
       name: "think",
       description: "Set thinking level",
@@ -96,15 +94,6 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
         })),
     },
     {
-      name: "elev",
-      description: "Alias for /elevated",
-      getArgumentCompletions: (prefix) =>
-        ELEVATED_LEVELS.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
-          value,
-          label: value,
-        })),
-    },
-    {
       name: "activation",
       description: "Set group activation",
       getArgumentCompletions: (prefix) =>
@@ -113,12 +102,74 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
           label: value,
         })),
     },
+    {
+      name: "theme",
+      description: "Set TUI color theme",
+      getArgumentCompletions: (prefix) =>
+        THEME_PRESETS.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "diff",
+      description: "Show git diff (optionally for a file)",
+    },
+    {
+      name: "context",
+      description: "Show context window usage",
+    },
+    {
+      name: "style",
+      description: "Set output style",
+      getArgumentCompletions: (prefix) =>
+        OUTPUT_STYLES.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "vim",
+      description: "Toggle vim editing mode",
+    },
+    {
+      name: "permission",
+      description: "Set permission mode",
+      getArgumentCompletions: (prefix) =>
+        PERMISSION_MODES.filter((v) => v.startsWith(prefix.toLowerCase())).map((value) => ({
+          value,
+          label: value,
+        })),
+    },
+    {
+      name: "fast",
+      description: "Toggle fast mode (minimal thinking)",
+    },
+    {
+      name: "copy",
+      description: "Copy last response to clipboard",
+    },
+    {
+      name: "export",
+      description: "Export session to file",
+    },
     { name: "abort", description: "Abort active run" },
     { name: "new", description: "Reset the session" },
-    { name: "reset", description: "Reset the session" },
     { name: "settings", description: "Open settings" },
+    // Mayros ecosystem
+    { name: "plan", description: "Start or show semantic plan" },
+    { name: "kg", description: "Search the knowledge graph" },
+    { name: "trace", description: "Show agent trace events" },
+    { name: "team", description: "Show team dashboard" },
+    { name: "tasks", description: "Show background tasks" },
+    { name: "workflow", description: "Run or list workflows" },
+    { name: "rules", description: "Show active rules" },
+    { name: "mailbox", description: "Check agent mailbox" },
+    { name: "batch", description: "Run batch prompt processing" },
+    { name: "teleport", description: "Export/import session between devices" },
+    { name: "sync", description: "Cortex peer sync status" },
+    { name: "onboard", description: "Run onboarding wizard" },
     { name: "exit", description: "Exit the TUI" },
-    { name: "quit", description: "Exit the TUI" },
   ];
 
   const seen = new Set(commands.map((command) => command.name));
@@ -135,29 +186,76 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     }
   }
 
+  // Discover user-defined markdown commands from .mayros/commands/
+  for (const mdCmd of discoverMarkdownCommands()) {
+    if (seen.has(mdCmd.name)) {
+      continue;
+    }
+    seen.add(mdCmd.name);
+    const desc = mdCmd.argumentHint
+      ? `${mdCmd.description} (${mdCmd.argumentHint})`
+      : mdCmd.description;
+    commands.push({ name: mdCmd.name, description: desc });
+  }
+
   return commands;
 }
 
 export function helpText(options: SlashCommandOptions = {}): string {
   const thinkLevels = formatThinkingLevels(options.provider, options.model, "|");
-  return [
+  const lines = [
     "Slash commands:",
     "/help",
     "/commands",
     "/status",
-    "/agent <id> (or /agents)",
-    "/session <key> (or /sessions)",
-    "/model <provider/model> (or /models)",
+    "/agent [id]",
+    "/session [key]",
+    "/model [provider/model]",
     `/think <${thinkLevels}>`,
     "/verbose <on|off>",
     "/reasoning <on|off>",
     "/usage <off|tokens|full>",
     "/elevated <on|off|ask|full>",
-    "/elev <on|off|ask|full>",
     "/activation <mention|always>",
-    "/new or /reset",
+    "/theme <dark|light|high-contrast>",
+    "/diff [file]",
+    "/context",
+    "/style <standard|explanatory|learning>",
+    "/vim",
+    "/permission <auto|ask|deny>",
+    "/fast",
+    "/copy",
+    "/export [file]",
+    "/new",
     "/abort",
     "/settings",
+    "",
+    "Mayros ecosystem:",
+    "/plan [start|show|list]",
+    "/kg <query>",
+    "/trace [events|stats]",
+    "/team",
+    "/tasks",
+    "/workflow [run|list] [name]",
+    "/rules [list|add]",
+    "/mailbox [list|send]",
+    "/batch <file>",
+    "/teleport [export|import]",
+    "/sync [status|pair]",
+    "/onboard",
+    "",
     "/exit",
-  ].join("\n");
+  ];
+
+  // Append user-defined markdown commands
+  const mdCommands = discoverMarkdownCommands();
+  if (mdCommands.length > 0) {
+    lines.push("", "Custom commands (.mayros/commands/):");
+    for (const cmd of mdCommands) {
+      const hint = cmd.argumentHint ? ` ${cmd.argumentHint}` : "";
+      lines.push(`/${cmd.name}${hint} — ${cmd.description}`);
+    }
+  }
+
+  return lines.join("\n");
 }

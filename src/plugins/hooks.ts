@@ -49,6 +49,12 @@ import type {
   PluginHookToolResultPersistResult,
   PluginHookBeforeMessageWriteEvent,
   PluginHookBeforeMessageWriteResult,
+  PluginHookPermissionRequestEvent,
+  PluginHookPermissionRequestResult,
+  PluginHookNotificationEvent,
+  PluginHookTeammateIdleEvent,
+  PluginHookTaskCompletedEvent,
+  PluginHookConfigChangeEvent,
 } from "./types.js";
 
 // Re-export types for consumers
@@ -93,6 +99,12 @@ export type {
   PluginHookGatewayContext,
   PluginHookGatewayStartEvent,
   PluginHookGatewayStopEvent,
+  PluginHookPermissionRequestEvent,
+  PluginHookPermissionRequestResult,
+  PluginHookNotificationEvent,
+  PluginHookTeammateIdleEvent,
+  PluginHookTaskCompletedEvent,
+  PluginHookConfigChangeEvent,
 };
 
 export type HookRunnerLogger = {
@@ -691,6 +703,90 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
   }
 
   // =========================================================================
+  // Permission Hooks
+  // =========================================================================
+
+  /**
+   * Run permission_request hook.
+   * Allows plugins to override permission decisions before user is prompted.
+   * Runs sequentially — first definitive result wins.
+   */
+  async function runPermissionRequest(
+    event: PluginHookPermissionRequestEvent,
+    ctx: PluginHookToolContext,
+  ): Promise<PluginHookPermissionRequestResult | undefined> {
+    return runModifyingHook<"permission_request", PluginHookPermissionRequestResult>(
+      "permission_request",
+      event,
+      ctx,
+      (acc, next) => ({
+        action: acc?.action ?? next.action,
+        reason: acc?.reason ?? next.reason,
+      }),
+    );
+  }
+
+  // =========================================================================
+  // Notification Hooks
+  // =========================================================================
+
+  /**
+   * Run notification hook.
+   * Allows plugins to observe system notifications.
+   * Runs in parallel (fire-and-forget).
+   */
+  async function runNotification(
+    event: PluginHookNotificationEvent,
+    ctx: PluginHookAgentContext,
+  ): Promise<void> {
+    return runVoidHook("notification", event, ctx);
+  }
+
+  // =========================================================================
+  // Team Hooks
+  // =========================================================================
+
+  /**
+   * Run teammate_idle hook.
+   * Notifies plugins when an agent has been idle for a configured duration.
+   * Runs in parallel (fire-and-forget).
+   */
+  async function runTeammateIdle(
+    event: PluginHookTeammateIdleEvent,
+    ctx: PluginHookAgentContext,
+  ): Promise<void> {
+    return runVoidHook("teammate_idle", event, ctx);
+  }
+
+  /**
+   * Run task_completed hook.
+   * Notifies plugins when a background task finishes.
+   * Runs in parallel (fire-and-forget).
+   */
+  async function runTaskCompleted(
+    event: PluginHookTaskCompletedEvent,
+    ctx: PluginHookAgentContext,
+  ): Promise<void> {
+    return runVoidHook("task_completed", event, ctx);
+  }
+
+  // =========================================================================
+  // Config Hooks
+  // =========================================================================
+
+  /**
+   * Run config_change hook.
+   * Notifies plugins when configuration has been written.
+   * Runs in parallel (fire-and-forget).
+   */
+  async function runConfigChange(
+    event: PluginHookConfigChangeEvent,
+    ctx: PluginHookAgentContext,
+  ): Promise<void> {
+    return runVoidHook("config_change", event, ctx);
+  }
+
+  // =========================================================================
   // Utility
   // =========================================================================
 
@@ -739,6 +835,15 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     // Gateway hooks
     runGatewayStart,
     runGatewayStop,
+    // Permission hooks
+    runPermissionRequest,
+    // Notification hooks
+    runNotification,
+    // Team hooks
+    runTeammateIdle,
+    runTaskCompleted,
+    // Config hooks
+    runConfigChange,
     // Utility
     hasHooks,
     getHookCount,

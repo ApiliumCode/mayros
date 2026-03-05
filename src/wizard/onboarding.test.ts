@@ -86,6 +86,7 @@ const isSystemdUserServiceAvailable = vi.hoisted(() => vi.fn(async () => true));
 const ensureControlUiAssetsBuilt = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
 const runTui = vi.hoisted(() => vi.fn(async (_options: unknown) => {}));
 const setupOnboardingShellCompletion = vi.hoisted(() => vi.fn(async () => {}));
+const setupMcpServers = vi.hoisted(() => vi.fn(async (cfg: unknown) => cfg));
 
 vi.mock("../commands/onboard-channels.js", () => ({
   setupChannels,
@@ -93,6 +94,10 @@ vi.mock("../commands/onboard-channels.js", () => ({
 
 vi.mock("../commands/onboard-skills.js", () => ({
   setupSkills,
+}));
+
+vi.mock("../commands/onboard-mcp.js", () => ({
+  setupMcpServers,
 }));
 
 vi.mock("../agents/auth-profiles.js", () => ({
@@ -308,6 +313,7 @@ describe("runOnboardingWizard", () => {
         skipSkills: true,
         skipHealth: true,
         skipUi: true,
+        skipSync: true,
       },
       runtime,
       prompter,
@@ -351,6 +357,7 @@ describe("runOnboardingWizard", () => {
         skipProviders: true,
         skipSkills: true,
         skipHealth: true,
+        skipSync: true,
         installDaemon: false,
       },
       runtime,
@@ -392,6 +399,7 @@ describe("runOnboardingWizard", () => {
           skipSkills: true,
           skipHealth: true,
           skipUi: true,
+          skipSync: true,
         },
         runtime,
         prompter,

@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-agent-mesh",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Mayros multi-agent coordination mesh with shared namespaces, delegation, and knowledge fusion",
   "type": "module",

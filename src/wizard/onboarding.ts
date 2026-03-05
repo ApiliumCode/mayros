@@ -443,6 +443,92 @@ export async function runOnboardingWizard(
     nextConfig = await setupSkills(nextConfig, workspaceDir, runtime, prompter);
   }
 
+  // MCP server setup
+  if (opts.skipMcp) {
+    await prompter.note("Skipping MCP server setup.", "MCP Servers");
+  } else {
+    const { setupMcpServers } = await import("../commands/onboard-mcp.js");
+    nextConfig = await setupMcpServers(nextConfig, runtime, prompter);
+  }
+
+  // Cortex sync pairing
+  if (opts.skipSync) {
+    await prompter.note("Skipping sync setup.", "Cortex Sync");
+  } else {
+    const syncChoice = await prompter.select({
+      message: "Pair with another Mayros instance?",
+      options: [
+        { value: "skip", label: "Skip for now" },
+        { value: "manual", label: "Enter peer address manually" },
+      ],
+      initialValue: "skip",
+    });
+
+    if (syncChoice === "manual") {
+      const peerEndpoint = await prompter.text({
+        message: "Peer Cortex endpoint (e.g. http://192.168.1.5:8080)",
+        placeholder: "http://host:8080",
+      });
+
+      if (peerEndpoint && typeof peerEndpoint === "string" && peerEndpoint.trim()) {
+        // Validate URL format
+        const endpoint = peerEndpoint.trim();
+        if (!/^https?:\/\/.+/.test(endpoint)) {
+          await prompter.note(
+            `Invalid endpoint "${endpoint}". Must start with http:// or https://`,
+            "Cortex Sync",
+          );
+        } else {
+          const peerId = await prompter.text({
+            message: "Peer name (unique identifier, alphanumeric/dashes)",
+            placeholder: "my-laptop",
+          });
+
+          const peerIdTrimmed = peerId && typeof peerId === "string" ? peerId.trim() : "";
+          if (!peerIdTrimmed || !/^[a-zA-Z0-9_-]+$/.test(peerIdTrimmed)) {
+            await prompter.note(
+              "Invalid peer name. Use only letters, numbers, dashes, and underscores.",
+              "Cortex Sync",
+            );
+          } else {
+            // Store sync peer in config for the cortex-sync plugin to pick up
+            const syncConfig = (nextConfig.plugins?.entries?.["cortex-sync"]?.config ??
+              {}) as Record<string, unknown>;
+            const discovery = (syncConfig.discovery ?? {}) as Record<string, unknown>;
+            const manualPeers = (
+              Array.isArray(discovery.manualPeers) ? discovery.manualPeers : []
+            ) as Array<Record<string, unknown>>;
+            manualPeers.push({
+              nodeId: peerIdTrimmed,
+              endpoint,
+              namespaces: ["mayros"],
+              enabled: true,
+            });
+            discovery.manualPeers = manualPeers;
+            syncConfig.discovery = discovery;
+            nextConfig = {
+              ...nextConfig,
+              plugins: {
+                ...nextConfig.plugins,
+                entries: {
+                  ...nextConfig.plugins?.entries,
+                  "cortex-sync": {
+                    ...nextConfig.plugins?.entries?.["cortex-sync"],
+                    config: syncConfig,
+                  },
+                },
+              },
+            };
+            await prompter.note(
+              `Peer "${peerIdTrimmed}" added at ${endpoint}.\nRun 'mayros sync now' after setup to trigger first sync.`,
+              "Cortex Sync",
+            );
+          }
+        } // close else (valid URL)
+      }
+    }
+  }
+
   // Setup hooks (session memory on /new)
   const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
   nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);

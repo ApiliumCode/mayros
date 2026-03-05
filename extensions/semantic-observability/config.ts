@@ -19,17 +19,25 @@ export type MetricsConfig = {
   path: string;
 };
 
+export type SessionConfig = {
+  maxCheckpointsPerSession: number;
+  maxForksPerSession: number;
+};
+
 export type ObservabilityConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
   tracing: TracingConfig;
   metrics: MetricsConfig;
+  session: SessionConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8080;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
+const DEFAULT_MAX_CHECKPOINTS = 50;
+const DEFAULT_MAX_FORKS = 10;
 
 function parseTracingConfig(raw: unknown): TracingConfig {
   const tracing = (raw ?? {}) as Record<string, unknown>;
@@ -69,6 +77,35 @@ function parseMetricsConfig(raw: unknown): MetricsConfig {
   };
 }
 
+function parseSessionConfig(raw: unknown): SessionConfig {
+  const session = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(
+      session,
+      ["maxCheckpointsPerSession", "maxForksPerSession"],
+      "session config",
+    );
+  }
+
+  const maxCheckpointsPerSession =
+    typeof session.maxCheckpointsPerSession === "number"
+      ? Math.floor(session.maxCheckpointsPerSession)
+      : DEFAULT_MAX_CHECKPOINTS;
+  if (maxCheckpointsPerSession < 1) {
+    throw new Error("session.maxCheckpointsPerSession must be at least 1");
+  }
+
+  const maxForksPerSession =
+    typeof session.maxForksPerSession === "number"
+      ? Math.floor(session.maxForksPerSession)
+      : DEFAULT_MAX_FORKS;
+  if (maxForksPerSession < 1) {
+    throw new Error("session.maxForksPerSession must be at least 1");
+  }
+
+  return { maxCheckpointsPerSession, maxForksPerSession };
+}
+
 export const observabilityConfigSchema = {
   parse(value: unknown): ObservabilityConfig {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -77,7 +114,7 @@ export const observabilityConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["cortex", "agentNamespace", "tracing", "metrics"],
+      ["cortex", "agentNamespace", "tracing", "metrics", "session"],
       "observability config",
     );
 
@@ -93,8 +130,9 @@ export const observabilityConfigSchema = {
 
     const tracing = parseTracingConfig(cfg.tracing);
     const metrics = parseMetricsConfig(cfg.metrics);
+    const session = parseSessionConfig(cfg.session);
 
-    return { cortex, agentNamespace, tracing, metrics };
+    return { cortex, agentNamespace, tracing, metrics, session };
   },
   uiHints: {
     "cortex.host": {
@@ -142,6 +180,18 @@ export const observabilityConfigSchema = {
       placeholder: String(DEFAULT_FLUSH_INTERVAL_MS),
       advanced: true,
       help: "How often buffered trace events are flushed to Cortex (milliseconds)",
+    },
+    "session.maxCheckpointsPerSession": {
+      label: "Max Checkpoints",
+      placeholder: String(DEFAULT_MAX_CHECKPOINTS),
+      advanced: true,
+      help: "Maximum number of checkpoints allowed per session",
+    },
+    "session.maxForksPerSession": {
+      label: "Max Forks",
+      placeholder: String(DEFAULT_MAX_FORKS),
+      advanced: true,
+      help: "Maximum number of forks allowed per session",
     },
   },
 };

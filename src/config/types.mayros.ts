@@ -68,6 +68,12 @@ export type MayrosConfig = {
   ui?: {
     /** Accent color for Mayros UI chrome (hex). */
     seamColor?: string;
+    /** TUI color theme preset. */
+    theme?: "dark" | "light" | "high-contrast";
+    /** Enable vim editing mode in the TUI. */
+    vim?: boolean;
+    /** Custom keybindings for TUI actions. */
+    keybindings?: Record<string, string | string[]>;
     assistant?: {
       /** Assistant display name for UI surfaces. */
       name?: string;

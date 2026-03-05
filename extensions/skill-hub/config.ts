@@ -19,12 +19,25 @@ export type VerificationConfig = {
   minTrustTier: TrustTier;
 };
 
+export type NotificationsConfig = {
+  checkOnSessionStart: boolean;
+  checkIntervalMs: number;
+};
+
+export type RatingConfig = {
+  enabled: boolean;
+  minScore: number;
+  maxScore: number;
+};
+
 export type SkillHubConfig = {
   hubUrl: string;
   cortex: CortexConfig;
   agentNamespace: string;
   keysDir: string;
   verification: VerificationConfig;
+  notifications: NotificationsConfig;
+  rating: RatingConfig;
 };
 
 const DEFAULT_HUB_URL = "https://hub.apilium.com";
@@ -70,6 +83,34 @@ function parseVerificationConfig(raw: unknown): VerificationConfig {
   };
 }
 
+function parseNotificationsConfig(raw: unknown): NotificationsConfig {
+  const cfg = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(cfg, ["checkOnSessionStart", "checkIntervalMs"], "notifications config");
+  }
+
+  return {
+    checkOnSessionStart: cfg.checkOnSessionStart === true,
+    checkIntervalMs:
+      typeof cfg.checkIntervalMs === "number"
+        ? Math.max(60_000, Math.floor(cfg.checkIntervalMs))
+        : 3_600_000,
+  };
+}
+
+function parseRatingConfig(raw: unknown): RatingConfig {
+  const cfg = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(cfg, ["enabled", "minScore", "maxScore"], "rating config");
+  }
+
+  return {
+    enabled: cfg.enabled !== false,
+    minScore: typeof cfg.minScore === "number" ? Math.max(1, Math.floor(cfg.minScore)) : 1,
+    maxScore: typeof cfg.maxScore === "number" ? Math.min(5, Math.floor(cfg.maxScore)) : 5,
+  };
+}
+
 function expandHome(p: string): string {
   if (p.startsWith("~/")) {
     return p.replace("~", process.env.HOME ?? "");
@@ -85,7 +126,7 @@ export const skillHubConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["hubUrl", "cortex", "agentNamespace", "keysDir", "verification"],
+      ["hubUrl", "cortex", "agentNamespace", "keysDir", "verification", "notifications", "rating"],
       "skill hub config",
     );
 
@@ -102,8 +143,10 @@ export const skillHubConfigSchema = {
 
     const keysDir = expandHome(typeof cfg.keysDir === "string" ? cfg.keysDir : DEFAULT_KEYS_DIR);
     const verification = parseVerificationConfig(cfg.verification);
+    const notifications = parseNotificationsConfig(cfg.notifications);
+    const rating = parseRatingConfig(cfg.rating);
 
-    return { hubUrl, cortex, agentNamespace, keysDir, verification };
+    return { hubUrl, cortex, agentNamespace, keysDir, verification, notifications, rating };
   },
   uiHints: {
     hubUrl: {

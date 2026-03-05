@@ -9,7 +9,11 @@ export type MeshMessageType =
   | "knowledge-share"
   | "delegation-context"
   | "merge-request"
-  | "conflict-alert";
+  | "conflict-alert"
+  | "task"
+  | "finding"
+  | "question"
+  | "status-update";
 
 export type MeshMessage = {
   type: MeshMessageType;
@@ -100,9 +104,16 @@ export type Grant = {
  * Validates that a value is a recognized MeshMessageType.
  */
 export function isValidMessageType(type: string): type is MeshMessageType {
-  return ["knowledge-share", "delegation-context", "merge-request", "conflict-alert"].includes(
-    type,
-  );
+  return [
+    "knowledge-share",
+    "delegation-context",
+    "merge-request",
+    "conflict-alert",
+    "task",
+    "finding",
+    "question",
+    "status-update",
+  ].includes(type);
 }
 
 /**

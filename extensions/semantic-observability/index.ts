@@ -15,6 +15,7 @@ import { DecisionGraph } from "./decision-graph.js";
 import { ObservabilityFormatter } from "./formatters.js";
 import { MetricsExporter } from "./metrics-exporter.js";
 import { ObservabilityQueryEngine } from "./query-engine.js";
+import { SessionForkManager } from "./session-fork.js";
 import { TraceEmitter } from "./trace-emitter.js";
 
 // ============================================================================
@@ -65,6 +66,8 @@ const semanticObservabilityPlugin = {
       },
     });
 
+    const forkMgr = new SessionForkManager(client, emitter, ns);
+
     // Metrics exporter
     const metrics = new MetricsExporter();
     if (cfg.metrics.enabled) {
@@ -94,9 +97,12 @@ const semanticObservabilityPlugin = {
     ]);
 
     // Track per-LLM-call timing
-    const llmCallTimers = new Map<string, { model: string; startMs: number }>();
+    const llmCallTimers = new Map<string, { model: string; startMs: number; session?: string }>();
     // Track subagent runs
-    const subagentRuns = new Map<string, { childId: string; task: string; startMs: number }>();
+    const subagentRuns = new Map<
+      string,
+      { childId: string; task: string; startMs: number; session?: string }
+    >();
 
     // ========================================================================
     // Tools
@@ -238,14 +244,99 @@ const semanticObservabilityPlugin = {
       { name: "trace_stats" },
     );
 
+    api.registerTool(
+      {
+        name: "trace_session_fork",
+        label: "Session Fork",
+        description: "Fork the current session into a new session, copying all trace events.",
+        parameters: Type.Object({
+          sessionKey: Type.Optional(Type.String({ description: "Source session key" })),
+          newSessionKey: Type.Optional(Type.String({ description: "Name for the forked session" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, newSessionKey } = params as {
+            sessionKey?: string;
+            newSessionKey?: string;
+          };
+
+          const sourceKey = sessionKey ?? "default";
+
+          try {
+            const result = await forkMgr.fork(sourceKey, newSessionKey);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session forked: ${result.originalSession} → ${result.forkedSession}\n  events copied: ${result.eventsCopied}\n  forkedAt: ${result.forkedAt}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Fork failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_fork" },
+    );
+
+    api.registerTool(
+      {
+        name: "trace_session_rewind",
+        label: "Session Rewind",
+        description: "Rewind a session to a specific timestamp, marking later events as inactive.",
+        parameters: Type.Object({
+          sessionKey: Type.String({ description: "Session key to rewind" }),
+          toTimestamp: Type.String({ description: "ISO 8601 timestamp to rewind to" }),
+        }),
+        async execute(_toolCallId, params) {
+          const { sessionKey, toTimestamp } = params as {
+            sessionKey: string;
+            toTimestamp: string;
+          };
+
+          try {
+            const result = await forkMgr.rewind(sessionKey, toTimestamp);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Session rewound: ${result.sessionKey}\n  rewindPoint: ${result.rewindPoint}\n  events removed: ${result.eventsRemoved}\n  events retained: ${result.eventsRetained}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Rewind failed: ${String(err)}` }],
+              details: { action: "failed", error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "trace_session_rewind" },
+    );
+
     // ========================================================================
     // Hooks
     // ========================================================================
 
     if (cfg.tracing.enabled && cfg.tracing.captureToolCalls) {
-      api.on("after_tool_call", async (event, _ctx) => {
+      api.on("after_tool_call", async (event, ctx) => {
         const durationMs = event.durationMs ?? 0;
-        emitter.emitToolCall(agentId, event.toolName, event.params, event.result ?? {}, durationMs);
+        emitter.emitToolCall(
+          agentId,
+          event.toolName,
+          event.params,
+          event.result ?? {},
+          durationMs,
+          ctx.sessionKey,
+        );
 
         if (cfg.metrics.enabled) {
           metrics.incrementCounter("mayros_tool_calls_total", { tool_name: event.toolName });
@@ -263,13 +354,14 @@ const semanticObservabilityPlugin = {
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureLLMCalls) {
-      api.on("llm_input", async (event, _ctx) => {
+      api.on("llm_input", async (event, ctx) => {
         const runId = event.runId;
         const model = event.model;
 
         llmCallTimers.set(runId, {
           model,
           startMs: Date.now(),
+          session: ctx.sessionKey,
         });
       });
 
@@ -282,7 +374,14 @@ const semanticObservabilityPlugin = {
         if (timer) {
           llmCallTimers.delete(runId);
           const durationMs = Date.now() - timer.startMs;
-          emitter.emitLLMCall(agentId, timer.model, promptTokens, completionTokens, durationMs);
+          emitter.emitLLMCall(
+            agentId,
+            timer.model,
+            promptTokens,
+            completionTokens,
+            durationMs,
+            timer.session,
+          );
 
           if (cfg.metrics.enabled) {
             metrics.incrementCounter("mayros_llm_calls_total", { model: timer.model });
@@ -302,18 +401,20 @@ const semanticObservabilityPlugin = {
     }
 
     if (cfg.tracing.enabled && cfg.tracing.captureDelegations) {
-      api.on("subagent_spawned", async (event, _ctx) => {
+      api.on("subagent_spawned", async (event, ctx) => {
         const runId = event.runId;
         const childId = event.agentId ?? "unknown";
         const task = event.label ?? "";
+        const session = ctx.requesterSessionKey;
 
         subagentRuns.set(runId, {
           childId,
           task,
           startMs: Date.now(),
+          session,
         });
 
-        emitter.emitDelegation(agentId, childId, task, runId);
+        emitter.emitDelegation(agentId, childId, task, runId, session);
       });
 
       api.on("subagent_ended", async (event, _ctx) => {
@@ -325,17 +426,17 @@ const semanticObservabilityPlugin = {
           subagentRuns.delete(runId);
           if (!success) {
             const error = String(event.error ?? "Subagent run failed");
-            emitter.emitError(run.childId, error, `delegation run: ${runId}`);
+            emitter.emitError(run.childId, error, `delegation run: ${runId}`, run.session);
           }
         }
       });
     }
 
     if (cfg.tracing.enabled) {
-      api.on("agent_end", async (event, _ctx) => {
+      api.on("agent_end", async (event, ctx) => {
         if (event.success === false) {
           const error = String(event.error ?? "Agent run failed");
-          emitter.emitError(agentId, error, "agent_end");
+          emitter.emitError(agentId, error, "agent_end", ctx.sessionKey);
         }
       });
     }

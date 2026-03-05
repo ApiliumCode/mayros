@@ -1,0 +1,18 @@
+{
+  "name": "@apilium/mayros-bash-sandbox",
+  "version": "0.1.4",
+  "private": true,
+  "description": "Bash command sandbox with domain allowlist, command blocklist, and dangerous pattern detection",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "@apilium/mayros": "workspace:*"
+  },
+  "mayros": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

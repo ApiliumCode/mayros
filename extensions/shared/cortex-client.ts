@@ -403,6 +403,26 @@ export class CortexClient implements CortexClientLike, CortexLike {
     return this.request<ListTriplesResponse>("GET", `/api/v1/triples${qs}`);
   }
 
+  /**
+   * List triples created after `since` (ISO timestamp).
+   * Client-side filter on `created_at` since Cortex REST API doesn't natively
+   * support timestamp-based queries.
+   */
+  async listTriplesSince(
+    since: string,
+    query?: Omit<ListTriplesQuery, "offset">,
+  ): Promise<ListTriplesResponse> {
+    const result = await this.listTriples({ ...query, limit: query?.limit ?? 10000 });
+    const sinceRaw = new Date(since).getTime();
+    const sinceMs = Number.isNaN(sinceRaw) ? 0 : sinceRaw;
+    const filtered = result.triples.filter((t) => {
+      if (!t.created_at) return false;
+      const ts = new Date(t.created_at).getTime();
+      return !Number.isNaN(ts) && ts >= sinceMs;
+    });
+    return { triples: filtered, total: filtered.length };
+  }
+
   // ---------- Query ----------
 
   async patternQuery(req: PatternQueryRequest): Promise<PatternQueryResponse> {

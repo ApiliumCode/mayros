@@ -38,6 +38,15 @@ const loadConfig = async (): Promise<MayrosConfig> => {
 // and set the flag accordingly.
 const entries: SubCliEntry[] = [
   {
+    name: "code",
+    description: "Start interactive coding session",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../code-cli.js");
+      mod.registerCodeCli(program);
+    },
+  },
+  {
     name: "acp",
     description: "Agent Control Protocol tools",
     hasSubcommands: true,
@@ -285,6 +294,132 @@ const entries: SubCliEntry[] = [
     register: async (program) => {
       const mod = await import("../completion-cli.js");
       mod.registerCompletionCli(program);
+    },
+  },
+  {
+    name: "trace",
+    description: "Inspect agent trace events — query, explain, stats, session trees",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../trace-cli.js");
+      mod.registerTraceCli(program);
+    },
+  },
+  {
+    name: "plan",
+    description: "Semantic plan mode — explore, assert, approve, execute with Cortex",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../plan-cli.js");
+      mod.registerPlanCli(program);
+    },
+  },
+  {
+    name: "kg",
+    description: "Knowledge graph — search, explore, and query project memory",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../kg-cli.js");
+      mod.registerKgCli(program);
+    },
+  },
+  {
+    name: "workflow",
+    description: "Multi-agent workflows — run, list, and track workflow execution",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../workflow-cli.js");
+      mod.registerWorkflowCli(program);
+    },
+  },
+  {
+    name: "rules",
+    description: "Rules engine — manage Cortex-backed hierarchical rules",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../rules-cli.js");
+      mod.registerRulesCli(program);
+    },
+  },
+  {
+    name: "mailbox",
+    description: "Agent mailbox — persistent messaging between agents",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../mailbox-cli.js");
+      mod.registerMailboxCli(program);
+    },
+  },
+  {
+    name: "team-dashboard",
+    description: "Team dashboard — real-time agent status and activity",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../dashboard-cli.js");
+      mod.registerDashboardCli(program);
+    },
+  },
+  {
+    name: "session",
+    description: "Session fork/rewind — checkpoint, fork, and rewind agent sessions",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../fork-cli.js");
+      mod.registerSessionCli(program);
+    },
+  },
+  {
+    name: "tasks",
+    description: "Background tasks — list, inspect, and manage background agent tasks",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../tasks-cli.js");
+      mod.registerTasksCli(program);
+    },
+  },
+  {
+    name: "diagnose",
+    description: "Diagnostic checks — runtime, Cortex, plugins, security, config",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../doctor-cli.js");
+      mod.registerDoctorCli(program);
+    },
+  },
+  {
+    name: "lsp",
+    description: "LSP bridge — query language diagnostics and definitions from Cortex",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../lsp-cli.js");
+      mod.registerLspCli(program);
+    },
+  },
+  {
+    name: "batch",
+    description: "Batch prompt processing — run multiple prompts in parallel",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../batch-cli.js");
+      mod.registerBatchCli(program);
+    },
+  },
+  {
+    name: "teleport",
+    description: "Session teleport — export/import sessions between devices",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../teleport-cli.js");
+      mod.registerTeleportCli(program);
+    },
+  },
+  {
+    name: "sync",
+    description: "Cortex sync — peer management and cross-device synchronization",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../sync-cli.js");
+      mod.registerSyncCli(program);
     },
   },
 ];
