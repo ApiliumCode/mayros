@@ -51,6 +51,25 @@ vi.mock("vscode", () => ({
   Uri: {
     joinPath: vi.fn((...parts: unknown[]) => parts.join("/")),
   },
+  Range: class MockRange {
+    start: unknown;
+    end: unknown;
+    constructor(start: unknown, end: unknown) {
+      this.start = start;
+      this.end = end;
+    }
+  },
+  CodeLens: class MockCodeLens {
+    range: unknown;
+    command: unknown;
+    constructor(range: unknown, command?: unknown) {
+      this.range = range;
+      this.command = command;
+    }
+  },
+  languages: {
+    registerCodeLensProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  },
   EventEmitter: vi.fn(() => ({
     event: vi.fn(),
     fire: vi.fn(),
@@ -121,7 +140,7 @@ describe("Extension activate/deactivate", () => {
     } as unknown as vscode.ExtensionContext;
   });
 
-  it("registers all 7 commands", () => {
+  it("registers all 10 commands", () => {
     activate(context);
 
     const expectedCommands = [
@@ -132,6 +151,9 @@ describe("Extension activate/deactivate", () => {
       "mayros.openPlan",
       "mayros.openTrace",
       "mayros.openKg",
+      "mayros.explainCode",
+      "mayros.sendSelection",
+      "mayros.sendMarker",
     ];
 
     for (const cmd of expectedCommands) {
@@ -150,8 +172,8 @@ describe("Extension activate/deactivate", () => {
   it("adds disposables to context.subscriptions", () => {
     activate(context);
 
-    // 3 tree providers + 7 commands + 1 config listener = 11
-    expect(context.subscriptions.length).toBeGreaterThanOrEqual(11);
+    // 3 tree providers + 10 commands + 1 CodeLens + 1 config listener = 15
+    expect(context.subscriptions.length).toBeGreaterThanOrEqual(15);
   });
 
   it("does not auto-connect when autoConnect is false", () => {

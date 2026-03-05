@@ -31,6 +31,7 @@ const webviewConfig: BuildOptions = {
   platform: "browser",
   target: "es2022",
   sourcemap: true,
+  loader: { ".css": "text" },
 };
 
 async function build(): Promise<void> {

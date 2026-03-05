@@ -1,4 +1,41 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+/* ------------------------------------------------------------------ */
+/*  Mock node:crypto, node:fs, node:os for device identity             */
+/* ------------------------------------------------------------------ */
+
+vi.mock("node:crypto", () => ({
+  default: {
+    createPublicKey: vi.fn(() => ({
+      export: vi.fn(() => Buffer.alloc(44)), // dummy SPKI
+    })),
+    createPrivateKey: vi.fn(() => ({})),
+    sign: vi.fn(() => Buffer.from("mock-signature")),
+  },
+}));
+
+vi.mock("node:fs", () => ({
+  default: {
+    existsSync: vi.fn(() => false),
+    readFileSync: vi.fn(() => "{}"),
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  },
+}));
+
+vi.mock("node:path", () => ({
+  default: {
+    join: vi.fn((...parts: string[]) => parts.join("/")),
+    dirname: vi.fn((p: string) => p.split("/").slice(0, -1).join("/")),
+  },
+}));
+
+vi.mock("node:os", () => ({
+  default: {
+    homedir: vi.fn(() => "/mock-home"),
+  },
+}));
+
 import { MayrosClient, type IWebSocket, type WebSocketFactory } from "../src/mayros-client.js";
 
 /* ------------------------------------------------------------------ */
@@ -42,6 +79,59 @@ class MockWebSocket implements IWebSocket {
 
   simulateError(error: Error): void {
     this.onerror?.(error);
+  }
+
+  /** Simulate the gateway challenge-response handshake. */
+  simulateHandshake(): void {
+    // 1. Send connect.challenge event
+    this.simulateMessage(
+      JSON.stringify({
+        type: "event",
+        event: "connect.challenge",
+        payload: { nonce: "test-nonce-123", ts: Date.now() },
+      }),
+    );
+
+    // 2. The client should have sent a connect request — find its id
+    const connectMsg = this.sent.find((s) => {
+      try {
+        const m = JSON.parse(s);
+        return m.method === "connect";
+      } catch {
+        return false;
+      }
+    });
+    if (!connectMsg) return;
+
+    const parsed = JSON.parse(connectMsg);
+
+    // 3. Respond with hello-ok
+    this.simulateMessage(
+      JSON.stringify({
+        type: "res",
+        id: parsed.id,
+        ok: true,
+        payload: { type: "hello-ok", protocol: 3, server: { version: "test" } },
+      }),
+    );
+  }
+
+  /** simulateOpen + simulateHandshake in one step */
+  simulateFullConnect(): void {
+    this.simulateOpen();
+    this.simulateHandshake();
+  }
+
+  /** Get sent messages after the handshake connect request (domain RPCs only). */
+  getSentAfterHandshake(): string[] {
+    const handshakeIdx = this.sent.findIndex((s) => {
+      try {
+        return JSON.parse(s).method === "connect";
+      } catch {
+        return false;
+      }
+    });
+    return handshakeIdx >= 0 ? this.sent.slice(handshakeIdx + 1) : this.sent;
   }
 }
 
@@ -96,12 +186,12 @@ describe("MayrosClient", () => {
 
   /* -- Connect -- */
 
-  it("connects successfully when WS fires onopen", async () => {
+  it("connects successfully after handshake", async () => {
     const { factory, lastWs } = createFactory();
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     expect(client.connected).toBe(true);
@@ -114,7 +204,7 @@ describe("MayrosClient", () => {
     client.on("connected", handler);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     expect(handler).toHaveBeenCalledOnce();
@@ -136,7 +226,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p1 = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p1;
 
     // Second connect should resolve immediately
@@ -152,6 +242,30 @@ describe("MayrosClient", () => {
     await expect(client.connect()).rejects.toThrow("Client is disposed");
   });
 
+  it("sends connect request with protocol version after challenge", async () => {
+    const { factory, lastWs } = createFactory();
+    const client = createClient(factory);
+
+    const p = client.connect();
+    lastWs().simulateFullConnect();
+    await p;
+
+    const connectMsg = lastWs().sent.find((s) => {
+      try {
+        return JSON.parse(s).method === "connect";
+      } catch {
+        return false;
+      }
+    });
+    expect(connectMsg).toBeDefined();
+    const parsed = JSON.parse(connectMsg!);
+    expect(parsed.params.minProtocol).toBe(3);
+    expect(parsed.params.maxProtocol).toBe(3);
+    expect(parsed.params.client.id).toBe("gateway-client");
+    expect(parsed.params.role).toBe("operator");
+    expect(parsed.params.scopes).toEqual(["operator.read", "operator.write"]);
+  });
+
   /* -- Disconnect -- */
 
   it("disconnects and emits 'disconnected' event", async () => {
@@ -161,7 +275,7 @@ describe("MayrosClient", () => {
     client.on("disconnected", handler);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     await client.disconnect();
@@ -183,29 +297,34 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.listSessions();
 
-    // Parse the sent request
-    const sent = JSON.parse(lastWs().sent[0]);
+    // Parse the sent request (after handshake)
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("sessions.list");
     expect(sent.id).toBeDefined();
 
     // Simulate response
     lastWs().simulateMessage(
       JSON.stringify({
+        type: "res",
         id: sent.id,
-        result: [
-          {
-            id: "s1",
-            status: "active",
-            agentId: "default",
-            startedAt: "2025-01-01",
-            messageCount: 5,
-          },
-        ],
+        ok: true,
+        payload: {
+          sessions: [
+            {
+              key: "s1",
+              kind: "direct",
+              displayName: "test",
+              updatedAt: Date.now(),
+              totalTokens: 5,
+            },
+          ],
+        },
       }),
     );
 
@@ -226,15 +345,18 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.getHealth();
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
 
     lastWs().simulateMessage(
       JSON.stringify({
+        type: "res",
         id: sent.id,
+        ok: false,
         error: { code: -32600, message: "Invalid request" },
       }),
     );
@@ -247,7 +369,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.getHealth();
@@ -265,7 +387,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const handler = vi.fn();
@@ -286,7 +408,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const handler = vi.fn();
@@ -303,7 +425,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const handler = vi.fn();
@@ -319,7 +441,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     // Should not throw
@@ -335,7 +457,7 @@ describe("MayrosClient", () => {
 
     const p = client.connect();
     const ws1 = lastWs();
-    ws1.simulateOpen();
+    ws1.simulateFullConnect();
     await p;
 
     const disconnectHandler = vi.fn();
@@ -355,19 +477,16 @@ describe("MayrosClient", () => {
     expect(lastWs()).not.toBe(ws1);
   });
 
-  it("emits error and stops after exceeding max reconnect attempts", () => {
+  it("emits error and stops after exceeding max reconnect attempts", async () => {
     const { factory, lastWs } = createFactory();
     const client = createClient(factory, { maxReconnectAttempts: 0, reconnectDelayMs: 10 });
 
     const errorHandler = vi.fn();
     client.on("error", errorHandler);
 
-    // Manually set connected state by connecting
     const p = client.connect();
-    lastWs().simulateOpen();
-
-    // Force the promise to resolve synchronously via fake timers
-    vi.runAllTicks();
+    lastWs().simulateFullConnect();
+    await p;
 
     // Now close — since maxReconnectAttempts is 0, scheduleReconnect should
     // immediately emit error without scheduling any timer
@@ -385,7 +504,7 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.listAgents();
@@ -403,15 +522,19 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.sendMessage("s1", "hello world");
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("chat.send");
-    expect(sent.params).toEqual({ sessionId: "s1", content: "hello world" });
+    expect(sent.params.sessionKey).toBe("s1");
+    expect(sent.params.message).toBe("hello world");
 
-    lastWs().simulateMessage(JSON.stringify({ id: sent.id, result: undefined }));
+    lastWs().simulateMessage(
+      JSON.stringify({ type: "res", id: sent.id, ok: true, payload: undefined }),
+    );
     await resultP;
   });
 
@@ -420,15 +543,18 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.getChatHistory("s1");
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("chat.history");
-    expect(sent.params).toEqual({ sessionId: "s1" });
+    expect(sent.params).toEqual({ sessionKey: "s1" });
 
-    lastWs().simulateMessage(JSON.stringify({ id: sent.id, result: [] }));
+    lastWs().simulateMessage(
+      JSON.stringify({ type: "res", id: sent.id, ok: true, payload: { messages: [] } }),
+    );
     const result = await resultP;
     expect(result).toEqual([]);
   });
@@ -438,18 +564,21 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.queryKg("project:*", 25);
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("kg.query");
     expect(sent.params).toEqual({ query: "project:*", limit: 25 });
 
     lastWs().simulateMessage(
       JSON.stringify({
+        type: "res",
         id: sent.id,
-        result: [{ subject: "s", predicate: "p", object: "o", id: "1" }],
+        ok: true,
+        payload: [{ subject: "s", predicate: "p", object: "o", id: "1" }],
       }),
     );
     const entries = await resultP;
@@ -461,15 +590,16 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.getTraceEvents({ agentId: "agent-1", limit: 50 });
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("trace.events");
     expect(sent.params).toEqual({ agentId: "agent-1", limit: 50 });
 
-    lastWs().simulateMessage(JSON.stringify({ id: sent.id, result: [] }));
+    lastWs().simulateMessage(JSON.stringify({ type: "res", id: sent.id, ok: true, payload: [] }));
     await resultP;
   });
 
@@ -478,16 +608,17 @@ describe("MayrosClient", () => {
     const client = createClient(factory);
 
     const p = client.connect();
-    lastWs().simulateOpen();
+    lastWs().simulateFullConnect();
     await p;
 
     const resultP = client.getPlan("s1");
-    const sent = JSON.parse(lastWs().sent[0]);
+    const domainSent = lastWs().getSentAfterHandshake();
+    const sent = JSON.parse(domainSent[0]);
     expect(sent.method).toBe("plan.get");
     expect(sent.params).toEqual({ sessionId: "s1" });
 
-    lastWs().simulateMessage(JSON.stringify({ id: sent.id, result: null }));
+    lastWs().simulateMessage(JSON.stringify({ type: "res", id: sent.id, ok: true, payload: null }));
     const plan = await resultP;
-    expect(plan).toBeNull();
+    expect(plan).toBeUndefined();
   });
 });

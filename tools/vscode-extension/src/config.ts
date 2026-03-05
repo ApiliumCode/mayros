@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 
 export type MayrosExtensionConfig = {
   gatewayUrl: string;
+  gatewayToken: string;
   autoConnect: boolean;
   reconnectDelayMs: number;
   maxReconnectAttempts: number;
@@ -13,6 +14,7 @@ export type MayrosExtensionConfig = {
 
 const DEFAULTS: Readonly<MayrosExtensionConfig> = {
   gatewayUrl: "ws://127.0.0.1:18789",
+  gatewayToken: "",
   autoConnect: true,
   reconnectDelayMs: 3000,
   maxReconnectAttempts: 5,
@@ -26,6 +28,7 @@ export function getConfig(): MayrosExtensionConfig {
   const config = vscode.workspace.getConfiguration("mayros");
   return {
     gatewayUrl: config.get<string>("gatewayUrl", DEFAULTS.gatewayUrl),
+    gatewayToken: config.get<string>("gatewayToken", DEFAULTS.gatewayToken),
     autoConnect: config.get<boolean>("autoConnect", DEFAULTS.autoConnect),
     reconnectDelayMs: config.get<number>("reconnectDelayMs", DEFAULTS.reconnectDelayMs),
     maxReconnectAttempts: config.get<number>("maxReconnectAttempts", DEFAULTS.maxReconnectAttempts),

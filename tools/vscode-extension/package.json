@@ -77,8 +77,40 @@
       {
         "command": "mayros.openKg",
         "title": "Mayros: Open Knowledge Graph"
+      },
+      {
+        "command": "mayros.explainCode",
+        "title": "Mayros: Explain Code"
+      },
+      {
+        "command": "mayros.sendSelection",
+        "title": "Mayros: Send Selection"
+      },
+      {
+        "command": "mayros.sendMarker",
+        "title": "Mayros: Analyze Marker"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mayros.explainCode",
+          "group": "mayros",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "mayros.sendSelection",
+          "group": "mayros",
+          "when": "editorHasSelection"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mayros.sendMarker",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "Mayros",
       "properties": {
@@ -101,6 +133,11 @@
           "type": "number",
           "default": 5,
           "description": "Maximum reconnection attempts"
+        },
+        "mayros.gatewayToken": {
+          "type": "string",
+          "default": "",
+          "description": "Auth token for the Mayros gateway (from `mayros config get gateway.auth.token`)"
         }
       }
     }
@@ -108,7 +145,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "icon": "assets/icon.svg",
+  "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.96.0"
   }

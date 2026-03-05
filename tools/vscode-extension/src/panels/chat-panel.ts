@@ -48,15 +48,69 @@ export class ChatPanel extends PanelBase {
       });
     });
 
-    // Subscribe to gateway streaming events
+    // Subscribe to gateway streaming events (event name is "chat")
     const onStreamMessage = (...args: unknown[]) => {
-      const data = args[0] as { sessionId: string; message: ChatMessage };
-      if (data?.message) {
-        this.postMessage({ type: "message", message: data.message });
+      const data = args[0] as Record<string, unknown>;
+      if (!data) return;
+      const state = data.state as string | undefined;
+      const runId = String(data.runId ?? "");
+      if (!runId || !state) return;
+
+      if (state === "delta" || state === "final") {
+        const raw = data.message as Record<string, unknown> | undefined;
+        let text = "";
+        if (raw) {
+          if (Array.isArray(raw.content)) {
+            text = (raw.content as Array<Record<string, unknown>>)
+              .filter((b) => b.type === "text" && typeof b.text === "string")
+              .map((b) => b.text as string)
+              .join("");
+          } else if (typeof raw.content === "string") {
+            text = raw.content;
+          }
+        }
+        this.postMessage({
+          type: "stream",
+          runId,
+          state: state as "delta" | "final",
+          content: text,
+        });
+      } else if (state === "error") {
+        this.postMessage({
+          type: "stream",
+          runId,
+          state: "error",
+          content: String(data.errorMessage ?? "Agent error"),
+        });
+      } else if (state === "aborted") {
+        this.postMessage({
+          type: "stream",
+          runId,
+          state: "aborted",
+          content: "",
+        });
       }
     };
-    this.client.on("event:chat.message", onStreamMessage);
-    this.eventDispose = () => this.client.off("event:chat.message", onStreamMessage);
+    this.client.on("event:chat", onStreamMessage);
+
+    // Forward connection status changes to the webview
+    const onConnected = () => {
+      this.postMessage({ type: "connectionStatus", connected: true });
+    };
+    const onDisconnected = () => {
+      this.postMessage({ type: "connectionStatus", connected: false });
+    };
+    this.client.on("connected", onConnected);
+    this.client.on("disconnected", onDisconnected);
+
+    // Send initial connection status
+    this.postMessage({ type: "connectionStatus", connected: this.client.connected });
+
+    this.eventDispose = () => {
+      this.client.off("event:chat", onStreamMessage);
+      this.client.off("connected", onConnected);
+      this.client.off("disconnected", onDisconnected);
+    };
 
     panel.onDidDispose(() => {
       this.eventDispose?.();
@@ -70,7 +124,7 @@ export class ChatPanel extends PanelBase {
   private async handleWebviewMessage(msg: WebviewToExtension): Promise<void> {
     switch (msg.type) {
       case "send":
-        await this.handleSend(msg.sessionId, msg.content);
+        await this.handleSend(msg.sessionId, msg.content, msg.attachments);
         break;
       case "history":
         await this.handleHistory(msg.sessionId);
@@ -86,8 +140,12 @@ export class ChatPanel extends PanelBase {
 
   /* ---- handlers ---- */
 
-  private async handleSend(sessionId: string, content: string): Promise<void> {
-    await this.client.sendMessage(sessionId, content);
+  private async handleSend(
+    sessionId: string,
+    content: string,
+    attachments?: Array<{ name: string; mimeType: string; dataBase64: string }>,
+  ): Promise<void> {
+    await this.client.sendMessage(sessionId, content, attachments);
   }
 
   private async handleHistory(sessionId: string): Promise<void> {
