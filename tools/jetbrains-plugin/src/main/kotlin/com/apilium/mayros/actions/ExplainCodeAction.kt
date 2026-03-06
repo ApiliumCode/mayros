@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.apilium.mayros.MayrosClient
 import com.apilium.mayros.MayrosService
+import com.intellij.openapi.diagnostic.Logger
 import java.util.UUID
 
 /**
@@ -16,6 +17,7 @@ import java.util.UUID
 class ExplainCodeAction : AnAction() {
 
     companion object {
+        private val LOG = Logger.getInstance(ExplainCodeAction::class.java)
         private val sessionKey = "jetbrains-explain-${UUID.randomUUID().toString().take(8)}"
     }
 
@@ -51,10 +53,10 @@ class ExplainCodeAction : AnAction() {
                         idempotencyKey = "jb-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
                     )
                 )
-            } catch (_: Exception) {
-                // Best-effort
+            } catch (e: Exception) {
+                LOG.warn("Failed to send explain request", e)
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     override fun update(e: AnActionEvent) {
