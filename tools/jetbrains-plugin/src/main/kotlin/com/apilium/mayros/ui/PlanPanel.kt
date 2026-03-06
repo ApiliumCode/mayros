@@ -9,6 +9,7 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.content.ContentFactory
 import com.apilium.mayros.MayrosService
+import com.intellij.openapi.diagnostic.Logger
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Font
@@ -32,6 +33,7 @@ class PlanPanel(@Suppress("unused") private val project: Project) : JPanel(Borde
     private val assertionsTable = JTable(assertionsModel)
     private val service = MayrosService.getInstance()
     private val registeredListeners = mutableListOf<Pair<String, (JsonObject) -> Unit>>()
+    private val logger = Logger.getInstance(PlanPanel::class.java)
 
     init {
         setupUI()
@@ -80,7 +82,7 @@ class PlanPanel(@Suppress("unused") private val project: Project) : JPanel(Borde
                     phaseLabel.text = "Phase: error — ${e.message}"
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun updatePlanUI(plan: JsonObject?) {
@@ -113,6 +115,16 @@ class PlanPanel(@Suppress("unused") private val project: Project) : JPanel(Borde
         }
     }
 
+    private fun clearRegisteredListeners() {
+        val client = service.getClient()
+        if (client != null) {
+            for ((event, listener) in registeredListeners) {
+                client.off(event, listener)
+            }
+        }
+        registeredListeners.clear()
+    }
+
     private fun subscribeToEvents() {
         val client = service.getClient() ?: return
         val listener: (JsonObject) -> Unit = { _ ->
@@ -133,13 +145,15 @@ class PlanPanel(@Suppress("unused") private val project: Project) : JPanel(Borde
                         sessionCombo.addItem(session.key)
                     }
                 }
-            } catch (_: Exception) { }
-        }.start()
+            } catch (e: Exception) {
+                logger.warn("Failed to refresh sessions", e)
+            }
+        }.apply { isDaemon = true }.start()
     }
 
     override fun onConnected() {
         SwingUtilities.invokeLater {
-            registeredListeners.clear()
+            clearRegisteredListeners()
             subscribeToEvents()
             refreshSessions()
         }
@@ -156,7 +170,7 @@ class PlanPanel(@Suppress("unused") private val project: Project) : JPanel(Borde
 
     override fun dispose() {
         service.removeListener(this)
-        registeredListeners.clear()
+        clearRegisteredListeners()
     }
 }
 
