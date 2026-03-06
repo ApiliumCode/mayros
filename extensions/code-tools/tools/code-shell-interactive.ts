@@ -68,27 +68,71 @@ export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeTool
         }
 
         const startTime = Date.now();
+        // Hard cap: cfg.shellTimeout is the max the user can request; use it
+        // as the outer guard so a hanging PTY never leaks beyond this limit.
+        const hardTimeout =
+          typeof p.timeout === "number" ? timeout : Math.min(60000, cfg.shellTimeout);
 
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           let output = "";
           let exitCode = -1;
           let exited = false;
+          let settled = false;
 
-          const shell = process.env.SHELL ?? "/bin/bash";
-          const proc = pty.spawn(shell, ["-c", command], {
-            name: "xterm-256color",
-            cols: 120,
-            rows: 40,
-            cwd: cfg.workspaceRoot,
-            env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
-          });
+          function settle(fn: () => void) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(hardTimer);
+            clearTimeout(timer);
+            fn();
+          }
 
+          // Hard timeout — rejects the promise if the PTY never exits.
+          const hardTimer = setTimeout(() => {
+            settle(() =>
+              reject(
+                new Error(
+                  `PTY hard timeout after ${hardTimeout}ms: command "${command}" did not exit`,
+                ),
+              ),
+            );
+          }, hardTimeout);
+
+          // IPty has kill() but dynamic import resolves to PtyHandle which omits it
+          type PtyProc = {
+            onData: (cb: (data: string) => void) => void;
+            onExit: (cb: (e: { exitCode: number }) => void) => void;
+            write: (data: string) => void;
+            kill: (signal?: string) => void;
+          };
+          let proc: PtyProc;
+          try {
+            const shell = process.env.SHELL ?? "/bin/bash";
+            proc = pty.spawn(shell, ["-c", command], {
+              name: "xterm-256color",
+              cols: 120,
+              rows: 40,
+              cwd: cfg.workspaceRoot,
+              env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
+            }) as unknown as PtyProc;
+          } catch (spawnErr) {
+            settle(() =>
+              reject(spawnErr instanceof Error ? spawnErr : new Error(String(spawnErr))),
+            );
+            return;
+          }
+
+          // Per-call soft timeout (kills the process, then resolves with partial output).
           const timer = setTimeout(() => {
             if (!exited) {
-              proc.kill();
+              try {
+                proc.kill();
+              } catch {
+                /* ignore */
+              }
               output += "\n[Process killed after timeout]";
               exitCode = 137;
-              finish();
+              settle(finish);
             }
           }, timeout);
 
@@ -101,8 +145,7 @@ export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeTool
           proc.onExit(({ exitCode: code }) => {
             exited = true;
             exitCode = code;
-            clearTimeout(timer);
-            finish();
+            settle(finish);
           });
 
           // Feed input lines with delays
