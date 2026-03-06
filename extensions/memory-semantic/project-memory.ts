@@ -412,10 +412,38 @@ export class ProjectMemory {
       limit?: number;
     },
   ): Promise<ProjectConvention[]> {
-    const all = await this.listActive({ category: opts?.category, limit: (opts?.limit ?? 10) * 5 });
-    const lower = query.toLowerCase();
+    const limit = opts?.limit ?? 10;
+    const all = await this.listActive({ category: opts?.category, limit: limit * 5 });
 
-    return all.filter((c) => c.text.toLowerCase().includes(lower)).slice(0, opts?.limit ?? 10);
+    // NOTE: Full semantic / vector search is not available yet because
+    // Cortex does not expose an embedding endpoint. As an interim measure we
+    // tokenise the query and require ALL tokens to appear in the convention
+    // text (AND logic), then rank results by how many tokens matched so the
+    // most relevant conventions surface first.
+    const queryTokens = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
+
+    if (queryTokens.length === 0) return all.slice(0, limit);
+
+    type Scored = { convention: ProjectConvention; score: number };
+    const scored: Scored[] = [];
+
+    for (const convention of all) {
+      const lowerText = convention.text.toLowerCase();
+      const matchedTokens = queryTokens.filter((token) => lowerText.includes(token)).length;
+
+      // Require ALL tokens to match (AND logic)
+      if (matchedTokens < queryTokens.length) continue;
+
+      scored.push({ convention, score: matchedTokens });
+    }
+
+    // Sort by score descending, then by confidence as tiebreaker
+    scored.sort((a, b) => b.score - a.score || b.convention.confidence - a.convention.confidence);
+
+    return scored.slice(0, limit).map((s) => s.convention);
   }
 
   async recentFindings(opts?: { limit?: number }): Promise<SessionFinding[]> {

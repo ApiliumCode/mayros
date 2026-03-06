@@ -217,15 +217,46 @@ export class AgentMemory {
       if (opts?.type && entry.type !== opts.type) continue;
       if (opts?.project && entry.project !== opts.project) continue;
       if (opts?.query) {
-        const lower = opts.query.toLowerCase();
-        if (!entry.content.toLowerCase().includes(lower)) continue;
+        // NOTE: Full semantic / vector search is not available yet because
+        // Cortex does not expose an embedding endpoint. As an interim measure
+        // we tokenise the query and require ALL tokens to appear in the content
+        // (AND logic). This is significantly better than substring matching for
+        // multi-word queries (e.g. "typescript strict no any" will not match
+        // unrelated entries that happen to contain one of the words).
+        const queryTokens = opts.query
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((t) => t.length > 0);
+        const lowerContent = entry.content.toLowerCase();
+        const allMatch = queryTokens.every((token) => lowerContent.includes(token));
+        if (!allMatch) continue;
       }
 
       memories.push(entry);
       if (memories.length >= limit * 2) break;
     }
 
-    // Sort by usageCount desc
+    if (opts?.query) {
+      // Relevance scoring: count matched query tokens and sort by score
+      // descending so the most relevant memories appear first.
+      const queryTokens = opts.query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((t) => t.length > 0);
+
+      type Scored = { entry: AgentMemoryEntry; score: number };
+      const scored: Scored[] = memories.map((entry) => {
+        const lowerContent = entry.content.toLowerCase();
+        const matchedTokens = queryTokens.filter((token) => lowerContent.includes(token)).length;
+        return { entry, score: matchedTokens };
+      });
+
+      scored.sort((a, b) => b.score - a.score || b.entry.usageCount - a.entry.usageCount);
+
+      return scored.slice(0, limit).map((s) => s.entry);
+    }
+
+    // Sort by usageCount desc (no query filter)
     memories.sort((a, b) => b.usageCount - a.usageCount);
 
     return memories.slice(0, limit);
