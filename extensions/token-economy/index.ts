@@ -5,12 +5,18 @@ import {
   resolveModelCostConfig,
   estimateUsageCost,
   formatUsd,
+  formatTokenCount,
 } from "../../src/utils/usage-format.js";
 import type { ModelCostConfig } from "../../src/utils/usage-format.js";
 import { BudgetPersistence } from "./budget-persistence.js";
 import { BudgetTracker } from "./budget-tracker.js";
-import type { BudgetSummary } from "./budget-tracker.js";
+import type { BudgetSummary, ModelUsageEntry } from "./budget-tracker.js";
 import { parseTokenBudgetConfig } from "./config.js";
+import {
+  resolveModelCostWithFallback,
+  getModelDisplayName,
+  listCatalogModels,
+} from "./model-pricing.js";
 import { PromptCache } from "./prompt-cache.js";
 
 const tokenEconomyPlugin = {
@@ -68,13 +74,19 @@ const tokenEconomyPlugin = {
       const usage = event.usage as NormalizedUsage | undefined;
       if (!usage) return;
 
-      const costConfig = resolveModelCostConfig({
+      // Resolve cost config: user config first, then built-in catalog
+      const configCost = resolveModelCostConfig({
         provider: event.provider,
         model: event.model,
         config: api.config,
       });
+      const costConfig = resolveModelCostWithFallback({
+        provider: event.provider,
+        model: event.model,
+        configCost: configCost,
+      });
 
-      tracker.recordUsage(usage, costConfig);
+      tracker.recordUsage(usage, costConfig, event.provider, event.model);
 
       // Update prompt cache (observational: store for future hit detection)
       if (cache) {
@@ -218,6 +230,14 @@ const tokenEconomyPlugin = {
             `Calls:   ${full.callCount}`,
             `Tokens:  in=${full.tokens.input ?? 0} out=${full.tokens.output ?? 0} cacheR=${full.tokens.cacheRead ?? 0} cacheW=${full.tokens.cacheWrite ?? 0}`,
           ];
+          if (full.modelUsage.length > 0) {
+            lines.push("", "Per-model:");
+            for (const m of full.modelUsage) {
+              const name = getModelDisplayName(m.provider, m.model);
+              const cost = formatUsd(m.costUsd) ?? "$0.0000";
+              lines.push(`  ${name}: ${m.calls} calls, ${cost}`);
+            }
+          }
           if (cacheStats) {
             lines.push(
               `Cache:   ${cacheStats.hits} hits, ${cacheStats.misses} misses, ${cacheStats.entries} entries`,
@@ -277,6 +297,88 @@ const tokenEconomyPlugin = {
         },
       },
       { name: "budget_set_limit" },
+    );
+
+    api.registerTool(
+      {
+        name: "budget_model_usage",
+        label: "Budget Model Usage",
+        description:
+          "Show per-model cost and token breakdown for the current session. " +
+          "Lists each model used with its call count, token usage, and cost.",
+        parameters: Type.Object({}),
+        async execute() {
+          if (!tracker) {
+            return {
+              content: [
+                { type: "text", text: "Token economy not initialized (no active session)." },
+              ],
+              details: { error: "not_initialized" },
+            };
+          }
+
+          const models = tracker.getModelUsage();
+          if (models.length === 0) {
+            return {
+              content: [{ type: "text", text: "No model usage recorded yet." }],
+              details: { models: [] },
+            };
+          }
+
+          const lines = ["Per-Model Usage (session)", "─────────────────────────"];
+          for (const m of models) {
+            const name = getModelDisplayName(m.provider, m.model);
+            const cost = formatUsd(m.costUsd) ?? "$0.0000";
+            const tokens = formatTokenCount((m.tokens.input ?? 0) + (m.tokens.output ?? 0));
+            lines.push(
+              `${name} (${m.provider})`,
+              `  Calls: ${m.calls}  Tokens: ${tokens}  Cost: ${cost}`,
+              `  in=${formatTokenCount(m.tokens.input)} out=${formatTokenCount(m.tokens.output)} cacheR=${formatTokenCount(m.tokens.cacheRead)} cacheW=${formatTokenCount(m.tokens.cacheWrite)}`,
+            );
+          }
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: { models },
+          };
+        },
+      },
+      { name: "budget_model_usage" },
+    );
+
+    api.registerTool(
+      {
+        name: "budget_pricing_catalog",
+        label: "Pricing Catalog",
+        description:
+          "List built-in model pricing catalog. Shows cost per 1M tokens for " +
+          "common models from Anthropic, OpenAI, and Google.",
+        parameters: Type.Object({}),
+        async execute() {
+          const catalog = listCatalogModels();
+          const lines = [
+            "Model Pricing Catalog (USD per 1M tokens)",
+            "──────────────────────────────────────────",
+          ];
+
+          let lastProvider = "";
+          for (const { provider, entry } of catalog) {
+            if (provider !== lastProvider) {
+              lines.push("", `${provider.toUpperCase()}`);
+              lastProvider = provider;
+            }
+            lines.push(
+              `  ${entry.displayName}: in=$${entry.input} out=$${entry.output} cacheR=$${entry.cacheRead} cacheW=$${entry.cacheWrite} (ctx: ${formatTokenCount(entry.contextWindow)})`,
+            );
+          }
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: { catalog },
+          };
+        },
+      },
+      { name: "budget_pricing_catalog" },
     );
 
     // ========================================================================
@@ -359,6 +461,53 @@ const tokenEconomyPlugin = {
             }
 
             console.log(`Budget counters reset (${s}).`);
+          });
+
+        budget
+          .command("models")
+          .description("Show per-model cost breakdown")
+          .action(async () => {
+            if (!tracker) {
+              console.log("Token economy not initialized (no active session).");
+              return;
+            }
+
+            const models = tracker.getModelUsage();
+            if (models.length === 0) {
+              console.log("No model usage recorded yet.");
+              return;
+            }
+
+            console.log("Per-Model Usage (session)");
+            console.log("─────────────────────────");
+            for (const m of models) {
+              const name = getModelDisplayName(m.provider, m.model);
+              const cost = formatUsd(m.costUsd) ?? "$0.0000";
+              const totalTokens = (m.tokens.input ?? 0) + (m.tokens.output ?? 0);
+              console.log(
+                `${name} (${m.provider}): ${m.calls} calls, ${formatTokenCount(totalTokens)} tokens, ${cost}`,
+              );
+            }
+          });
+
+        budget
+          .command("pricing")
+          .description("Show built-in model pricing catalog")
+          .action(async () => {
+            const catalog = listCatalogModels();
+            console.log("Model Pricing Catalog (USD per 1M tokens)");
+            console.log("──────────────────────────────────────────");
+
+            let lastProvider = "";
+            for (const { provider, entry } of catalog) {
+              if (provider !== lastProvider) {
+                console.log(`\n${provider.toUpperCase()}`);
+                lastProvider = provider;
+              }
+              console.log(
+                `  ${entry.displayName}: in=$${entry.input} out=$${entry.output} cacheR=$${entry.cacheRead} cacheW=$${entry.cacheWrite}`,
+              );
+            }
           });
 
         budget
