@@ -111,6 +111,48 @@ export function resolveToolDisplay(params: {
     detail = resolveWebFetchDetail(params.args);
   }
 
+  if (!detail && key === "code_web_search") {
+    detail = resolveWebSearchDetail(params.args);
+  }
+
+  if (!detail && key === "code_web_fetch") {
+    detail = resolveWebFetchDetail(params.args);
+  }
+
+  if (!detail && key === "code_shell_interactive") {
+    detail = resolveExecDetail(params.args);
+  }
+
+  if (!detail && key === "git_commit") {
+    const args = params.args as Record<string, unknown> | undefined;
+    const msg = args?.message;
+    if (typeof msg === "string" && msg.trim()) {
+      detail = msg.trim().length > 60 ? msg.trim().slice(0, 57) + "..." : msg.trim();
+    }
+  }
+
+  if (!detail && key === "git_push") {
+    const args = params.args as Record<string, unknown> | undefined;
+    const remote = args?.remote;
+    detail = typeof remote === "string" && remote.trim() ? remote.trim() : "origin";
+  }
+
+  if (!detail && key === "git_create_pr") {
+    const args = params.args as Record<string, unknown> | undefined;
+    const title = args?.title;
+    if (typeof title === "string" && title.trim()) {
+      detail = title.trim().length > 60 ? title.trim().slice(0, 57) + "..." : title.trim();
+    }
+  }
+
+  if (!detail && key === "code_multi_edit") {
+    const args = params.args as Record<string, unknown> | undefined;
+    const edits = args?.edits;
+    if (Array.isArray(edits)) {
+      detail = `${edits.length} edit(s)`;
+    }
+  }
+
   const detailKeys = actionSpec?.detailKeys ?? spec?.detailKeys ?? FALLBACK.detailKeys ?? [];
   if (!detail && detailKeys.length > 0) {
     detail = resolveDetailFromKeys(params.args, detailKeys, {
