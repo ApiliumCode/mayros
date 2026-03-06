@@ -85,8 +85,17 @@ function resolveProvider(config: VoiceCallConfig): VoiceCallProvider {
           webhookSecurity: config.webhookSecurity,
         },
       );
-    case "mock":
+    case "mock": {
+      const isMockAllowed =
+        process.env.NODE_ENV === "test" || process.env.MAYROS_VOICE_MOCK === "1";
+      if (!isMockAllowed) {
+        throw new Error(
+          "MockProvider is only available in test environments (NODE_ENV=test or MAYROS_VOICE_MOCK=1). " +
+            "Configure a real provider (telnyx, twilio, or plivo) for production use.",
+        );
+      }
       return new MockProvider();
+    }
     default:
       throw new Error(`Unsupported voice-call provider: ${String(config.provider)}`);
   }

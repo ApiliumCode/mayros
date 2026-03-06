@@ -422,6 +422,33 @@ const entries: SubCliEntry[] = [
       mod.registerSyncCli(program);
     },
   },
+  {
+    name: "remote-control",
+    description: "Start remote control server for mobile/web access",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../remote-cli.js");
+      mod.registerRemoteCli(program);
+    },
+  },
+  {
+    name: "serve",
+    description: "Start MCP server to expose Mayros tools, resources, and prompts",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../serve-cli.js");
+      mod.registerServeCli(program);
+    },
+  },
+  {
+    name: "search",
+    description: "Search conversation history across sessions",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../search-cli.js");
+      mod.registerSearchCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {

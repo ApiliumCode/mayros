@@ -19,6 +19,7 @@ import { CortexAudit, type PermissionDecision } from "./cortex-audit.js";
 import { classifyCommand } from "./intent-classifier.js";
 import { PolicyStore, generatePolicyId, type PermissionPolicyKind } from "./policy-store.js";
 import { PromptUI } from "./prompt-ui.js";
+import { isWildcardExpression } from "./wildcard-matcher.js";
 
 // ============================================================================
 // Plugin Definition
@@ -97,13 +98,27 @@ const interactivePermissionsPlugin = {
             sessionKey,
             timestamp: new Date().toISOString(),
           };
-          await audit.recordDecision(decision);
+          // Audit is best-effort — a Cortex outage must not crash the session.
+          try {
+            await audit.recordDecision(decision);
+          } catch (err) {
+            api.logger.warn(`interactive-permissions: audit record failed (auto_safe): ${err}`);
+          }
           return;
         }
 
         // Step 3: Check stored policies
         if (cfg.policyEnabled) {
-          const matchedPolicy = policyStore.findMatchingPolicy(toolName, command, riskLevel);
+          const toolArgs =
+            typeof params === "object" && params !== null
+              ? (params as Record<string, unknown>)
+              : {};
+          const matchedPolicy = policyStore.findMatchingPolicy(
+            toolName,
+            command,
+            riskLevel,
+            toolArgs,
+          );
 
           if (matchedPolicy) {
             const allowed = matchedPolicy.kind === "always_allow";
@@ -118,7 +133,12 @@ const interactivePermissionsPlugin = {
               sessionKey,
               timestamp: new Date().toISOString(),
             };
-            await audit.recordDecision(decision);
+            // Audit is best-effort — a Cortex outage must not crash the session.
+            try {
+              await audit.recordDecision(decision);
+            } catch (err) {
+              api.logger.warn(`interactive-permissions: audit record failed (policy): ${err}`);
+            }
 
             if (!allowed) {
               return {
@@ -145,7 +165,14 @@ const interactivePermissionsPlugin = {
               sessionKey,
               timestamp: new Date().toISOString(),
             };
-            await audit.recordDecision(decision);
+            // Audit is best-effort — a Cortex outage must not crash the session.
+            try {
+              await audit.recordDecision(decision);
+            } catch (err) {
+              api.logger.warn(
+                `interactive-permissions: audit record failed (deny_default): ${err}`,
+              );
+            }
             return {
               block: true,
               blockReason: `Permission denied (default deny): no policy for tool "${toolName}"`,
@@ -166,7 +193,14 @@ const interactivePermissionsPlugin = {
             sessionKey,
             timestamp: new Date().toISOString(),
           };
-          await audit.recordDecision(decision);
+          // Audit is best-effort — a Cortex outage must not crash the session.
+          try {
+            await audit.recordDecision(decision);
+          } catch (err) {
+            api.logger.warn(
+              `interactive-permissions: audit record failed (deny_default/no-tty): ${err}`,
+            );
+          }
           return {
             block: true,
             blockReason: `Permission denied (default deny, no TTY): ${command ?? toolName}`,
@@ -201,7 +235,12 @@ const interactivePermissionsPlugin = {
           sessionKey,
           timestamp: new Date().toISOString(),
         };
-        await audit.recordDecision(decision);
+        // Audit is best-effort — a Cortex outage must not crash the session.
+        try {
+          await audit.recordDecision(decision);
+        } catch (err) {
+          api.logger.warn(`interactive-permissions: audit record failed (user_prompt): ${err}`);
+        }
 
         if (!promptResult.allowed) {
           return {
@@ -295,7 +334,7 @@ const interactivePermissionsPlugin = {
           .description("Add a permission policy")
           .argument("<pattern>", "Pattern to match against tool name or command")
           .option("--kind <kind>", "Policy kind: always_allow, always_deny, ask", "always_allow")
-          .option("--type <type>", "Matcher type: exact, glob, regex", "exact")
+          .option("--type <type>", "Matcher type: exact, glob, regex, wildcard", "exact")
           .option("--risk <level>", "Maximum risk level for this policy")
           .action(async (pattern, options) => {
             const kind = options.kind as PermissionPolicyKind;
@@ -304,18 +343,27 @@ const interactivePermissionsPlugin = {
               return;
             }
 
-            const matcherType = options.type as "exact" | "glob" | "regex";
-            if (!["exact", "glob", "regex"].includes(matcherType)) {
-              console.log(`Invalid type: ${matcherType}. Use exact, glob, or regex.`);
+            // Auto-detect wildcard expressions like "Bash(git:*)"
+            let matcherType = options.type as "exact" | "glob" | "regex" | "wildcard";
+            if (matcherType === "exact" && isWildcardExpression(pattern)) {
+              matcherType = "wildcard";
+            }
+
+            if (!["exact", "glob", "regex", "wildcard"].includes(matcherType)) {
+              console.log(`Invalid type: ${matcherType}. Use exact, glob, regex, or wildcard.`);
               return;
             }
+
+            // Wildcard policies are stored with matcherType "exact" since the
+            // wildcard expression in the matcher field is parsed at match time
+            const storeMatcherType = matcherType === "wildcard" ? "exact" : matcherType;
 
             const id = generatePolicyId();
             await policyStore.savePolicy({
               id,
               kind,
               matcher: pattern,
-              matcherType,
+              matcherType: storeMatcherType,
               maxRiskLevel: options.risk,
               createdAt: new Date().toISOString(),
               source: "manual",
@@ -416,3 +464,9 @@ export type { PermissionDecision } from "./cortex-audit.js";
 export type { PermissionPolicy, PermissionPolicyKind } from "./policy-store.js";
 export type { RiskLevel, IntentClassification } from "./intent-classifier.js";
 export type { InteractivePermissionsConfig } from "./config.js";
+export {
+  parsePermissionWildcard,
+  matchesWildcardPermission,
+  isWildcardExpression,
+} from "./wildcard-matcher.js";
+export type { ParsedWildcard } from "./wildcard-matcher.js";

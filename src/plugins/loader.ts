@@ -39,6 +39,13 @@ export type PluginLoadOptions = {
   coreGatewayHandlers?: Record<string, GatewayRequestHandler>;
   cache?: boolean;
   mode?: "full" | "validate";
+  /**
+   * Optional LLM call function injected by the host. Plugins that need
+   * LLM evaluation (e.g., llm-hooks) receive this via `api.callLlm`.
+   * When absent the field is undefined on the api object and plugins
+   * must degrade gracefully with a warning log.
+   */
+  callLlm?: (prompt: string, opts?: { model?: string; maxTokens?: number }) => Promise<string>;
 };
 
 const registryCache = new Map<string, PluginRegistry>();
@@ -359,6 +366,7 @@ export function loadMayrosPlugins(options: PluginLoadOptions = {}): PluginRegist
     logger,
     runtime,
     coreGatewayHandlers: options.coreGatewayHandlers as Record<string, GatewayRequestHandler>,
+    callLlm: options.callLlm,
   });
 
   const discovery = discoverMayrosPlugins({

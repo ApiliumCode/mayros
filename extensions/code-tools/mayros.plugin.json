@@ -1,0 +1,7 @@
+{
+  "id": "code-tools",
+  "name": "Code Tools",
+  "description": "File read/write/edit, glob, grep, ls, and shell tools for local code interaction",
+  "version": "0.1.4",
+  "kind": "coding"
+}

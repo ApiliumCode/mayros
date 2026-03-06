@@ -82,12 +82,16 @@ if (isMain) {
   installUnhandledRejectionHandler();
 
   process.on("uncaughtException", (error) => {
-    console.error("[mayros] Uncaught exception:", formatUncaughtError(error));
-    process.exit(1);
+    const msg = `[mayros] Uncaught exception: ${formatUncaughtError(error)}\n`;
+    process.stderr.write(msg, () => {
+      process.exit(1);
+    });
   });
 
   void program.parseAsync(process.argv).catch((err) => {
-    console.error("[mayros] CLI failed:", formatUncaughtError(err));
-    process.exit(1);
+    const msg = `[mayros] CLI failed: ${formatUncaughtError(err)}\n`;
+    process.stderr.write(msg, () => {
+      process.exit(1);
+    });
   });
 }

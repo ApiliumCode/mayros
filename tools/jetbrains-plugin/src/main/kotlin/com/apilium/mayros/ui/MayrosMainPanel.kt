@@ -74,7 +74,7 @@ class MayrosMainPanel(private val project: Project) : JPanel(BorderLayout()), Ma
         urlField.text = settings.gatewayUrl
 
         // Auto-detect token: settings first, then ~/.mayros/mayros.json
-        val token = settings.gatewayToken.takeIf { it.isNotBlank() } ?: detectGatewayToken()
+        val token = MayrosSettings.getGatewayToken().takeIf { it.isNotBlank() } ?: detectGatewayToken()
         tokenField.text = token ?: ""
 
         connectButton.addActionListener { tryConnect() }
@@ -174,7 +174,7 @@ class MayrosMainPanel(private val project: Project) : JPanel(BorderLayout()), Ma
         // Save settings from fields (including auto-detected token)
         val settings = MayrosSettings.getInstance()
         settings.gatewayUrl = urlField.text.trim()
-        settings.gatewayToken = String(tokenField.password)
+        MayrosSettings.setGatewayToken(String(tokenField.password))
 
         connectButton.isEnabled = false
         setupStatus.text = "Connecting..."
@@ -197,7 +197,7 @@ class MayrosMainPanel(private val project: Project) : JPanel(BorderLayout()), Ma
                     setupStatus.foreground = Color(0xE53935)
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     // ========================================================================
@@ -258,6 +258,9 @@ class MayrosMainPanel(private val project: Project) : JPanel(BorderLayout()), Ma
         (chatPanel as? Disposable)?.dispose()
         (tracesPanel as? Disposable)?.dispose()
         (planPanel as? Disposable)?.dispose()
+        (agentsPanel as? Disposable)?.dispose()
+        (skillsPanel as? Disposable)?.dispose()
+        (kgPanel as? Disposable)?.dispose()
     }
 }
 

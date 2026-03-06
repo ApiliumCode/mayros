@@ -1,5 +1,6 @@
 package com.apilium.mayros.ui
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -23,7 +24,7 @@ import javax.swing.table.DefaultTableModel
  * Body: table with Subject, Predicate, Object, ID columns.
  * Double-click a row to re-query with that row's subject.
  */
-class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener {
+class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener, Disposable {
 
     private val searchField = JTextField(20)
     private val limitSpinner = JSpinner(SpinnerNumberModel(50, 1, 500, 10))
@@ -33,9 +34,11 @@ class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderL
     private val tableModel = DefaultTableModel(columnNames, 0)
     private val resultTable = JTable(tableModel)
 
+    private val service = MayrosService.getInstance()
+
     init {
         setupUI()
-        MayrosService.getInstance().addListener(this)
+        service.addListener(this)
     }
 
     private fun setupUI() {
@@ -83,7 +86,7 @@ class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderL
     }
 
     private fun search() {
-        val client = MayrosService.getInstance().getClient()
+        val client = service.getClient()
         if (client == null || !client.isConnected) {
             statusLabel.text = "Not connected"
             return
@@ -110,7 +113,7 @@ class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderL
                     statusLabel.text = "Error: ${e.message}"
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     override fun onConnected() {
@@ -123,12 +126,17 @@ class KgPanel(@Suppress("unused") private val project: Project) : JPanel(BorderL
             tableModel.rowCount = 0
         }
     }
+
+    override fun dispose() {
+        service.removeListener(this)
+    }
 }
 
 class KgPanelFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = KgPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }
 }

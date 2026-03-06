@@ -240,7 +240,18 @@ export class UrbitSSEClient {
       if (!this.aborted && this.autoReconnect) {
         this.isConnected = false;
         this.logger.log?.("[SSE] Stream ended, attempting reconnection...");
-        await this.attemptReconnect();
+        try {
+          await this.attemptReconnect();
+        } catch (reconnectErr) {
+          this.logger.error?.(
+            `[SSE] Reconnection failed unexpectedly: ${String(reconnectErr)}. Scheduling delayed retry...`,
+          );
+          setTimeout(() => {
+            this.attemptReconnect().catch((retryErr) => {
+              this.logger.error?.(`[SSE] Delayed retry also failed: ${String(retryErr)}`);
+            });
+          }, this.reconnectDelay);
+        }
       }
     }
   }

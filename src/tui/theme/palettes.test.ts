@@ -1,39 +1,80 @@
-import { describe, expect, it } from "vitest";
-import {
-  DARK_PALETTE,
-  HIGH_CONTRAST_PALETTE,
-  LIGHT_PALETTE,
-  THEME_PRESETS,
-  resolvePalette,
-} from "./palettes.js";
+import { describe, it, expect } from "vitest";
+import { resolvePalette, THEME_PRESETS, type ThemePreset, type Palette } from "./palettes.js";
 
-describe("palettes", () => {
-  it("resolves dark preset", () => {
-    expect(resolvePalette("dark")).toBe(DARK_PALETTE);
+const PALETTE_KEYS: (keyof Palette)[] = [
+  "text",
+  "dim",
+  "accent",
+  "accentSoft",
+  "border",
+  "userBg",
+  "userText",
+  "systemText",
+  "toolPendingBg",
+  "toolSuccessBg",
+  "toolErrorBg",
+  "toolTitle",
+  "toolOutput",
+  "quote",
+  "quoteBorder",
+  "code",
+  "codeBlock",
+  "codeBorder",
+  "link",
+  "filePath",
+  "error",
+  "success",
+];
+
+describe("Theme Palettes", () => {
+  it("has 10 theme presets", () => {
+    expect(THEME_PRESETS).toHaveLength(10);
   });
 
-  it("resolves light preset", () => {
-    expect(resolvePalette("light")).toBe(LIGHT_PALETTE);
+  it("includes all expected presets", () => {
+    expect(THEME_PRESETS).toContain("dark");
+    expect(THEME_PRESETS).toContain("dracula");
+    expect(THEME_PRESETS).toContain("github-dark");
+    expect(THEME_PRESETS).toContain("github-light");
+    expect(THEME_PRESETS).toContain("solarized-dark");
+    expect(THEME_PRESETS).toContain("solarized-light");
+    expect(THEME_PRESETS).toContain("atom-one-dark");
+    expect(THEME_PRESETS).toContain("ayu-dark");
   });
 
-  it("resolves high-contrast preset", () => {
-    expect(resolvePalette("high-contrast")).toBe(HIGH_CONTRAST_PALETTE);
+  for (const preset of [
+    "dark",
+    "light",
+    "high-contrast",
+    "dracula",
+    "github-dark",
+    "github-light",
+    "solarized-dark",
+    "solarized-light",
+    "atom-one-dark",
+    "ayu-dark",
+  ] as ThemePreset[]) {
+    it(`resolvePalette("${preset}") has all 22 keys`, () => {
+      const palette = resolvePalette(preset);
+      for (const key of PALETTE_KEYS) {
+        expect(palette[key]).toBeDefined();
+        expect(typeof palette[key]).toBe("string");
+        expect(palette[key].length).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it("default preset falls back to dark", () => {
+    const unknown = resolvePalette("nonexistent" as ThemePreset);
+    const dark = resolvePalette("dark");
+    expect(unknown).toEqual(dark);
   });
 
-  it("lists all preset names", () => {
-    expect(THEME_PRESETS).toEqual(["dark", "light", "high-contrast"]);
-  });
-
-  it("all palettes have the same keys", () => {
-    const darkKeys = Object.keys(DARK_PALETTE).sort();
-    expect(Object.keys(LIGHT_PALETTE).sort()).toEqual(darkKeys);
-    expect(Object.keys(HIGH_CONTRAST_PALETTE).sort()).toEqual(darkKeys);
-  });
-
-  it("palette values are valid hex colors", () => {
-    for (const palette of [DARK_PALETTE, LIGHT_PALETTE, HIGH_CONTRAST_PALETTE]) {
+  it("all palettes have valid hex colors", () => {
+    for (const preset of THEME_PRESETS) {
+      const palette = resolvePalette(preset);
       for (const [key, value] of Object.entries(palette)) {
-        expect(value, `${key} should be hex color`).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(value, `${preset}.${key} should be hex color`).toMatch(/^#[0-9A-Fa-f]{6}$/);
       }
     }
   });

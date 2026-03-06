@@ -26,6 +26,13 @@ export type McpCallResult = {
   isError?: boolean;
 };
 
+/**
+ * Token provider function for OAuth2 integration.
+ * Called before each request to get a valid access token.
+ * Returns null if no token is available.
+ */
+export type TokenProvider = () => Promise<string | null>;
+
 export type McpTransport = {
   type: McpTransportType;
   connect(): Promise<void>;
@@ -89,6 +96,7 @@ class StdioTransport implements McpTransport {
     stdin: { write(data: string): boolean; end(): void };
     stdout: { on(event: string, cb: (data: Buffer) => void): void };
     on(event: string, cb: (...args: unknown[]) => void): void;
+    removeAllListeners(): void;
     kill(): boolean;
   } | null = null;
   private pending = new Map<
@@ -150,6 +158,7 @@ class StdioTransport implements McpTransport {
   async disconnect(): Promise<void> {
     if (this.process) {
       this.process.stdin.end();
+      this.process.removeAllListeners();
       this.process.kill();
       this.process = null;
     }
@@ -232,10 +241,11 @@ class HttpTransport implements McpTransport {
   constructor(
     private readonly url: string,
     private readonly authToken?: string,
+    private readonly tokenProvider?: TokenProvider,
   ) {}
 
   async connect(): Promise<void> {
-    const headers = this.buildHeaders();
+    const headers = await this.buildHeaders();
     const req = createRequest("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
@@ -290,11 +300,20 @@ class HttpTransport implements McpTransport {
     }
   }
 
-  private buildHeaders(): Record<string, string> {
+  private async buildHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+    // Static token takes precedence
     if (this.authToken) {
       headers["Authorization"] = this.authToken;
+    } else if (this.tokenProvider) {
+      // OAuth2 dynamic token
+      const token = await this.tokenProvider();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
     }
+
     if (this.sessionId) {
       headers["mcp-session-id"] = this.sessionId;
     }
@@ -303,9 +322,10 @@ class HttpTransport implements McpTransport {
 
   private async rpcCall(method: string, params?: Record<string, unknown>): Promise<unknown> {
     const req = createRequest(method, params);
+    const headers = await this.buildHeaders();
     const res = await fetch(this.url, {
       method: "POST",
-      headers: this.buildHeaders(),
+      headers,
       body: JSON.stringify(req),
     });
 
@@ -340,6 +360,7 @@ class SseTransport implements McpTransport {
   constructor(
     private readonly url: string,
     private readonly authToken?: string,
+    private readonly tokenProvider?: TokenProvider,
   ) {}
 
   async connect(): Promise<void> {
@@ -347,6 +368,9 @@ class SseTransport implements McpTransport {
     const headers: Record<string, string> = { Accept: "text/event-stream" };
     if (this.authToken) {
       headers["Authorization"] = this.authToken;
+    } else if (this.tokenProvider) {
+      const token = await this.tokenProvider();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
     }
 
     // Open SSE connection to get the messages endpoint
@@ -386,9 +410,10 @@ class SseTransport implements McpTransport {
       clientInfo: { name: "mayros-mcp-client", version: "0.1.3" },
     });
 
+    const postHeaders = await this.buildPostHeaders();
     const initRes = await fetch(this.messagesUrl, {
       method: "POST",
-      headers: this.buildPostHeaders(),
+      headers: postHeaders,
       body: JSON.stringify(initReq),
     });
 
@@ -437,10 +462,13 @@ class SseTransport implements McpTransport {
     }
   }
 
-  private buildPostHeaders(): Record<string, string> {
+  private async buildPostHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.authToken) {
       headers["Authorization"] = this.authToken;
+    } else if (this.tokenProvider) {
+      const token = await this.tokenProvider();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
     }
     if (this.sessionId) {
       headers["mcp-session-id"] = this.sessionId;
@@ -450,9 +478,10 @@ class SseTransport implements McpTransport {
 
   private async rpcCall(method: string, params?: Record<string, unknown>): Promise<unknown> {
     const req = createRequest(method, params);
+    const headers = await this.buildPostHeaders();
     const res = await fetch(this.messagesUrl!, {
       method: "POST",
-      headers: this.buildPostHeaders(),
+      headers,
       body: JSON.stringify(req),
     });
 
@@ -480,6 +509,7 @@ class WebSocketTransport implements McpTransport {
     removeEventListener(event: string, handler: (ev: { data: string }) => void): void;
     readyState: number;
   } | null = null;
+  private messageHandler: ((ev: { data: string }) => void) | null = null;
   private pending = new Map<
     number,
     {
@@ -491,12 +521,18 @@ class WebSocketTransport implements McpTransport {
   constructor(
     private readonly url: string,
     private readonly authToken?: string,
+    private readonly tokenProvider?: TokenProvider,
   ) {}
 
   async connect(): Promise<void> {
-    // Dynamic import to support environments without native WebSocket
-    const wsUrl = this.authToken
-      ? `${this.url}${this.url.includes("?") ? "&" : "?"}token=${encodeURIComponent(this.authToken)}`
+    // Resolve token for WebSocket URL
+    let token = this.authToken;
+    if (!token && this.tokenProvider) {
+      const oauthToken = await this.tokenProvider();
+      if (oauthToken) token = `Bearer ${oauthToken}`;
+    }
+    const wsUrl = token
+      ? `${this.url}${this.url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
       : this.url;
 
     const ws = new WebSocket(wsUrl);
@@ -520,7 +556,7 @@ class WebSocketTransport implements McpTransport {
       target.addEventListener("error", onError);
     });
 
-    ws.addEventListener("message", (event: { data: string }) => {
+    this.messageHandler = (event: { data: string }) => {
       try {
         const response = parseResponse(String(event.data));
         const handler = this.pending.get(response.id);
@@ -531,7 +567,8 @@ class WebSocketTransport implements McpTransport {
       } catch {
         // Ignore non-JSON or notification messages
       }
-    });
+    };
+    ws.addEventListener("message", this.messageHandler);
 
     this.ws = ws as unknown as typeof this.ws;
 
@@ -549,6 +586,10 @@ class WebSocketTransport implements McpTransport {
 
   async disconnect(): Promise<void> {
     if (this.ws) {
+      if (this.messageHandler) {
+        this.ws.removeEventListener("message", this.messageHandler);
+        this.messageHandler = null;
+      }
       this.ws.close();
       this.ws = null;
     }
@@ -609,6 +650,7 @@ export function createTransport(config: {
   args?: string[];
   url?: string;
   authToken?: string;
+  tokenProvider?: TokenProvider;
 }): McpTransport {
   switch (config.type) {
     case "stdio":
@@ -621,19 +663,19 @@ export function createTransport(config: {
       if (!config.url) {
         throw new Error("http transport requires a url");
       }
-      return new HttpTransport(config.url, config.authToken);
+      return new HttpTransport(config.url, config.authToken, config.tokenProvider);
 
     case "sse":
       if (!config.url) {
         throw new Error("sse transport requires a url");
       }
-      return new SseTransport(config.url, config.authToken);
+      return new SseTransport(config.url, config.authToken, config.tokenProvider);
 
     case "websocket":
       if (!config.url) {
         throw new Error("websocket transport requires a url");
       }
-      return new WebSocketTransport(config.url, config.authToken);
+      return new WebSocketTransport(config.url, config.authToken, config.tokenProvider);
 
     default:
       throw new Error(`Unsupported transport type: ${String(config.type)}`);

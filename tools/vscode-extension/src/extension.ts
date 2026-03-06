@@ -12,6 +12,7 @@ import { explainCode, sendSelection } from "./editor/code-actions.js";
 import { MayrosCodeLensProvider, sendMarker } from "./editor/gutter-markers.js";
 
 let client: MayrosClient | undefined;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = getConfig();
@@ -31,13 +32,20 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerTreeDataProvider("mayros.sessions", sessionsProvider),
     vscode.window.registerTreeDataProvider("mayros.agents", agentsProvider),
     vscode.window.registerTreeDataProvider("mayros.skills", skillsProvider),
+    sessionsProvider,
+    agentsProvider,
+    skillsProvider,
   );
 
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand("mayros.connect", async () => {
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
       try {
-        await client!.connect();
+        await client.connect();
         vscode.window.showInformationMessage("Connected to Mayros gateway");
         refreshAll();
       } catch (e) {
@@ -48,7 +56,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("mayros.disconnect", async () => {
-      await client!.disconnect();
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      await client.disconnect();
       vscode.window.showInformationMessage("Disconnected from Mayros gateway");
       refreshAll();
     }),
@@ -58,34 +70,62 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("mayros.openChat", () => {
-      ChatPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      ChatPanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openPlan", () => {
-      PlanPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      PlanPanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openTrace", () => {
-      TracePanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      TracePanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openKg", () => {
-      KgPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      KgPanel.createOrShow(context.extensionUri, client);
     }),
 
     // Editor context actions
     vscode.commands.registerCommand("mayros.explainCode", () => {
-      explainCode(client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      explainCode(client);
     }),
 
     vscode.commands.registerCommand("mayros.sendSelection", () => {
-      sendSelection(client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      sendSelection(client);
     }),
 
     vscode.commands.registerCommand(
       "mayros.sendMarker",
       (file: string, line: number, text: string) => {
-        sendMarker(client!, file, line, text);
+        if (!client) {
+          vscode.window.showWarningMessage("Mayros client not initialized");
+          return;
+        }
+        sendMarker(client, file, line, text);
       },
     ),
 
@@ -96,34 +136,27 @@ export function activate(context: vscode.ExtensionContext): void {
   // React to configuration changes
   context.subscriptions.push(
     onConfigChange((newConfig) => {
-      if (client && client.connected) {
-        client
-          .disconnect()
-          .then(() => {
-            client = new MayrosClient(newConfig.gatewayUrl, {
-              maxReconnectAttempts: newConfig.maxReconnectAttempts,
-              reconnectDelayMs: newConfig.reconnectDelayMs,
-              token: newConfig.gatewayToken || undefined,
-            });
-            // Re-wire tree providers
-            sessionsProvider.setClient(client!);
-            agentsProvider.setClient(client!);
-            skillsProvider.setClient(client!);
-            if (newConfig.autoConnect) {
-              client!.connect().catch(() => {});
-            }
-          })
-          .catch(() => {});
-      } else {
+      const rewireClient = (): void => {
+        const oldClient = client;
         client = new MayrosClient(newConfig.gatewayUrl, {
           maxReconnectAttempts: newConfig.maxReconnectAttempts,
           reconnectDelayMs: newConfig.reconnectDelayMs,
           token: newConfig.gatewayToken || undefined,
         });
-        sessionsProvider.setClient(client!);
-        agentsProvider.setClient(client!);
-        skillsProvider.setClient(client!);
-      }
+        sessionsProvider.setClient(client);
+        agentsProvider.setClient(client);
+        skillsProvider.setClient(client);
+        if (oldClient) {
+          oldClient.disconnect().catch(() => {});
+        }
+        if (newConfig.autoConnect) {
+          client.connect().catch((e) => {
+            console.error("[Mayros] Auto-reconnect after config change failed:", e);
+          });
+        }
+      };
+
+      rewireClient();
     }),
   );
 
@@ -134,12 +167,16 @@ export function activate(context: vscode.ExtensionContext): void {
       .then(() => {
         refreshAll();
       })
-      .catch(() => {
-        setTimeout(() => {
+      .catch((e) => {
+        console.error("[Mayros] Initial auto-connect failed, retrying in 2s:", e);
+        retryTimer = setTimeout(() => {
+          retryTimer = undefined;
           client
             ?.connect()
             .then(() => refreshAll())
-            .catch(() => {});
+            .catch((retryErr) => {
+              console.error("[Mayros] Auto-connect retry failed:", retryErr);
+            });
         }, 2000);
       });
   }
@@ -152,6 +189,10 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = undefined;
+  }
   if (client) {
     client.dispose();
     client = undefined;

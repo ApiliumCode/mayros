@@ -211,10 +211,15 @@ export class RulesEngine {
   }
 
   async removeRule(id: string): Promise<void> {
-    // Find the rule subject by querying all scopes
-    for (const scope of ["global", "project", "agent", "skill", "file"] as RuleScope[]) {
-      const sub = ruleSubject(this.ns, scope, id);
-      const result = await this.client.listTriples({ subject: sub, limit: 20 });
+    // Query all scopes in parallel to avoid sequential round-trips
+    const scopes = ["global", "project", "agent", "skill", "file"] as RuleScope[];
+    const results = await Promise.all(
+      scopes.map((scope) =>
+        this.client.listTriples({ subject: ruleSubject(this.ns, scope, id), limit: 20 }),
+      ),
+    );
+
+    for (const result of results) {
       if (result.triples.length > 0) {
         for (const t of result.triples) {
           if (t.id) await this.client.deleteTriple(t.id);
@@ -255,9 +260,15 @@ export class RulesEngine {
   }
 
   async getRule(id: string): Promise<Rule | null> {
-    for (const scope of ["global", "project", "agent", "skill", "file"] as RuleScope[]) {
-      const sub = ruleSubject(this.ns, scope, id);
-      const result = await this.client.listTriples({ subject: sub, limit: 20 });
+    // Query all scopes in parallel to avoid sequential round-trips
+    const scopes = ["global", "project", "agent", "skill", "file"] as RuleScope[];
+    const results = await Promise.all(
+      scopes.map((scope) =>
+        this.client.listTriples({ subject: ruleSubject(this.ns, scope, id), limit: 20 }),
+      ),
+    );
+
+    for (const result of results) {
       if (result.triples.length > 0) {
         return triplesToRule(result.triples);
       }

@@ -11,10 +11,56 @@ export class ChatLog extends Container {
   private streamingRuns = new Map<string, AssistantMessageComponent>();
   private toolsExpanded = false;
   private _lastAssistantText = "";
+  private _scrollOffset = 0;
+  private _totalRenderedLines = 0;
 
   constructor(maxComponents = 180) {
     super();
     this.maxComponents = Math.max(20, Math.floor(maxComponents));
+  }
+
+  /**
+   * Scroll the chat log by a number of lines.
+   * Positive = scroll up (toward older content), negative = scroll down.
+   */
+  scrollBy(lines: number): void {
+    this._scrollOffset = Math.max(0, this._scrollOffset + lines);
+  }
+
+  /** Scroll to the bottom (most recent content). */
+  scrollToBottom(): void {
+    this._scrollOffset = 0;
+  }
+
+  /** True when the user has scrolled away from the bottom. */
+  isScrolledUp(): boolean {
+    return this._scrollOffset > 0;
+  }
+
+  /** Current scroll offset in lines. */
+  getScrollOffset(): number {
+    return this._scrollOffset;
+  }
+
+  render(width: number): string[] {
+    const allLines = super.render(width);
+    this._totalRenderedLines = allLines.length;
+
+    if (this._scrollOffset <= 0) return allLines;
+
+    // Clamp scroll offset to total lines
+    if (this._scrollOffset >= allLines.length) {
+      this._scrollOffset = Math.max(0, allLines.length - 1);
+    }
+
+    const end = allLines.length - this._scrollOffset;
+    const visible = allLines.slice(0, end);
+
+    // Append scroll indicator
+    const pct = Math.round(((allLines.length - this._scrollOffset) / allLines.length) * 100);
+    visible.push(theme.dim(`── scrolled up ${this._scrollOffset} lines (${pct}%) ──`));
+
+    return visible;
   }
 
   private dropComponentReferences(component: Component) {
@@ -44,6 +90,8 @@ export class ChatLog extends Container {
   private append(component: Component) {
     this.addChild(component);
     this.pruneOverflow();
+    // Auto-scroll to bottom on new content
+    this._scrollOffset = 0;
   }
 
   clearAll() {

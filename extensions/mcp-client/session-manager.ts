@@ -186,14 +186,11 @@ export class SessionManager {
       this.transports.delete(serverId);
     }
 
-    // Update attempt counter before connecting
-    if (connection) {
-      connection.reconnectAttempts = attempts + 1;
-    }
-
     try {
       return await this.connect(serverId);
     } catch (err) {
+      // Increment only after a confirmed failure so each failed attempt
+      // advances the counter exactly once, ensuring termination.
       if (connection) {
         connection.reconnectAttempts = attempts + 1;
       }

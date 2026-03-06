@@ -87,19 +87,28 @@ export async function ensureMediaDir() {
 
 export async function cleanOldMedia(ttlMs = DEFAULT_TTL_MS) {
   const mediaDir = await ensureMediaDir();
-  const entries = await fs.readdir(mediaDir).catch(() => []);
+  const entries = await fs.readdir(mediaDir).catch((err) => {
+    console.warn("[media] readdir failed for", mediaDir, err);
+    return [] as string[];
+  });
   const now = Date.now();
   const removeExpiredFilesInDir = async (dir: string) => {
-    const dirEntries = await fs.readdir(dir).catch(() => []);
+    const dirEntries = await fs.readdir(dir).catch((err) => {
+      console.warn("[media] readdir failed for", dir, err);
+      return [] as string[];
+    });
     await Promise.all(
       dirEntries.map(async (entry) => {
         const full = path.join(dir, entry);
-        const stat = await fs.stat(full).catch(() => null);
+        const stat = await fs.stat(full).catch((err) => {
+          console.warn("[media] stat failed for", full, err);
+          return null;
+        });
         if (!stat || !stat.isFile()) {
           return;
         }
         if (now - stat.mtimeMs > ttlMs) {
-          await fs.rm(full).catch(() => {});
+          await fs.rm(full).catch((err) => console.warn("[media] cleanup failed for", full, err));
         }
       }),
     );
@@ -108,7 +117,10 @@ export async function cleanOldMedia(ttlMs = DEFAULT_TTL_MS) {
   await Promise.all(
     entries.map(async (file) => {
       const full = path.join(mediaDir, file);
-      const stat = await fs.stat(full).catch(() => null);
+      const stat = await fs.stat(full).catch((err) => {
+        console.warn("[media] stat failed for", full, err);
+        return null;
+      });
       if (!stat) {
         return;
       }
@@ -117,7 +129,7 @@ export async function cleanOldMedia(ttlMs = DEFAULT_TTL_MS) {
         return;
       }
       if (stat.isFile() && now - stat.mtimeMs > ttlMs) {
-        await fs.rm(full).catch(() => {});
+        await fs.rm(full).catch((err) => console.warn("[media] cleanup failed for", full, err));
       }
     }),
   );
@@ -261,17 +273,22 @@ export async function saveMediaSource(
   const baseId = crypto.randomUUID();
   if (looksLikeUrl(source)) {
     const tempDest = path.join(dir, `${baseId}.tmp`);
-    const { headerMime, sniffBuffer, size } = await downloadToFile(source, tempDest, headers);
-    const mime = await detectMime({
-      buffer: sniffBuffer,
-      headerMime,
-      filePath: source,
-    });
-    const ext = extensionForMime(mime) ?? path.extname(new URL(source).pathname);
-    const id = ext ? `${baseId}${ext}` : baseId;
-    const finalDest = path.join(dir, id);
-    await fs.rename(tempDest, finalDest);
-    return { id, path: finalDest, size, contentType: mime };
+    try {
+      const { headerMime, sniffBuffer, size } = await downloadToFile(source, tempDest, headers);
+      const mime = await detectMime({
+        buffer: sniffBuffer,
+        headerMime,
+        filePath: source,
+      });
+      const ext = extensionForMime(mime) ?? path.extname(new URL(source).pathname);
+      const id = ext ? `${baseId}${ext}` : baseId;
+      const finalDest = path.join(dir, id);
+      await fs.rename(tempDest, finalDest);
+      return { id, path: finalDest, size, contentType: mime };
+    } catch (err) {
+      await fs.rm(tempDest).catch(() => {});
+      throw err;
+    }
   }
   // local path
   try {

@@ -179,7 +179,12 @@ export async function extractPackageArchive(
   archiveBuffer: Buffer,
   targetDir: string,
 ): Promise<{ files: string[]; totalSize: number }> {
-  const archive = JSON.parse(archiveBuffer.toString("utf-8")) as PackageArchive;
+  let archive: PackageArchive;
+  try {
+    archive = JSON.parse(archiveBuffer.toString("utf-8")) as PackageArchive;
+  } catch {
+    throw new Error("Failed to parse skill archive: malformed JSON data");
+  }
 
   if (archive.format !== "mayros-skill-archive-v1") {
     throw new Error(`Unknown archive format: ${archive.format}`);

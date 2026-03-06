@@ -6,6 +6,8 @@ import type {
 } from "@mariozechner/pi-tui";
 import chalk from "chalk";
 import { highlight, supportsLanguage } from "cli-highlight";
+import { formatTerminalLink } from "../../utils.js";
+import { stripAnsi } from "../../terminal/ansi.js";
 import type { SearchableSelectListTheme } from "../components/searchable-select-list.js";
 import type { Palette } from "./palettes.js";
 import { createSyntaxTheme } from "./syntax-theme.js";
@@ -32,6 +34,7 @@ export type ThemeSet = {
     toolSuccessBg: (text: string) => string;
     toolErrorBg: (text: string) => string;
     border: (text: string) => string;
+    filePath: (text: string) => string;
     bold: (text: string) => string;
     italic: (text: string) => string;
   };
@@ -81,14 +84,33 @@ export function createThemeSet(palette: Palette): ThemeSet {
     toolSuccessBg: bg(palette.toolSuccessBg),
     toolErrorBg: bg(palette.toolErrorBg),
     border: fg(palette.border),
+    filePath: fg(palette.filePath),
     bold: (text: string) => chalk.bold(text),
     italic: (text: string) => chalk.italic(text),
   };
 
   const markdownTheme: MarkdownTheme = {
     heading: (text) => chalk.bold(fg(palette.accent)(text)),
-    link: (text) => fg(palette.link)(text),
-    linkUrl: (text) => chalk.dim(text),
+    link: (text) => {
+      // Autolinks: text is the URL itself (e.g. "[https://...](https://...)")
+      const plain = stripAnsi(text);
+      if (/^https?:\/\//.test(plain)) {
+        return formatTerminalLink(fg(palette.link)(text), plain, {
+          fallback: fg(palette.link)(text),
+        });
+      }
+      return fg(palette.link)(text);
+    },
+    linkUrl: (text) => {
+      // pi-tui passes " (url)" — extract the URL
+      const match = /\(\s*(https?:\/\/[^\s)]+)\s*\)/.exec(text);
+      if (match?.[1]) {
+        const url = match[1];
+        const styled = chalk.dim(text);
+        return formatTerminalLink(styled, url, { fallback: styled });
+      }
+      return chalk.dim(text);
+    },
     code: (text) => fg(palette.code)(text),
     codeBlock: (text) => fg(palette.code)(text),
     codeBlockBorder: (text) => fg(palette.codeBorder)(text),

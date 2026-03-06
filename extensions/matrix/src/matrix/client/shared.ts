@@ -164,13 +164,23 @@ export async function resolveSharedMatrixClient(
   }
 }
 
-export async function waitForMatrixSync(_params: {
+export async function waitForMatrixSync(params: {
   client: MatrixClient;
   timeoutMs?: number;
   abortSignal?: AbortSignal;
 }): Promise<void> {
-  // @vector-im/matrix-bot-sdk handles sync internally in start()
-  // This is kept for API compatibility but is essentially a no-op now
+  // @vector-im/matrix-bot-sdk handles sync internally in client.start().
+  // Explicit sync waiting is not supported by this SDK — log a warning so
+  // callers are aware that this function does not perform additional waiting.
+  LogService.warn(
+    "MatrixClientLite",
+    "waitForMatrixSync() is a no-op: @vector-im/matrix-bot-sdk manages sync internally via start(). " +
+      "No additional sync polling is performed.",
+  );
+
+  if (params.abortSignal?.aborted) {
+    throw new Error("waitForMatrixSync aborted");
+  }
 }
 
 export function stopSharedClient(key?: string): void {

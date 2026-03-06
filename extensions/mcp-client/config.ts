@@ -19,13 +19,24 @@ export type { CortexConfig };
 
 export type McpTransportType = "stdio" | "sse" | "http" | "websocket";
 
+export type OAuth2TransportConfig = {
+  clientId: string;
+  clientSecret?: string;
+  scopes?: string[];
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  deviceAuthorizationEndpoint?: string;
+  redirectPort?: number;
+  autoDiscover?: boolean;
+};
+
 export type McpTransportConfig = {
   type: McpTransportType;
   command?: string;
   args?: string[];
   url?: string;
   authToken?: string;
-  oauthClientId?: string;
+  oauth2?: OAuth2TransportConfig;
 };
 
 export type McpServerConfig = {
@@ -57,6 +68,37 @@ const DEFAULT_RECONNECT_DELAY_MS = 3000;
 
 const VALID_TRANSPORT_TYPES = new Set<McpTransportType>(["stdio", "sse", "http", "websocket"]);
 
+function parseOAuth2Config(raw: Record<string, unknown>): OAuth2TransportConfig {
+  const clientId = typeof raw.clientId === "string" ? raw.clientId : "";
+  if (!clientId) {
+    throw new Error("oauth2.clientId is required");
+  }
+
+  const config: OAuth2TransportConfig = { clientId };
+
+  if (typeof raw.clientSecret === "string") config.clientSecret = raw.clientSecret;
+  if (Array.isArray(raw.scopes)) {
+    config.scopes = raw.scopes.filter((s): s is string => typeof s === "string");
+  }
+  if (typeof raw.authorizationEndpoint === "string") {
+    config.authorizationEndpoint = raw.authorizationEndpoint;
+  }
+  if (typeof raw.tokenEndpoint === "string") {
+    config.tokenEndpoint = raw.tokenEndpoint;
+  }
+  if (typeof raw.deviceAuthorizationEndpoint === "string") {
+    config.deviceAuthorizationEndpoint = raw.deviceAuthorizationEndpoint;
+  }
+  if (typeof raw.redirectPort === "number") {
+    config.redirectPort = Math.floor(raw.redirectPort);
+  }
+  if (typeof raw.autoDiscover === "boolean") {
+    config.autoDiscover = raw.autoDiscover;
+  }
+
+  return config;
+}
+
 // ============================================================================
 // Parsers
 // ============================================================================
@@ -68,7 +110,7 @@ function parseTransportConfig(raw: unknown): McpTransportConfig {
   const t = raw as Record<string, unknown>;
   assertAllowedKeys(
     t,
-    ["type", "command", "args", "url", "authToken", "oauthClientId"],
+    ["type", "command", "args", "url", "authToken", "oauth2"],
     "transport config",
   );
 
@@ -87,7 +129,9 @@ function parseTransportConfig(raw: unknown): McpTransportConfig {
   }
   if (typeof t.url === "string") transport.url = t.url;
   if (typeof t.authToken === "string") transport.authToken = t.authToken;
-  if (typeof t.oauthClientId === "string") transport.oauthClientId = t.oauthClientId;
+  if (t.oauth2 && typeof t.oauth2 === "object" && !Array.isArray(t.oauth2)) {
+    transport.oauth2 = parseOAuth2Config(t.oauth2 as Record<string, unknown>);
+  }
 
   // Validate transport-specific requirements
   if (type === "stdio" && !transport.command) {

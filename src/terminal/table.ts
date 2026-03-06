@@ -83,12 +83,25 @@ function wrapLine(text: string, width: number): string[] {
         }
       }
 
-      // OSC-8 link open/close: ESC ] 8 ; ; ... ST (ST = ESC \)
+      // OSC-8 link open/close: ESC ] 8 ; ; ... TERM (TERM = BEL \x07 or ST = ESC \)
       if (text[i + 1] === "]" && text.slice(i + 2, i + 5) === "8;;") {
+        // Try ST terminator first (ESC \)
         const st = text.indexOf(`${ESC}\\`, i + 5);
-        if (st >= 0) {
-          tokens.push({ kind: "ansi", value: text.slice(i, st + 2) });
-          i = st + 2;
+        // Try BEL terminator (\x07)
+        const bel = text.indexOf("\x07", i + 5);
+        // Pick whichever comes first
+        let end = -1;
+        let skip = 0;
+        if (st >= 0 && (bel < 0 || st <= bel)) {
+          end = st;
+          skip = 2; // ESC + backslash
+        } else if (bel >= 0) {
+          end = bel;
+          skip = 1; // BEL
+        }
+        if (end >= 0) {
+          tokens.push({ kind: "ansi", value: text.slice(i, end + skip) });
+          i = end + skip;
           continue;
         }
       }
