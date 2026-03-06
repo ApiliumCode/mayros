@@ -134,10 +134,10 @@ export function registerWebFetch(api: MayrosPluginApi, _cfg: CodeToolsConfig): v
         let responseText: string;
         let finalUrl = url;
 
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 30000);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
 
+        try {
           const resp = await fetch(url, {
             headers: {
               "User-Agent": "Mayros/0.1 (Web Fetch Tool)",
@@ -147,8 +147,6 @@ export function registerWebFetch(api: MayrosPluginApi, _cfg: CodeToolsConfig): v
             redirect: "follow",
             signal: controller.signal,
           });
-
-          clearTimeout(timeout);
 
           if (!resp.ok) {
             return {
@@ -170,6 +168,8 @@ export function registerWebFetch(api: MayrosPluginApi, _cfg: CodeToolsConfig): v
             content: [{ type: "text" as const, text: `Fetch failed for ${url}: ${message}` }],
             details: { url, error: message },
           };
+        } finally {
+          clearTimeout(timeout);
         }
 
         // Convert HTML to text
