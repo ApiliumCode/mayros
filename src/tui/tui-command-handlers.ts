@@ -64,6 +64,7 @@ type CommandHandlerContext = {
   applySessionInfoFromPatch: (result: SessionsPatchResult) => void;
   noteLocalRunId: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
+  mouseHandler?: { enable(): void; disable(): void; isEnabled(): boolean };
 };
 
 export function createCommandHandlers(context: CommandHandlerContext) {
@@ -979,12 +980,28 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         await sendMessage(`/plan ${action}`);
         break;
       }
+      case "mouse": {
+        if (context.mouseHandler) {
+          if (context.mouseHandler.isEnabled()) {
+            context.mouseHandler.disable();
+            chatLog.addSystem("Mouse reporting disabled — text selection enabled.");
+          } else {
+            context.mouseHandler.enable();
+            chatLog.addSystem("Mouse reporting enabled.");
+          }
+        } else {
+          chatLog.addSystem("Mouse handler not available.");
+        }
+        break;
+      }
       case "kg": {
         if (!args) {
-          chatLog.addSystem("usage: /kg <query>");
-          break;
+          await sendMessage(
+            "Use the semantic_memory_query tool to list a summary of what is stored in the knowledge graph. Show categories, triple counts, and recent entries.",
+          );
+        } else {
+          await sendMessage(`Use the semantic_memory_query tool to search for: ${args}`);
         }
-        await sendMessage(`Use the semantic_memory_query tool to search for: ${args}`);
         break;
       }
       case "trace": {
