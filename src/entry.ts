@@ -69,11 +69,10 @@ function ensureExperimentalWarningSuppressed(): boolean {
   });
 
   child.once("error", (error) => {
-    console.error(
-      "[mayros] Failed to respawn CLI:",
-      error instanceof Error ? (error.stack ?? error.message) : error,
-    );
-    process.exit(1);
+    const msg = `[mayros] Failed to respawn CLI: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`;
+    process.stderr.write(msg, () => {
+      process.exit(1);
+    });
   });
 
   // Parent must not continue running the CLI.
