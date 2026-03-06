@@ -877,6 +877,7 @@ export async function runTui(opts: TuiOptions) {
       formatSessionKey,
       noteLocalRunId,
       forgetLocalRunId,
+      mouseHandler,
     });
 
   const { runLocalShellLine } = createLocalShellRunner({
