@@ -275,11 +275,17 @@ function countStripped(original: unknown, sanitized: unknown): number {
   return 0;
 }
 
-// Export for testing
+// INJECTION_PATTERNS is re-used by memory-semantic/index.ts for injection detection.
+// The remaining exports are internal helpers exposed for unit testing only.
 export {
+  /** @internal Test utility -- use sanitizeEnrichment() for production code. */
   containsInjection,
+  /** @internal Test utility -- use sanitizeEnrichment() for production code. */
   sanitizeValue,
+  /** @internal Test utility -- use sanitizeEnrichment() for production code. */
   normalizeForDetection,
+  /** Used by memory-semantic for shared injection detection. */
   INJECTION_PATTERNS,
+  /** @internal Test utility -- the constant is applied internally by sanitizeEnrichment(). */
   MAX_ENRICHMENT_CHARS,
 };

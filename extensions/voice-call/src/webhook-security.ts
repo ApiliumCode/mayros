@@ -390,6 +390,10 @@ export function verifyTelnyxWebhook(
   },
 ): TelnyxVerificationResult {
   if (options?.skipVerification) {
+    console.warn(
+      "[voice-call] SECURITY: Telnyx webhook verification skipped (skipVerification=true). " +
+        "This should only be used in development.",
+    );
     return { ok: true, reason: "verification skipped (dev mode)" };
   }
 
@@ -478,6 +482,10 @@ export function verifyTwilioWebhook(
 ): TwilioVerificationResult {
   // Allow skipping verification for development/testing
   if (options?.skipVerification) {
+    console.warn(
+      "[voice-call] SECURITY: Twilio webhook verification skipped (skipVerification=true). " +
+        "This should only be used in development.",
+    );
     return { ok: true, reason: "verification skipped (dev mode)" };
   }
 
@@ -705,6 +713,10 @@ export function verifyPlivoWebhook(
   },
 ): PlivoVerificationResult {
   if (options?.skipVerification) {
+    console.warn(
+      "[voice-call] SECURITY: Plivo webhook verification skipped (skipVerification=true). " +
+        "This should only be used in development.",
+    );
     return { ok: true, reason: "verification skipped (dev mode)" };
   }
 

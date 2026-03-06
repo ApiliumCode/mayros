@@ -24,6 +24,8 @@ import {
   resolveMediaAttachmentLocalRoots,
   runCapability,
 } from "./runner.js";
+import type { MediaCapabilityWarning } from "./capability-warnings.js";
+import { extractCapabilityWarnings } from "./capability-warnings.js";
 import type {
   MediaUnderstandingCapability,
   MediaUnderstandingDecision,
@@ -34,6 +36,7 @@ import type {
 export type ApplyMediaUnderstandingResult = {
   outputs: MediaUnderstandingOutput[];
   decisions: MediaUnderstandingDecision[];
+  warnings: MediaCapabilityWarning[];
   appliedImage: boolean;
   appliedAudio: boolean;
   appliedVideo: boolean;
@@ -511,6 +514,8 @@ export async function applyMediaUnderstanding(params: {
       ctx.MediaUnderstandingDecisions = [...(ctx.MediaUnderstandingDecisions ?? []), ...decisions];
     }
 
+    const warnings = extractCapabilityWarnings(decisions, attachments.length);
+
     if (outputs.length > 0) {
       ctx.Body = formatMediaUnderstandingBody({ body: ctx.Body, outputs });
       const audioOutputs = outputs.filter((output) => output.kind === "audio.transcription");
@@ -554,6 +559,7 @@ export async function applyMediaUnderstanding(params: {
     return {
       outputs,
       decisions,
+      warnings,
       appliedImage: outputs.some((output) => output.kind === "image.description"),
       appliedAudio: outputs.some((output) => output.kind === "audio.transcription"),
       appliedVideo: outputs.some((output) => output.kind === "video.description"),

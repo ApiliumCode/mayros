@@ -225,6 +225,83 @@ describe("BudgetTracker", () => {
     expect(tracker.getSessionStatus().usedUsd).toBe(0);
     expect(tracker.getCallCount()).toBe(1);
   });
+
+  it("tracks per-model usage with provider and model", () => {
+    const tracker = new BudgetTracker(parseTokenBudgetConfig({}), { ...basePersisted });
+    const costConfig = { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 };
+
+    tracker.recordUsage({ input: 1000, output: 500 }, costConfig, "anthropic", "claude-sonnet-4-6");
+    tracker.recordUsage({ input: 2000, output: 300 }, costConfig, "anthropic", "claude-sonnet-4-6");
+    tracker.recordUsage({ input: 500, output: 100 }, costConfig, "openai", "gpt-4o");
+
+    const models = tracker.getModelUsage();
+    expect(models).toHaveLength(2);
+
+    // Sorted by cost descending — anthropic model should be first (more usage)
+    const anthropicModel = models.find((m) => m.provider === "anthropic");
+    expect(anthropicModel).toBeDefined();
+    expect(anthropicModel!.calls).toBe(2);
+    expect(anthropicModel!.tokens.input).toBe(3000);
+    expect(anthropicModel!.tokens.output).toBe(800);
+
+    const openaiModel = models.find((m) => m.provider === "openai");
+    expect(openaiModel).toBeDefined();
+    expect(openaiModel!.calls).toBe(1);
+  });
+
+  it("getModelUsage returns empty when no provider/model given", () => {
+    const tracker = new BudgetTracker(parseTokenBudgetConfig({}), { ...basePersisted });
+    tracker.recordUsage(
+      { input: 1000, output: 500 },
+      { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
+    );
+    expect(tracker.getModelUsage()).toHaveLength(0);
+  });
+
+  it("getSummary includes modelUsage", () => {
+    const tracker = new BudgetTracker(parseTokenBudgetConfig({}), { ...basePersisted });
+    tracker.recordUsage(
+      { input: 1000, output: 500 },
+      { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
+      "anthropic",
+      "claude-opus-4-6",
+    );
+    const summary = tracker.getSummary();
+    expect(summary.modelUsage).toHaveLength(1);
+    expect(summary.modelUsage[0].model).toBe("claude-opus-4-6");
+  });
+
+  it("resetSession clears per-model usage", () => {
+    const tracker = new BudgetTracker(parseTokenBudgetConfig({}), { ...basePersisted });
+    tracker.recordUsage(
+      { input: 1000, output: 500 },
+      { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
+      "anthropic",
+      "claude-sonnet-4-6",
+    );
+    expect(tracker.getModelUsage()).toHaveLength(1);
+
+    tracker.resetSession();
+    expect(tracker.getModelUsage()).toHaveLength(0);
+  });
+
+  it("updates persisted modelUsage on recordUsage", () => {
+    const persisted = { ...basePersisted };
+    const tracker = new BudgetTracker(parseTokenBudgetConfig({}), persisted);
+    tracker.recordUsage(
+      { input: 1000, output: 500 },
+      { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 },
+      "anthropic",
+      "claude-opus-4-6",
+    );
+
+    const snapshot = tracker.getPersistedSnapshot();
+    expect(snapshot.modelUsage).toBeDefined();
+    const key = "anthropic:claude-opus-4-6";
+    expect(snapshot.modelUsage![key]).toBeDefined();
+    expect(snapshot.modelUsage![key].calls).toBe(1);
+    expect(snapshot.modelUsage![key].costUsd).toBeGreaterThan(0);
+  });
 });
 
 // ============================================================================

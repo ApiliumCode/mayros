@@ -59,4 +59,39 @@ describe("createThemeSet", () => {
     expect(stripAnsi(set.selectListTheme.selectedPrefix(">"))).toBe(">");
     expect(stripAnsi(set.selectListTheme.selectedText("item"))).toBe("item");
   });
+
+  it("theme.filePath is a function", () => {
+    const set = createThemeSet(DARK_PALETTE);
+    expect(typeof set.theme.filePath).toBe("function");
+    const styled = set.theme.filePath("src/foo.ts");
+    expect(stripAnsi(styled)).toBe("src/foo.ts");
+  });
+
+  it("markdownTheme.link detects autolinks (URL text)", () => {
+    const set = createThemeSet(DARK_PALETTE);
+    const result = set.markdownTheme.link("https://example.com");
+    // Without TTY it falls back, but the URL should be in the output
+    expect(result).toContain("https://example.com");
+  });
+
+  it("markdownTheme.link leaves non-URL text as colored text", () => {
+    const set = createThemeSet(DARK_PALETTE);
+    const result = set.markdownTheme.link("click here");
+    // Should NOT contain OSC 8 (not a URL)
+    expect(result).not.toContain("\x1b]8;;");
+    expect(stripAnsi(result)).toBe("click here");
+  });
+
+  it("markdownTheme.linkUrl extracts URL from parenthesized format", () => {
+    const set = createThemeSet(DARK_PALETTE);
+    const result = set.markdownTheme.linkUrl(" (https://example.com)");
+    // Without TTY it falls back but URL should be preserved
+    expect(result).toContain("https://example.com");
+  });
+
+  it("markdownTheme.linkUrl falls back for non-URL text", () => {
+    const set = createThemeSet(DARK_PALETTE);
+    const result = set.markdownTheme.linkUrl(" (not a url)");
+    expect(result).not.toContain("\x1b]8;;");
+  });
 });

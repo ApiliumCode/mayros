@@ -136,6 +136,9 @@ CLAUDE.md
 .claude/RULES.md
 
 docs/evolution/
+docs/experiments/
+docs/refactor/
+secret/
 
 # JetBrains plugin build artifacts
 tools/jetbrains-plugin/.gradle/

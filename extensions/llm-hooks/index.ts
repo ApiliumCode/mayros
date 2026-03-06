@@ -47,13 +47,28 @@ const llmHooksPlugin = {
     const cache = new HookCache(cfg.globalCacheTtlMs);
     let llmCallFn: LlmCallFn | undefined;
 
+    // Tracks whether event handlers have already been registered.
+    // registerEventHandlers() must be idempotent: calling it more than once
+    // (e.g. via the `llm-hooks reload` CLI command) would stack duplicate
+    // handlers on the same events, causing hooks to fire multiple times per
+    // event. The flag is reset in stop() so a full service restart re-registers
+    // cleanly.
+    let handlersRegistered = false;
+
     // Concurrency limiter
     let activeEvals = 0;
 
-    // Inject the LLM call function from the host API if available
-    const apiExt = api as unknown as Record<string, unknown>;
-    if (typeof apiExt.callLlm === "function") {
-      llmCallFn = apiExt.callLlm as LlmCallFn;
+    // Inject the LLM call function from the host API.
+    // api.callLlm is typed as optional on MayrosPluginApi; when absent we must
+    // NOT silently approve — we warn and skip evaluation so the operator is
+    // aware that hook decisions are not being enforced.
+    if (typeof api.callLlm === "function") {
+      llmCallFn = api.callLlm as LlmCallFn;
+    } else {
+      api.logger.warn(
+        "llm-hooks: api.callLlm is not available — LLM hook evaluation will be skipped. " +
+          "Wire a callLlm implementation via PluginLoadOptions.callLlm to enable enforcement.",
+      );
     }
 
     // ========================================================================
@@ -146,6 +161,14 @@ const llmHooksPlugin = {
     // ========================================================================
 
     function registerEventHandlers(): void {
+      // Guard against duplicate registration. On reload the hook definitions
+      // are refreshed in-memory (reloadHooks()), but the api.on() handlers
+      // already registered will pick up the updated `hooks` array because they
+      // close over it via runHooksForEvent(). Re-calling api.on() would stack
+      // a second (and subsequent) copy of each handler on every reload.
+      if (handlersRegistered) return;
+      handlersRegistered = true;
+
       // Collect unique event names from all hooks
       const eventNames = new Set<string>();
       for (const hook of hooks) {
@@ -352,7 +375,6 @@ const llmHooksPlugin = {
                 console.log(`    model: ${hook.model}`);
               }
               console.log(`    source: ${hook.sourcePath}`);
-              console.log();
             }
           });
 
@@ -457,6 +479,7 @@ const llmHooksPlugin = {
       async stop() {
         cache.clearAll();
         hooks = [];
+        handlersRegistered = false;
         api.logger.info("llm-hooks: service stopped");
       },
     });

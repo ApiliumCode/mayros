@@ -36,7 +36,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     private var currentSessionKey: String? = null
 
     private val registeredListeners = mutableListOf<Pair<String, (JsonObject) -> Unit>>()
-    private val streamBuffer = StringBuilder()
+    private val streamBuffer = StringBuffer()
     private val messages = mutableListOf<ChatBubble>()
 
     private data class SessionItem(val key: String, val displayName: String) {
@@ -86,6 +86,14 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     }
 
     private fun clearRegisteredListeners() {
+        // Unregister listeners from the current client before clearing the tracking list.
+        // Prevents duplicate event delivery and memory leaks on reconnect or dispose.
+        val client = service.getClient()
+        if (client != null) {
+            for ((event, listener) in registeredListeners) {
+                client.off(event, listener)
+            }
+        }
         registeredListeners.clear()
     }
 
@@ -105,7 +113,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                 "final" -> {
                     SwingUtilities.invokeLater {
                         val finalText = cleanGatewayText(streamBuffer.toString().trim())
-                        streamBuffer.clear()
+                        streamBuffer.setLength(0)
                         if (finalText.isNotEmpty()) {
                             messages.add(ChatBubble("assistant", finalText))
                         }
@@ -117,7 +125,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     val errorText = message?.get("error")?.asString
                         ?: extractTextFromMessage(message).ifEmpty { "Unknown error" }
                     SwingUtilities.invokeLater {
-                        streamBuffer.clear()
+                        streamBuffer.setLength(0)
                         messages.add(ChatBubble("error", errorText))
                         renderMessages()
                         statusLabel.text = " Error "
@@ -362,7 +370,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     statusLabel.text = " Error "
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun loadSessions() {
@@ -388,7 +396,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     renderMessages()
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun sendMessage() {
@@ -404,7 +412,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
 
         inputField.text = ""
         messages.add(ChatBubble("user", text))
-        streamBuffer.clear()
+        streamBuffer.setLength(0)
         renderMessages()
         statusLabel.text = " Sending... "
 
@@ -433,7 +441,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     statusLabel.text = " Error "
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     override fun onConnected() {

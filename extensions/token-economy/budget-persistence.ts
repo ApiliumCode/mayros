@@ -3,12 +3,22 @@ import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+export type PersistedModelEntry = {
+  provider: string;
+  model: string;
+  calls: number;
+  tokens: number;
+  costUsd: number;
+};
+
 export type PersistedBudget = {
   dailyCostUsd: number;
   dailyDate: string; // "YYYY-MM-DD"
   monthlyCostUsd: number;
   monthlyKey: string; // "YYYY-MM"
   lastFlushedAt: number;
+  /** Per-model usage keyed by "provider:model". */
+  modelUsage?: Record<string, PersistedModelEntry>;
 };
 
 function defaultPersistedBudget(): PersistedBudget {
@@ -28,6 +38,24 @@ function formatDate(d: Date): string {
 
 function formatMonth(d: Date): string {
   return d.toISOString().slice(0, 7);
+}
+
+function parsePersistedModelUsage(raw: unknown): Record<string, PersistedModelEntry> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const result: Record<string, PersistedModelEntry> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== "object") continue;
+    const entry = val as Record<string, unknown>;
+    if (typeof entry.provider !== "string" || typeof entry.model !== "string") continue;
+    result[key] = {
+      provider: entry.provider,
+      model: entry.model,
+      calls: typeof entry.calls === "number" ? entry.calls : 0,
+      tokens: typeof entry.tokens === "number" ? entry.tokens : 0,
+      costUsd: typeof entry.costUsd === "number" ? entry.costUsd : 0,
+    };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function resolveTilde(p: string): string {
@@ -55,6 +83,7 @@ export class BudgetPersistence {
         monthlyCostUsd: typeof data.monthlyCostUsd === "number" ? data.monthlyCostUsd : 0,
         monthlyKey: typeof data.monthlyKey === "string" ? data.monthlyKey : formatMonth(new Date()),
         lastFlushedAt: typeof data.lastFlushedAt === "number" ? data.lastFlushedAt : Date.now(),
+        modelUsage: parsePersistedModelUsage(data.modelUsage),
       };
     } catch {
       return defaultPersistedBudget();
@@ -76,7 +105,7 @@ export class BudgetPersistence {
     let rolled = data;
 
     if (rolled.dailyDate !== today) {
-      rolled = { ...rolled, dailyCostUsd: 0, dailyDate: today };
+      rolled = { ...rolled, dailyCostUsd: 0, dailyDate: today, modelUsage: undefined };
     }
     if (rolled.monthlyKey !== thisMonth) {
       rolled = { ...rolled, monthlyCostUsd: 0, monthlyKey: thisMonth };

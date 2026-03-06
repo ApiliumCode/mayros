@@ -9,6 +9,7 @@ import type { WebviewToExtension } from "../types.js";
 
 export class KgPanel extends PanelBase {
   private static instance: KgPanel | undefined;
+  private messageDisposable: vscode.Disposable | undefined;
 
   private constructor(
     extensionUri: vscode.Uri,
@@ -36,7 +37,7 @@ export class KgPanel extends PanelBase {
     const panel = this.createPanel(vscode.ViewColumn.Beside);
     panel.webview.html = this.getWebviewContent("kg/kg.js");
 
-    panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
+    this.messageDisposable = panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
       this.handleWebviewMessage(msg).catch((err) => {
         this.postMessage({
           type: "error",
@@ -46,6 +47,8 @@ export class KgPanel extends PanelBase {
     });
 
     panel.onDidDispose(() => {
+      this.messageDisposable?.dispose();
+      this.messageDisposable = undefined;
       KgPanel.instance = undefined;
     });
   }

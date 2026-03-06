@@ -27,6 +27,11 @@ export class SessionsTreeProvider implements vscode.TreeDataProvider<SessionTree
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  /** Dispose the internal event emitter. */
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+  }
+
   getTreeItem(element: SessionTreeItem): vscode.TreeItem {
     return element;
   }

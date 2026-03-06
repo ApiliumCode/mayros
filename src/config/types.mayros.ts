@@ -74,6 +74,8 @@ export type MayrosConfig = {
     vim?: boolean;
     /** Custom keybindings for TUI actions. */
     keybindings?: Record<string, string | string[]>;
+    /** Enable screen reader accessibility mode (linear output, no alternate screen). */
+    accessibility?: boolean;
     assistant?: {
       /** Assistant display name for UI surfaces. */
       name?: string;

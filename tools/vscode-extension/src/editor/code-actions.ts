@@ -8,8 +8,8 @@ const actionsSessionKey = `vscode-actions-${Date.now().toString(36)}`;
  * Ask Mayros to explain the currently selected code.
  * Sends the selection with file context to the gateway.
  */
-export function explainCode(client: MayrosClient): void {
-  const editor = getActiveEditor();
+export async function explainCode(client: MayrosClient): Promise<void> {
+  const editor = await getActiveEditor();
   if (!editor) return;
 
   const { text, fileName, language } = getSelectionContext(editor);
@@ -21,14 +21,16 @@ export function explainCode(client: MayrosClient): void {
     `\`\`\`${language}\n${text}\n\`\`\`\n\n` +
     `Please explain what this code does, its purpose, and any notable patterns or concerns.`;
 
-  client.sendMessage(explainSessionKey, message).catch(() => {});
+  client.sendMessage(explainSessionKey, message).catch((e) => {
+    console.error("[Mayros] Failed to send explain request:", e);
+  });
 }
 
 /**
  * Send the currently selected code to Mayros chat.
  */
-export function sendSelection(client: MayrosClient): void {
-  const editor = getActiveEditor();
+export async function sendSelection(client: MayrosClient): Promise<void> {
+  const editor = await getActiveEditor();
   if (!editor) return;
 
   const { text, fileName, language } = getSelectionContext(editor);
@@ -38,17 +40,18 @@ export function sendSelection(client: MayrosClient): void {
   const message =
     `Here is code from \`${fileName}\`${langSuffix}:\n\n` + `\`\`\`${language}\n${text}\n\`\`\``;
 
-  client.sendMessage(actionsSessionKey, message).catch(() => {});
+  client.sendMessage(actionsSessionKey, message).catch((e) => {
+    console.error("[Mayros] Failed to send selection:", e);
+  });
 }
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function getActiveEditor(): vscode.TextEditor | undefined {
+async function getActiveEditor(): Promise<vscode.TextEditor | undefined> {
   // Dynamic import to keep module testable without vscode at load time
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const vsc = require("vscode") as typeof import("vscode");
+  const vsc = await import("vscode");
   return vsc.window.activeTextEditor;
 }
 
