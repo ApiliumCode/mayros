@@ -86,6 +86,14 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     }
 
     private fun clearRegisteredListeners() {
+        // Unregister listeners from the current client before clearing the tracking list.
+        // Prevents duplicate event delivery and memory leaks on reconnect or dispose.
+        val client = service.getClient()
+        if (client != null) {
+            for ((event, listener) in registeredListeners) {
+                client.off(event, listener)
+            }
+        }
         registeredListeners.clear()
     }
 

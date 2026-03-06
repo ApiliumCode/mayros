@@ -106,8 +106,15 @@ class TracesPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
     }
 
     private fun clearRegisteredListeners() {
-        // On reconnect the old client is already disposed (its eventListeners cleared),
-        // so we only need to reset our tracking list before subscribing to the new client.
+        // Unregister listeners from the current client before clearing the tracking list.
+        // On reconnect the old client may still be alive briefly, so explicitly removing
+        // listeners prevents duplicate event delivery and memory leaks.
+        val client = service.getClient()
+        if (client != null) {
+            for ((event, listener) in registeredListeners) {
+                client.off(event, listener)
+            }
+        }
         registeredListeners.clear()
     }
 
