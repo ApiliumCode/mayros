@@ -218,19 +218,26 @@ export class BackgroundTracker {
     const result = await this.client.patternQuery(queryOpts);
 
     const prefix = `${this.ns}:bgtask:`;
-    const tasks: BackgroundTask[] = [];
+    const taskIds: string[] = [];
 
     for (const match of result.matches) {
       if (!match.subject.startsWith(prefix)) continue;
+      taskIds.push(match.subject.slice(prefix.length));
+    }
 
-      const taskId = match.subject.slice(prefix.length);
-      const task = await this.getTask(taskId);
-      if (!task) continue;
+    // Fetch all tasks in parallel, in batches of 10 to avoid overwhelming Cortex
+    const BATCH_SIZE = 10;
+    const tasks: BackgroundTask[] = [];
 
-      // Apply agent filter
-      if (opts?.agentId && task.agentId !== opts.agentId) continue;
-
-      tasks.push(task);
+    for (let i = 0; i < taskIds.length; i += BATCH_SIZE) {
+      const batch = taskIds.slice(i, i + BATCH_SIZE);
+      const settled = await Promise.all(batch.map((id) => this.getTask(id)));
+      for (const task of settled) {
+        if (!task) continue;
+        // Apply agent filter
+        if (opts?.agentId && task.agentId !== opts.agentId) continue;
+        tasks.push(task);
+      }
     }
 
     // Sort by startedAt descending (newest first)
