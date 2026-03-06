@@ -46,8 +46,16 @@ export function importSession(token: string): TeleportPayload {
 
   const base64 = token.slice(TELEPORT_MAGIC.length);
   const compressed = Buffer.from(base64, "base64url");
-  const json = inflateSync(compressed).toString("utf-8");
-  const payload = JSON.parse(json) as TeleportPayload;
+
+  let payload: TeleportPayload;
+  try {
+    const json = inflateSync(compressed).toString("utf-8");
+    payload = JSON.parse(json) as TeleportPayload;
+  } catch (err) {
+    throw new Error(
+      `Invalid teleport token: ${err instanceof Error ? err.message : "corrupt data"}`,
+    );
+  }
 
   if (payload.version !== 1) {
     throw new Error(`Unsupported teleport version: ${payload.version}`);
