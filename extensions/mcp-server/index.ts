@@ -41,13 +41,49 @@ const mcpServerPlugin = {
 
     // ── Collect tools from the plugin registry ──────────────────────
 
-    const collectTools = (ctx: MayrosPluginToolContext): AdaptableTool[] => {
-      // Tools are resolved at registration time via the plugin context.
-      // The MCP server exposes whatever tools are available to the current agent.
-      // We return an empty array here — tools are registered dynamically via
-      // the `registerTool` callback or the service start lifecycle.
-      void ctx;
-      return [];
+    const collectTools = async (ctx: MayrosPluginToolContext): Promise<AdaptableTool[]> => {
+      try {
+        // Dynamically import the plugin tool resolver to avoid circular deps
+        // at module load time. resolvePluginTools discovers all registered
+        // plugin tools for the given context and returns AnyAgentTool[].
+        const { resolvePluginTools } = (await import("../../src/plugins/tools.js")) as {
+          resolvePluginTools: (params: {
+            context: MayrosPluginToolContext;
+          }) => Array<{
+            name: string;
+            label?: string;
+            description?: string;
+            parameters?: unknown;
+            execute: (...args: unknown[]) => Promise<unknown>;
+          }>;
+        };
+
+        const tools = resolvePluginTools({ context: ctx });
+        return tools.map((tool) => ({
+          name: tool.name,
+          label: tool.label,
+          description: tool.description,
+          parameters: tool.parameters,
+          execute: async (
+            toolCallId: string,
+            params: Record<string, unknown>,
+            signal?: AbortSignal,
+          ) => {
+            const result = await tool.execute(toolCallId, params, signal);
+            const typed = result as {
+              content?: Array<{ type: string; text?: string }>;
+              details?: unknown;
+            };
+            return {
+              content: typed.content ?? [{ type: "text" as const, text: JSON.stringify(result) }],
+              details: typed.details,
+            };
+          },
+        }));
+      } catch {
+        // Plugin tool resolution not available (e.g. during early loading)
+        return [];
+      }
     };
 
     // ── Resource data sources (stubs — wired at service start) ──────
@@ -132,7 +168,7 @@ const mcpServerPlugin = {
             host,
           };
 
-          const tools = collectTools({});
+          const tools = await collectTools({});
           const serverOpts: McpServerOptions = {
             config: serverCfg,
             tools,
@@ -245,6 +281,28 @@ const mcpServerPlugin = {
             }
           };
 
+          resourceSources.getConvention = async (id: string) => {
+            try {
+              const res = await client.patternQuery({
+                subject: `${ns}:project:convention:${id}`,
+                predicate: `${ns}:convention:text`,
+              });
+              const match = res.matches[0];
+              if (!match) return null;
+              return {
+                id,
+                text: String(match.object),
+                category: "general",
+                source: "cortex",
+                confidence: 1,
+                status: "active",
+                createdAt: match.created_at ?? "",
+              };
+            } catch {
+              return null;
+            }
+          };
+
           resourceSources.listRules = async () => {
             try {
               const res = await client.patternQuery({
@@ -261,6 +319,27 @@ const mcpServerPlugin = {
               }));
             } catch {
               return [];
+            }
+          };
+
+          resourceSources.getRule = async (id: string) => {
+            try {
+              const res = await client.patternQuery({
+                subject: `${ns}:rule:${id}`,
+                predicate: `${ns}:rule:content`,
+              });
+              const match = res.matches[0];
+              if (!match) return null;
+              return {
+                id,
+                content: String(match.object),
+                scope: "global",
+                priority: 0,
+                source: "cortex",
+                enabled: true,
+              };
+            } catch {
+              return null;
             }
           };
 
