@@ -842,7 +842,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
               role: String(m.role ?? "user"),
               content: typeof m.content === "string" ? m.content : "",
             }));
-          const compactResult = compactMessages({
+          const compactResult = await compactMessages({
             messages: mapped,
             sessionKey: state.currentSessionKey,
           });
