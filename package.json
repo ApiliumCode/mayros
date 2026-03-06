@@ -1,9 +1,23 @@
 {
   "name": "@apilium/mayros",
-  "version": "0.1.4",
-  "description": "Multi-channel AI agent framework — la era de la IA con certezas",
-  "keywords": [],
-  "homepage": "https://apilium.com/mayros",
+  "version": "0.1.5",
+  "description": "Multi-channel AI agent framework with knowledge graph, MCP support, and coding CLI",
+  "keywords": [
+    "agent",
+    "ai",
+    "aingle",
+    "apilium",
+    "cli",
+    "coding-assistant",
+    "cortex",
+    "knowledge-graph",
+    "mayros",
+    "mcp",
+    "multi-agent",
+    "terminal",
+    "tui"
+  ],
+  "homepage": "https://apilium.com/en/products/mayros",
   "bugs": {
     "url": "https://github.com/ApiliumCode/mayros/issues"
   },
