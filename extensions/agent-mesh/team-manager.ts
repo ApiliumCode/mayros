@@ -40,9 +40,10 @@ export type TeamStatus = "pending" | "running" | "completed" | "failed";
 
 export type TeamResult = {
   summary: string;
-  memberResults: Array<{ agentId: string; role: string; findings: number }>;
+  memberResults: Array<{ agentId: string; role: string; findings: number; error?: string }>;
   conflicts: number;
   fusionReport?: FusionReport;
+  mergeErrors?: Array<{ agentId: string; role: string; error: string }>;
 };
 
 export type TeamEntry = {
@@ -348,7 +349,13 @@ export class TeamManager {
     // Merge each member's private namespace into the shared namespace
     let totalConflicts = 0;
     let lastReport: FusionReport | undefined;
-    const memberResults: Array<{ agentId: string; role: string; findings: number }> = [];
+    const memberResults: Array<{
+      agentId: string;
+      role: string;
+      findings: number;
+      error?: string;
+    }> = [];
+    const mergeErrors: Array<{ agentId: string; role: string; error: string }> = [];
 
     const additionalNs =
       completedMembers.length >= 3
@@ -372,20 +379,27 @@ export class TeamManager {
           role: member.role,
           findings: report.added,
         });
-      } catch {
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[TeamManager] merge failed for agent "${member.agentId}" (role: ${member.role}): ${errMsg}`,
+        );
+        mergeErrors.push({ agentId: member.agentId, role: member.role, error: errMsg });
         memberResults.push({
           agentId: member.agentId,
           role: member.role,
-          findings: 0,
+          findings: -1,
+          error: errMsg,
         });
       }
     }
 
     const teamResult: TeamResult = {
-      summary: `Merged ${completedMembers.length} member(s) with ${team.strategy} strategy`,
+      summary: `Merged ${completedMembers.length} member(s) with ${team.strategy} strategy${mergeErrors.length > 0 ? ` (${mergeErrors.length} merge failure(s))` : ""}`,
       memberResults,
       conflicts: totalConflicts,
       fusionReport: lastReport,
+      ...(mergeErrors.length > 0 && { mergeErrors }),
     };
 
     // Persist result
