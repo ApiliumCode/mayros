@@ -27,6 +27,11 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  /** Dispose the internal event emitter. */
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+  }
+
   getTreeItem(element: AgentTreeItem): vscode.TreeItem {
     return element;
   }
