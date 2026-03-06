@@ -4,6 +4,7 @@ import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { ToolInputError } from "../../../src/agents/tools/common.js";
 import type { CodeToolsConfig } from "../config.js";
 import { resolveSafePath } from "../path-utils.js";
+import { parseDiffStats } from "../../../src/tui/diff-renderer.js";
 
 /**
  * Generate a minimal unified diff snippet showing the change context.
@@ -140,12 +141,14 @@ export function registerCodeEdit(api: MayrosPluginApi, cfg: CodeToolsConfig): vo
         await fs.writeFile(filePath, newContent, "utf-8");
 
         const diff = generateDiff(p.path.trim(), content, newContent);
+        const stats = parseDiffStats(diff);
 
         return {
           content: [{ type: "text" as const, text: diff }],
           details: {
             path: p.path.trim(),
             replacements,
+            diffStats: stats,
           },
         };
       },
