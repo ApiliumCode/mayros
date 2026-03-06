@@ -50,10 +50,17 @@ const llmHooksPlugin = {
     // Concurrency limiter
     let activeEvals = 0;
 
-    // Inject the LLM call function from the host API if available
-    const apiExt = api as unknown as Record<string, unknown>;
-    if (typeof apiExt.callLlm === "function") {
-      llmCallFn = apiExt.callLlm as LlmCallFn;
+    // Inject the LLM call function from the host API.
+    // api.callLlm is typed as optional on MayrosPluginApi; when absent we must
+    // NOT silently approve — we warn and skip evaluation so the operator is
+    // aware that hook decisions are not being enforced.
+    if (typeof api.callLlm === "function") {
+      llmCallFn = api.callLlm as LlmCallFn;
+    } else {
+      api.logger.warn(
+        "llm-hooks: api.callLlm is not available — LLM hook evaluation will be skipped. " +
+          "Wire a callLlm implementation via PluginLoadOptions.callLlm to enable enforcement.",
+      );
     }
 
     // ========================================================================

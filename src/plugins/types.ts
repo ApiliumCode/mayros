@@ -251,6 +251,23 @@ export type MayrosPluginApi = {
   pluginConfig?: Record<string, unknown>;
   runtime: PluginRuntime;
   logger: PluginLogger;
+  /**
+   * Call the host LLM gateway with a plain-text prompt.
+   * Returns the assistant's text response.
+   *
+   * This is optional — plugins must check for its presence before calling.
+   * When not wired (e.g., during early plugin loading or in tests), it will
+   * be undefined. Use `api.logger.warn()` when the function is absent rather
+   * than silently falling back to a permissive default.
+   *
+   * @example
+   * if (!api.callLlm) {
+   *   api.logger.warn('my-plugin: callLlm not available — skipping LLM evaluation');
+   *   return;
+   * }
+   * const reply = await api.callLlm('Is this safe?', { maxTokens: 256 });
+   */
+  callLlm?: (prompt: string, opts?: { model?: string; maxTokens?: number }) => Promise<string>;
   registerTool: (
     tool: AnyAgentTool | MayrosPluginToolFactory,
     opts?: MayrosPluginToolOptions,
