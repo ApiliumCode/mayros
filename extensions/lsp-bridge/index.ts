@@ -495,14 +495,18 @@ const lspBridgePlugin = {
       // Start periodic diagnostic sync
       if (cfg.diagnosticSyncIntervalMs > 0) {
         diagnosticTimer = setInterval(async () => {
-          if (!(await ensureCortex())) return;
+          try {
+            if (!(await ensureCortex())) return;
 
-          // Query each running server for diagnostics and store in Cortex
-          for (const config of cfg.servers) {
-            if (!serverMgr.isRunning(config.language)) continue;
-            // Diagnostic sync would require textDocument/diagnostic support
-            // which varies by server. For now, diagnostics are stored
-            // when published by the server via notifications.
+            // Query each running server for diagnostics and store in Cortex
+            for (const config of cfg.servers) {
+              if (!serverMgr.isRunning(config.language)) continue;
+              // Diagnostic sync would require textDocument/diagnostic support
+              // which varies by server. For now, diagnostics are stored
+              // when published by the server via notifications.
+            }
+          } catch (err) {
+            api.logger.warn(`lsp-bridge: diagnostic sync failed: ${String(err)}`);
           }
         }, cfg.diagnosticSyncIntervalMs);
       }

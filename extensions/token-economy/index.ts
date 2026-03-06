@@ -60,8 +60,8 @@ const tokenEconomyPlugin = {
         if (tracker) {
           try {
             await persistence.save(tracker.getPersistedSnapshot());
-          } catch {
-            // best-effort flush
+          } catch (err) {
+            api.logger.warn(`token-economy: periodic flush failed: ${String(err)}`);
           }
         }
       }, 30_000);

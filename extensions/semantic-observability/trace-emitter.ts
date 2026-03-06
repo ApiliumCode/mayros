@@ -70,7 +70,9 @@ export class TraceEmitter {
       MAX_BACKOFF_INTERVAL_MS,
     );
     this.flushTimer = setInterval(() => {
-      void this.flush();
+      void this.flush().catch((err) => {
+        console.warn(`[trace-emitter] flush failed: ${String(err)}`);
+      });
     }, effectiveInterval);
     // Allow the timer to not block process exit
     if (this.flushTimer && typeof this.flushTimer === "object" && "unref" in this.flushTimer) {
