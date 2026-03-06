@@ -846,9 +846,17 @@ export function createCommandHandlers(context: CommandHandlerContext) {
             messages: mapped,
             sessionKey: state.currentSessionKey,
           });
+          // Send the summary back to the gateway: truncate the transcript and
+          // inject the condensed summary as a system message so the agent
+          // retains the extracted context going forward.
+          await client.compactSession({
+            key: state.currentSessionKey,
+            summaryMessage: compactResult.summary,
+          });
           chatLog.addSystem(
             `Compacted ${compactResult.originalCount} messages \u2192 summary (${compactResult.knowledgeItems} knowledge items extracted)`,
           );
+          await loadHistory();
         } catch (err) {
           chatLog.addSystem(`compact failed: ${String(err)}`);
         }
@@ -972,36 +980,66 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem("usage: /kg <query>");
           break;
         }
-        await sendMessage(`Search the knowledge graph for: ${args}`);
+        await sendMessage(`Use the semantic_memory_query tool to search for: ${args}`);
         break;
       }
       case "trace": {
-        await sendMessage(`Show trace ${args || "events"} summary for the current session`);
+        const subCmd = args || "events";
+        if (subCmd === "stats") {
+          await sendMessage(
+            "Use the trace_stats tool with no arguments to show aggregated observability statistics for the current agent.",
+          );
+        } else if (subCmd === "explain" && args.includes(" ")) {
+          const eventId = args.slice("explain".length).trim();
+          await sendMessage(
+            `Use the trace_explain tool with eventId "${eventId}" to trace the causal chain for that event.`,
+          );
+        } else {
+          await sendMessage(
+            "Use the trace_query tool with no arguments to list recent trace events for the current agent.",
+          );
+        }
         break;
       }
       case "team": {
-        await sendMessage("Show the team dashboard with current agent status and activity");
+        await sendMessage(
+          "Use the mesh_team_dashboard tool with no arguments to show the team dashboard with current agent status and activity.",
+        );
         break;
       }
       case "tasks": {
-        await sendMessage("Show background tasks status and summary");
+        await sendMessage(
+          "Use the agent_list_background_tasks tool with no arguments to list all background agent tasks and their current status.",
+        );
         break;
       }
       case "workflow": {
         if (!args) {
-          await sendMessage("List available workflows and their status");
+          await sendMessage(
+            'Use the mesh_run_workflow tool with action "list" to list available workflows and their status.',
+          );
         } else {
           await sendMessage(`/workflow ${args}`);
         }
         break;
       }
       case "rules": {
-        await sendMessage(`Show active rules${args ? ` matching: ${args}` : ""}`);
+        if (args) {
+          await sendMessage(
+            `Use the semantic_memory_recall tool to search for rules matching: ${args}`,
+          );
+        } else {
+          await sendMessage(
+            'Use the semantic_memory_recall tool with subject pattern "rule:*" to list all active rules.',
+          );
+        }
         break;
       }
       case "mailbox": {
         if (!args) {
-          await sendMessage("Check my inbox for new messages and show unread count");
+          await sendMessage(
+            "Use the agent_check_inbox tool with no arguments to check the inbox for new messages and show unread count.",
+          );
         } else {
           await sendMessage(`/mailbox ${args}`);
         }
@@ -1041,11 +1079,64 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       }
       case "batch": {
         if (!args) {
-          chatLog.addSystem("usage: /batch <file> — run 'mayros batch run <file>' from terminal");
-        } else {
-          chatLog.addSystem(
-            `Run 'mayros batch run ${args}' from the terminal for batch processing`,
-          );
+          chatLog.addSystem("usage: /batch <file> [--concurrency N] [--thinking <level>]");
+          break;
+        }
+        // Parse optional flags from args: <file> [--concurrency N] [--thinking level]
+        const batchArgParts = args.split(/\s+/);
+        const batchFile = batchArgParts[0] ?? "";
+        const batchExtraArgs = batchArgParts.slice(1).join(" ");
+
+        // Verify file exists before attempting to run
+        try {
+          const fs = await import("node:fs");
+          if (!fs.existsSync(batchFile)) {
+            chatLog.addSystem(`batch: file not found: ${batchFile}`);
+            break;
+          }
+        } catch {
+          chatLog.addSystem(`batch: cannot check file: ${batchFile}`);
+          break;
+        }
+
+        chatLog.addSystem(
+          `Running batch: ${batchFile}${batchExtraArgs ? " " + batchExtraArgs : ""}...`,
+        );
+        tui.requestRender();
+
+        try {
+          const { parseInputFile } = await import("../cli/batch-cli.js");
+          const fs = await import("node:fs");
+          const content = fs.readFileSync(batchFile, "utf-8");
+          const items = parseInputFile(content);
+          if (items.length === 0) {
+            chatLog.addSystem("batch: no valid prompts found in file");
+            break;
+          }
+
+          chatLog.addSystem(`batch: processing ${items.length} prompt(s) sequentially...`);
+          tui.requestRender();
+
+          let completed = 0;
+          const errors: string[] = [];
+          for (const item of items) {
+            try {
+              chatLog.addSystem(
+                `batch [${completed + 1}/${items.length}]: ${item.prompt.slice(0, 60)}${item.prompt.length > 60 ? "…" : ""}`,
+              );
+              tui.requestRender();
+              await sendMessage(item.context ? `${item.context}\n\n${item.prompt}` : item.prompt);
+              completed++;
+            } catch (err) {
+              const msg = `batch [${completed + 1}/${items.length}] error: ${String(err)}`;
+              chatLog.addSystem(msg);
+              errors.push(msg);
+              completed++;
+            }
+          }
+          chatLog.addSystem(`batch done: ${completed - errors.length} ok, ${errors.length} errors`);
+        } catch (err) {
+          chatLog.addSystem(`batch failed: ${String(err)}`);
         }
         break;
       }
@@ -1108,9 +1199,48 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
           try {
             const payload = importSession(token);
-            chatLog.addSystem(
-              `Session imported: ${payload.messages.length} messages from agent "${payload.agentId}" (${payload.timestamp})`,
-            );
+
+            // Render each message in the chat log display and inject
+            // assistant messages into the current session via the gateway.
+            // User and system messages are shown visually only — they are
+            // part of the imported context that the user brought over.
+            let injected = 0;
+            let failed = 0;
+            for (const msg of payload.messages) {
+              if (msg.role === "user") {
+                chatLog.addUser(msg.content);
+              } else if (msg.role === "system") {
+                chatLog.addSystem(msg.content);
+              } else if (msg.role === "assistant") {
+                // Persist to the session transcript so the model sees the history
+                try {
+                  await client.injectChat({
+                    sessionKey: state.currentSessionKey,
+                    message: msg.content,
+                    label: "teleport",
+                  });
+                  chatLog.finalizeAssistant(msg.content);
+                  injected++;
+                } catch {
+                  // Fall back to display-only if injection fails
+                  chatLog.finalizeAssistant(msg.content);
+                  failed++;
+                }
+              }
+            }
+
+            const summaryParts = [`Session imported: ${payload.messages.length} messages`];
+            summaryParts.push(`from agent "${payload.agentId}" (${payload.timestamp})`);
+            if (injected > 0) {
+              summaryParts.push(`${injected} assistant message(s) written to session transcript`);
+            }
+            if (failed > 0) {
+              summaryParts.push(
+                `${failed} assistant message(s) displayed only (transcript write failed)`,
+              );
+            }
+            chatLog.addSystem(summaryParts.join(" — "));
+            tui.requestRender();
           } catch (err) {
             chatLog.addSystem(`Import failed: ${String(err)}`);
           }
@@ -1120,11 +1250,24 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       }
       case "sync": {
-        await sendMessage(`Show Cortex sync ${args || "status"}`);
+        await sendMessage(
+          "Use the cortex_sync_status tool with no arguments to show Cortex peer sync status and statistics.",
+        );
         break;
       }
       case "onboard": {
-        chatLog.addSystem("Run 'mayros onboard' from the terminal to start the setup wizard");
+        try {
+          chatLog.addSystem("Launching onboarding wizard — stopping TUI...");
+          tui.requestRender();
+          client.stop();
+          tui.stop();
+          const { onboardCommand } = await import("../commands/onboard.js");
+          const { defaultRuntime } = await import("../runtime.js");
+          await onboardCommand({}, defaultRuntime);
+          process.exit(0);
+        } catch (err) {
+          chatLog.addSystem(`onboard failed: ${String(err)}`);
+        }
         break;
       }
       default: {
