@@ -153,6 +153,17 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
       name: "export",
       description: "Export session to file",
     },
+    {
+      name: "undo",
+      description: "Undo last file change",
+      getArgumentCompletions: (prefix) =>
+        ["list"]
+          .filter((v) => v.startsWith(prefix.toLowerCase()))
+          .map((value) => ({
+            value,
+            label: value,
+          })),
+    },
     { name: "abort", description: "Abort active run" },
     { name: "new", description: "Reset the session" },
     { name: "settings", description: "Open settings" },
@@ -226,6 +237,7 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/fast",
     "/copy",
     "/export [file]",
+    "/undo [list]",
     "/new",
     "/abort",
     "/settings",

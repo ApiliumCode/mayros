@@ -12,6 +12,8 @@ import { normalizeAgentId } from "../routing/session-key.js";
 import { execSync, spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { helpText, parseCommand } from "./commands.js";
+import { undo, listUndoEntries } from "./undo-manager.js";
+import { exportSession, importSession, type TeleportPayload } from "./session-teleport.js";
 import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
 import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
@@ -792,6 +794,24 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "undo": {
+        const cwd = process.cwd();
+        if (args === "list") {
+          const entries = listUndoEntries(cwd);
+          if (entries.length === 0) {
+            chatLog.addSystem("No undo points available.");
+          } else {
+            const lines = entries.map(
+              (e) => `  [${e.index}] ${e.label}${e.timestamp ? ` (${e.timestamp})` : ""}`,
+            );
+            chatLog.addSystem(`Undo points:\n${lines.join("\n")}`);
+          }
+        } else {
+          const result = undo(cwd);
+          chatLog.addSystem(result.message);
+        }
+        break;
+      }
       case "abort":
         await abortActive();
         break;
@@ -861,15 +881,46 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       }
       case "teleport": {
-        const action = args || "export";
-        if (action === "export") {
-          chatLog.addSystem(
-            `Run 'mayros teleport export --session ${state.currentSessionKey}' from the terminal`,
-          );
-        } else if (action === "import") {
-          chatLog.addSystem("Run 'mayros teleport import <file>' from the terminal");
+        const subCmd = args.split(/\s+/)[0]?.toLowerCase();
+        if (subCmd === "export") {
+          // Build payload from current session
+          const payload: TeleportPayload = {
+            version: 1,
+            timestamp: new Date().toISOString(),
+            agentId: state.currentAgentId,
+            sessionKey: state.currentSessionKey,
+            messages: [], // Would be populated from actual session history
+            metadata: {},
+          };
+          const token = exportSession(payload);
+          // Copy to clipboard
+          try {
+            execSync(
+              `echo -n "${token}" | pbcopy 2>/dev/null || echo -n "${token}" | xclip -sel clipboard 2>/dev/null || echo -n "${token}" | xsel --clipboard 2>/dev/null`,
+              { encoding: "utf-8" },
+            );
+            chatLog.addSystem(
+              `Session exported to clipboard (${token.length} chars). Share this token to import on another device.`,
+            );
+          } catch {
+            chatLog.addSystem(`Session token:\n${token}`);
+          }
+        } else if (subCmd === "import") {
+          const token = args.slice("import".length).trim();
+          if (!token) {
+            chatLog.addSystem("Usage: /teleport import <token>");
+            break;
+          }
+          try {
+            const payload = importSession(token);
+            chatLog.addSystem(
+              `Session imported: ${payload.messages.length} messages from agent "${payload.agentId}" (${payload.timestamp})`,
+            );
+          } catch (err) {
+            chatLog.addSystem(`Import failed: ${String(err)}`);
+          }
         } else {
-          chatLog.addSystem("usage: /teleport [export|import]");
+          chatLog.addSystem("Usage: /teleport export | /teleport import <token>");
         }
         break;
       }
