@@ -289,6 +289,13 @@ class MayrosClient(
     // Handshake (protocol v3)
     // ========================================================================
 
+    /**
+     * Session keys and client identity are process-scoped and do not rotate.
+     * This is acceptable for IDE plugins: the WebSocket connection is tied to
+     * the IDE process lifetime, and each new IDE launch creates a fresh
+     * connection with a new handshake timestamp.  The gateway enforces its
+     * own session timeouts server-side, so client-side rotation is unnecessary.
+     */
     private fun performHandshake(nonce: String?) {
         val clientId = "gateway-client"
         val clientMode = "ui"
