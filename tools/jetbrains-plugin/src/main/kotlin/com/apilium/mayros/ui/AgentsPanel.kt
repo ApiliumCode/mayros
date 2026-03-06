@@ -1,5 +1,6 @@
 package com.apilium.mayros.ui
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
@@ -18,16 +19,18 @@ import javax.swing.*
  * Shows a list of agents with their ID, name, and description.
  * Refresh button fetches the current list from the gateway.
  */
-class AgentsPanel(@Suppress("unused") private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener {
+class AgentsPanel(@Suppress("unused") private val project: Project) : JPanel(BorderLayout()), MayrosService.ConnectionListener, Disposable {
 
     private val listModel = DefaultListModel<String>()
     private val agentList = JBList(listModel)
     private val refreshButton = JButton("Refresh")
     private val statusLabel = JLabel("Not connected")
 
+    private val service = MayrosService.getInstance()
+
     init {
         setupUI()
-        MayrosService.getInstance().addListener(this)
+        service.addListener(this)
     }
 
     private fun setupUI() {
@@ -46,7 +49,7 @@ class AgentsPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
     }
 
     private fun refreshAgents() {
-        val client = MayrosService.getInstance().getClient()
+        val client = service.getClient()
         if (client == null || !client.isConnected) {
             statusLabel.text = "Not connected"
             return
@@ -69,7 +72,7 @@ class AgentsPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
                     statusLabel.text = "Error: ${e.message}"
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     override fun onConnected() {
@@ -85,12 +88,17 @@ class AgentsPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
             listModel.clear()
         }
     }
+
+    override fun dispose() {
+        service.removeListener(this)
+    }
 }
 
 class AgentsPanelFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = AgentsPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
+        content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }
 }

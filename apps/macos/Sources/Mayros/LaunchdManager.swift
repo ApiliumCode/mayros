@@ -5,7 +5,11 @@ enum LaunchdManager {
         let process = Process()
         process.launchPath = "/bin/launchctl"
         process.arguments = args
-        try? process.run()
+        do {
+            try process.run()
+        } catch {
+            NSLog("LaunchdManager: launchctl %@ failed: %@", args.joined(separator: " "), error.localizedDescription)
+        }
     }
 
     static func startMayros() {

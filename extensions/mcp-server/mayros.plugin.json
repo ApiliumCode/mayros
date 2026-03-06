@@ -1,0 +1,39 @@
+{
+  "id": "mcp-server",
+  "kind": "integration",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cortex": {
+        "type": "object",
+        "properties": {
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "authToken": { "type": "string" }
+        }
+      },
+      "agentNamespace": { "type": "string" },
+      "transport": { "type": "string", "enum": ["stdio", "http"] },
+      "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+      "host": { "type": "string" },
+      "auth": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "allowedOrigins": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "capabilities": {
+        "type": "object",
+        "properties": {
+          "tools": { "type": "boolean" },
+          "resources": { "type": "boolean" },
+          "prompts": { "type": "boolean" }
+        }
+      },
+      "serverName": { "type": "string" },
+      "serverVersion": { "type": "string" }
+    }
+  }
+}

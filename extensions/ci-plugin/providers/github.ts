@@ -126,6 +126,7 @@ export class GitHubProvider implements CiProvider {
     const resolved = this.resolveRepo(repo);
     const workflow = opts.workflow ?? "ci.yml";
     const url = `${this.baseUrl}/repos/${resolved}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`;
+    const dispatchedAt = new Date().toISOString();
 
     const res = await fetch(url, {
       method: "POST",
@@ -137,7 +138,37 @@ export class GitHubProvider implements CiProvider {
       throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
     }
 
-    // workflow_dispatch returns 204 — return a placeholder run
+    // workflow_dispatch returns 204 with no body. Poll for the triggered run
+    // by listing recent runs for this branch created after the dispatch time.
+    const maxAttempts = 5;
+    const pollIntervalMs = 2000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+
+      const params = new URLSearchParams();
+      params.set("branch", opts.branch);
+      params.set("event", "workflow_dispatch");
+      params.set("per_page", "5");
+      params.set("created", `>=${dispatchedAt.slice(0, 10)}`);
+
+      const listUrl = `${this.baseUrl}/repos/${resolved}/actions/runs?${params.toString()}`;
+      const listRes = await fetch(listUrl, { headers: this.headers });
+      if (!listRes.ok) continue;
+
+      const data = (await listRes.json()) as GitHubWorkflowRunsResponse;
+      const match = data.workflow_runs.find(
+        (run) =>
+          run.head_branch === opts.branch && new Date(run.created_at).toISOString() >= dispatchedAt,
+      );
+
+      if (match) {
+        return this.toRun(match, resolved);
+      }
+    }
+
+    // Fallback: return a queued placeholder with the actions URL when
+    // the run could not be resolved within the polling window
     return {
       id: "pending",
       provider: "github",
@@ -145,7 +176,7 @@ export class GitHubProvider implements CiProvider {
       branch: opts.branch,
       status: "queued",
       url: `https://github.com/${resolved}/actions`,
-      startedAt: new Date().toISOString(),
+      startedAt: dispatchedAt,
     };
   }
 

@@ -226,26 +226,27 @@ if [[ -n "$SEARCH_TEXT" ]]; then
     PREDICATE="$PREDICATE AND eventMessage CONTAINS[c] \"$SEARCH_TEXT\""
 fi
 
-# Build the command - always use sudo with --info to show private data
+# Build the command as an array — avoids eval injection via user-controlled args
+CMD_ARGS=()
 if [[ "$STREAM_MODE" == true ]]; then
     # Streaming mode
-    CMD="sudo log stream --predicate '$PREDICATE' --level $LOG_LEVEL --info"
+    CMD_ARGS=(sudo log stream --predicate "$PREDICATE" --level "$LOG_LEVEL" --info)
 
     echo -e "${GREEN}Streaming Mayros logs continuously...${NC}"
     echo -e "${YELLOW}Press Ctrl+C to stop${NC}\n"
 else
     # Show mode
-    CMD="sudo log show --predicate '$PREDICATE'"
+    CMD_ARGS=(sudo log show --predicate "$PREDICATE")
 
     # Add log level for show command
     if [[ "$LOG_LEVEL" == "debug" ]]; then
-        CMD="$CMD --debug"
+        CMD_ARGS+=(--debug)
     else
-        CMD="$CMD --info"
+        CMD_ARGS+=(--info)
     fi
 
     # Add time range
-    CMD="$CMD --last $TIME_RANGE"
+    CMD_ARGS+=(--last "$TIME_RANGE")
 
     if [[ "$SHOW_TAIL" == true ]]; then
         echo -e "${GREEN}Showing last $TAIL_LINES log lines from the past $TIME_RANGE${NC}"
@@ -266,9 +267,10 @@ else
     echo ""  # Empty line for readability
 fi
 
-# Add style arguments if specified
+# Add style arguments if specified (split into array safely)
 if [[ -n "${STYLE_ARGS:-}" ]]; then
-    CMD="$CMD $STYLE_ARGS"
+    read -ra STYLE_ARRAY <<< "$STYLE_ARGS"
+    CMD_ARGS+=("${STYLE_ARRAY[@]}")
 fi
 
 # Execute the command
@@ -280,9 +282,9 @@ if [[ -n "$OUTPUT_FILE" ]]; then
 
     echo -e "${BLUE}Exporting logs to: $OUTPUT_FILE${NC}\n"
     if [[ "$SHOW_TAIL" == true ]] && [[ "$STREAM_MODE" == false ]]; then
-        eval "$CMD" 2>&1 | tail -n "$TAIL_LINES" > "$OUTPUT_FILE"
+        "${CMD_ARGS[@]}" 2>&1 | tail -n "$TAIL_LINES" > "$OUTPUT_FILE"
     else
-        eval "$CMD" > "$OUTPUT_FILE" 2>&1
+        "${CMD_ARGS[@]}" > "$OUTPUT_FILE" 2>&1
     fi
 
     # Check if file was created and has content
@@ -301,9 +303,9 @@ else
 
     if [[ "$SHOW_TAIL" == true ]] && [[ "$STREAM_MODE" == false ]]; then
         # Apply tail for non-streaming mode
-        eval "$CMD" 2>&1 | tail -n "$TAIL_LINES"
+        "${CMD_ARGS[@]}" 2>&1 | tail -n "$TAIL_LINES"
         echo -e "\n${YELLOW}Showing last $TAIL_LINES lines. Use --all or -n to see more.${NC}"
     else
-        eval "$CMD"
+        "${CMD_ARGS[@]}"
     fi
 fi

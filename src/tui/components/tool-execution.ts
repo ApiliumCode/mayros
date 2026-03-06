@@ -1,5 +1,7 @@
 import { Box, Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { formatToolDetail, resolveToolDisplay } from "../../agents/tool-display.js";
+import { renderDiff, parseDiffStats, formatDiffStatsLine } from "../diff-renderer.js";
+import { linkifyFilePaths } from "../linkify-paths.js";
 import { markdownTheme, theme } from "../theme/theme.js";
 import { sanitizeRenderableText } from "../tui-formatters.js";
 
@@ -17,6 +19,8 @@ type ToolResult = {
 };
 
 const PREVIEW_LINES = 12;
+const DIFF_TOOLS = new Set(["code_edit", "code_write", "code_multi_edit"]);
+const DIFF_PREVIEW_LINES = 20;
 
 function formatArgs(toolName: string, args: unknown): string {
   const display = resolveToolDisplay({ name: toolName, args });
@@ -121,17 +125,37 @@ export class ToolExecutionComponent extends Container {
     this.header.setText(theme.toolTitle(theme.bold(title)));
 
     const argLine = formatArgs(this.toolName, this.args);
-    this.argsLine.setText(argLine ? theme.dim(argLine) : theme.dim(" "));
+    this.argsLine.setText(
+      argLine ? linkifyFilePaths(argLine, { color: theme.filePath }) : theme.dim(" "),
+    );
 
     const raw = extractText(this.result);
-    const text = raw || (this.isPartial ? "…" : "");
-    if (!this.expanded && text) {
-      const lines = text.split("\n");
-      const preview =
-        lines.length > PREVIEW_LINES ? `${lines.slice(0, PREVIEW_LINES).join("\n")}\n…` : text;
-      this.output.setText(preview);
+    const isDiff = DIFF_TOOLS.has(this.toolName) && raw && !this.isPartial;
+
+    if (isDiff) {
+      const colored = renderDiff(raw);
+      const stats = parseDiffStats(raw);
+      const statsLine = formatDiffStatsLine(stats);
+      const maxLines = this.expanded ? Infinity : DIFF_PREVIEW_LINES;
+      const display =
+        colored.length > maxLines
+          ? [...colored.slice(0, maxLines), "…", statsLine]
+          : [...colored, "", statsLine];
+      this.output.setText(display.join("\n"));
     } else {
-      this.output.setText(text);
+      const text = raw
+        ? linkifyFilePaths(raw, { color: theme.filePath })
+        : this.isPartial
+          ? "…"
+          : "";
+      if (!this.expanded && text) {
+        const lines = text.split("\n");
+        const preview =
+          lines.length > PREVIEW_LINES ? `${lines.slice(0, PREVIEW_LINES).join("\n")}\n…` : text;
+        this.output.setText(preview);
+      } else {
+        this.output.setText(text);
+      }
     }
   }
 }

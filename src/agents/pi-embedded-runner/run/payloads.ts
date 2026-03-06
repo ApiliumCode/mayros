@@ -1,6 +1,7 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives.js";
 import type { ReasoningLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
+import { stripReasoningTagsFromText } from "../../../shared/text/reasoning-tags.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { formatToolAggregate } from "../../../auto-reply/tool-meta.js";
 import type { MayrosConfig } from "../../../config/config.js";
@@ -240,7 +241,7 @@ export function buildEmbeddedRunPayloads(params: {
       replyToId,
       replyToTag,
       replyToCurrent,
-    } = parseReplyDirectives(text);
+    } = parseReplyDirectives(stripReasoningTagsFromText(text));
     if (!cleanedText && (!mediaUrls || mediaUrls.length === 0) && !audioAsVoice) {
       continue;
     }

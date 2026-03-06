@@ -103,7 +103,8 @@ function loadDeviceIdentity(): DeviceIdentity | null {
       };
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.warn("[Mayros] Failed to load device identity:", err);
     return null;
   }
 }
@@ -348,7 +349,8 @@ export class MayrosClient {
   }
 
   private async call<T>(method: string, params?: Record<string, unknown>): Promise<T> {
-    if (!this._connected || !this.ws) {
+    const ws = this.ws;
+    if (!this._connected || !ws) {
       throw new Error("Not connected to gateway");
     }
     const id = this.nextId();
@@ -366,7 +368,7 @@ export class MayrosClient {
         reject,
         timer,
       });
-      this.ws!.send(JSON.stringify(request));
+      ws.send(JSON.stringify(request));
     });
   }
 
@@ -441,8 +443,8 @@ export class MayrosClient {
       for (const handler of set) {
         try {
           handler(...args);
-        } catch {
-          // swallow handler errors
+        } catch (err) {
+          console.warn(`[Mayros] Event handler error for "${event}":`, err);
         }
       }
     }
@@ -487,9 +489,6 @@ export class MayrosClient {
     try {
       const auth = payload?.auth as Record<string, unknown> | undefined;
       if (auth?.deviceToken && typeof auth.deviceToken === "string") {
-        const fs = require("node:fs");
-        const path = require("node:path");
-        const os = require("node:os");
         const tokenPath = path.join(os.homedir(), ".mayros", "identity", "device-token.json");
         fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
         fs.writeFileSync(
@@ -506,8 +505,8 @@ export class MayrosClient {
           ),
         );
       }
-    } catch {
-      // Non-critical — ignore
+    } catch (err) {
+      console.warn("[Mayros] Failed to store device token:", err);
     }
   }
 

@@ -1,0 +1,49 @@
+{
+  "name": "@apilium/mayros-sdk",
+  "version": "0.1.0",
+  "description": "Mayros Agent SDK — build custom AI agents with the Mayros runtime",
+  "keywords": [
+    "agent",
+    "ai",
+    "apilium",
+    "mayros",
+    "sdk"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ApiliumCode/mayros.git",
+    "directory": "packages/mayros-sdk"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
+    "./tools": {
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

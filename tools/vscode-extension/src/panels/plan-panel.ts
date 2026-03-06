@@ -11,6 +11,7 @@ export class PlanPanel extends PanelBase {
   private static instance: PlanPanel | undefined;
 
   private eventDispose: (() => void) | undefined;
+  private messageDisposable: vscode.Disposable | undefined;
 
   private constructor(
     extensionUri: vscode.Uri,
@@ -38,7 +39,7 @@ export class PlanPanel extends PanelBase {
     const panel = this.createPanel(vscode.ViewColumn.Beside);
     panel.webview.html = this.getWebviewContent("plan/plan.js");
 
-    panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
+    this.messageDisposable = panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
       this.handleWebviewMessage(msg).catch((err) => {
         this.postMessage({
           type: "error",
@@ -58,6 +59,8 @@ export class PlanPanel extends PanelBase {
     this.eventDispose = () => this.client.off("event:plan.updated", onPlanUpdate);
 
     panel.onDidDispose(() => {
+      this.messageDisposable?.dispose();
+      this.messageDisposable = undefined;
       this.eventDispose?.();
       this.eventDispose = undefined;
       PlanPanel.instance = undefined;

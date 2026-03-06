@@ -154,14 +154,18 @@ export function installUnhandledRejectionHandler(): void {
     }
 
     if (isFatalError(reason)) {
-      console.error("[mayros] FATAL unhandled rejection:", formatUncaughtError(reason));
-      process.exit(1);
+      const msg = `[mayros] FATAL unhandled rejection: ${formatUncaughtError(reason)}\n`;
+      process.stderr.write(msg, () => {
+        process.exit(1);
+      });
       return;
     }
 
     if (isConfigError(reason)) {
-      console.error("[mayros] CONFIGURATION ERROR - requires fix:", formatUncaughtError(reason));
-      process.exit(1);
+      const msg = `[mayros] CONFIGURATION ERROR - requires fix: ${formatUncaughtError(reason)}\n`;
+      process.stderr.write(msg, () => {
+        process.exit(1);
+      });
       return;
     }
 
@@ -173,7 +177,9 @@ export function installUnhandledRejectionHandler(): void {
       return;
     }
 
-    console.error("[mayros] Unhandled promise rejection:", formatUncaughtError(reason));
-    process.exit(1);
+    const msg = `[mayros] Unhandled promise rejection: ${formatUncaughtError(reason)}\n`;
+    process.stderr.write(msg, () => {
+      process.exit(1);
+    });
   });
 }

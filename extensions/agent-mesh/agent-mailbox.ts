@@ -257,27 +257,71 @@ export class AgentMailbox {
 
   /**
    * Get mailbox statistics for an agent.
+   *
+   * Uses three parallel patternQuery calls — one per status — to count messages
+   * without fetching full message content. O(1) Cortex RPCs instead of O(N).
    */
   async stats(agentId: string): Promise<MailboxStats> {
-    const messages = await this.inbox({ agent: agentId, limit: 1000 });
+    const statusPredicate = mailPredicate(this.ns, "status");
 
-    const stats: MailboxStats = {
-      total: messages.length,
-      unread: 0,
-      read: 0,
-      archived: 0,
-      byType: {},
-    };
+    // Find all subjects that belong to this agent's mailbox first
+    const agentMessages = await this.client.patternQuery({
+      predicate: mailPredicate(this.ns, "to"),
+      object: { node: agentId },
+      limit: 1000,
+    });
 
-    for (const msg of messages) {
-      if (msg.status === "unread") stats.unread++;
-      else if (msg.status === "read") stats.read++;
-      else if (msg.status === "archived") stats.archived++;
-
-      stats.byType[msg.type] = (stats.byType[msg.type] ?? 0) + 1;
+    if (agentMessages.matches.length === 0) {
+      return { total: 0, unread: 0, read: 0, archived: 0, byType: {} };
     }
 
-    return stats;
+    const agentSubjects = new Set(agentMessages.matches.map((m) => String(m.subject)));
+
+    // Count by status using three parallel pattern queries — no message reconstruction
+    const [unreadResult, readResult, archivedResult] = await Promise.all([
+      this.client.patternQuery({
+        predicate: statusPredicate,
+        object: "unread",
+        limit: 1000,
+      }),
+      this.client.patternQuery({
+        predicate: statusPredicate,
+        object: "read",
+        limit: 1000,
+      }),
+      this.client.patternQuery({
+        predicate: statusPredicate,
+        object: "archived",
+        limit: 1000,
+      }),
+    ]);
+
+    const unread = unreadResult.matches.filter((m) => agentSubjects.has(String(m.subject))).length;
+    const read = readResult.matches.filter((m) => agentSubjects.has(String(m.subject))).length;
+    const archived = archivedResult.matches.filter((m) =>
+      agentSubjects.has(String(m.subject)),
+    ).length;
+
+    // byType requires fetching type triples — query once for all agent messages
+    const typeResult = await this.client.patternQuery({
+      predicate: mailPredicate(this.ns, "type"),
+      limit: 1000,
+    });
+
+    const byType: Record<string, number> = {};
+    for (const match of typeResult.matches) {
+      if (!agentSubjects.has(String(match.subject))) continue;
+      const type = String(match.object ?? "task");
+      byType[type] = (byType[type] ?? 0) + 1;
+    }
+
+    return {
+      total: unread + read + archived,
+      unread,
+      read,
+      archived,
+      byType,
+    };
   }
 
   // ---------- internal ----------

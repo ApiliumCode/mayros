@@ -8,6 +8,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import type { AgentMailbox } from "./agent-mailbox.js";
+import type { BackgroundTracker } from "./background-tracker.js";
 import type { KnowledgeFusion } from "./knowledge-fusion.js";
 import type { MergeStrategy } from "./mesh-protocol.js";
 import type { NamespaceManager } from "./namespace-manager.js";
@@ -20,6 +22,14 @@ import type {
   WorkflowResult,
   WorkflowState,
 } from "./workflows/types.js";
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const DEFAULT_PHASE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INITIAL_INTERVAL_MS = 1_000; // 1 second
+const POLL_MAX_INTERVAL_MS = 10_000; // 10 seconds
 
 // ============================================================================
 // Triple helpers
@@ -46,6 +56,9 @@ export class WorkflowOrchestrator {
     teamMgr: TeamManager,
     private readonly fusion: KnowledgeFusion,
     private readonly nsMgr: NamespaceManager,
+    private readonly mailbox?: AgentMailbox,
+    private readonly bgTracker?: BackgroundTracker,
+    private readonly phaseTimeoutMs: number = DEFAULT_PHASE_TIMEOUT_MS,
   ) {
     this.teamMgr = teamMgr;
   }
@@ -292,14 +305,97 @@ export class WorkflowOrchestrator {
       await this.teamMgr.updateMemberStatus(workflow.teamId, agent.agentId, "running");
     }
 
-    // Simulate agent completion (in real deployment, agents complete asynchronously)
-    for (const agent of phase.agents) {
-      await this.teamMgr.updateMemberStatus(
-        workflow.teamId,
-        agent.agentId,
-        "completed",
-        `Completed ${agent.role} analysis`,
+    // Dispatch tasks via AgentMailbox and track with BackgroundTracker when available.
+    // Falls back to marking agents completed immediately when neither is present (e.g. tests).
+    if (this.mailbox && this.bgTracker) {
+      // Map agentId → background task id so we can poll for completion
+      const taskIds: Map<string, string> = new Map();
+
+      for (const agent of phase.agents) {
+        // Send the task to the agent's inbox as a "task" message
+        await this.mailbox.send({
+          from: `workflow:${workflowId}`,
+          to: agent.agentId,
+          content: agent.task,
+          type: "task",
+        });
+
+        // Register in BackgroundTracker so progress is observable
+        const bgTask = await this.bgTracker.track({
+          agentId: agent.agentId,
+          description: `[workflow:${workflowId}] phase:${phase.name} role:${agent.role}`,
+          status: "running",
+        });
+
+        taskIds.set(agent.agentId, bgTask.id);
+      }
+
+      // Poll for all agent tasks to reach a terminal status
+      const deadline = Date.now() + this.phaseTimeoutMs;
+      let pollIntervalMs = POLL_INITIAL_INTERVAL_MS;
+      const pendingAgents = new Set(phase.agents.map((a) => a.agentId));
+
+      while (pendingAgents.size > 0 && Date.now() < deadline) {
+        await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
+        // Exponential backoff capped at max interval
+        pollIntervalMs = Math.min(pollIntervalMs * 2, POLL_MAX_INTERVAL_MS);
+
+        for (const agentId of [...pendingAgents]) {
+          const taskId = taskIds.get(agentId);
+          if (!taskId) {
+            pendingAgents.delete(agentId);
+            continue;
+          }
+          const task = await this.bgTracker.getTask(taskId);
+          if (!task) {
+            pendingAgents.delete(agentId);
+            continue;
+          }
+          if (
+            task.status === "completed" ||
+            task.status === "failed" ||
+            task.status === "cancelled"
+          ) {
+            pendingAgents.delete(agentId);
+            const memberStatus = task.status === "completed" ? "completed" : "failed";
+            await this.teamMgr.updateMemberStatus(
+              workflow.teamId,
+              agentId,
+              memberStatus,
+              task.result ?? `Task ${task.status}`,
+            );
+          }
+        }
+      }
+
+      // Any agents still pending after the deadline are timed out
+      for (const agentId of pendingAgents) {
+        const taskId = taskIds.get(agentId);
+        if (taskId) {
+          await this.bgTracker.updateStatus(taskId, "failed", "timed_out");
+        }
+        await this.teamMgr.updateMemberStatus(workflow.teamId, agentId, "failed", "timed_out");
+      }
+    } else {
+      // Fallback: no mailbox/tracker available — mark all agents completed with a warning
+      const hasMailbox = Boolean(this.mailbox);
+      const hasTracker = Boolean(this.bgTracker);
+      const missing = [!hasMailbox && "AgentMailbox", !hasTracker && "BackgroundTracker"]
+        .filter(Boolean)
+        .join(", ");
+      // Use a simple console.warn since we may not have a logger here
+      console.warn(
+        `[WorkflowOrchestrator] ${missing} not available — agent tasks for phase "${phase.name}" ` +
+          `of workflow "${workflowId}" will be marked completed without real dispatch.`,
       );
+      for (const agent of phase.agents) {
+        await this.teamMgr.updateMemberStatus(
+          workflow.teamId,
+          agent.agentId,
+          "completed",
+          `Completed ${agent.role} analysis`,
+        );
+      }
     }
 
     // Merge results

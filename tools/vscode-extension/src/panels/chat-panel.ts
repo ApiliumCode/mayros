@@ -11,6 +11,7 @@ export class ChatPanel extends PanelBase {
   private static instance: ChatPanel | undefined;
 
   private eventDispose: (() => void) | undefined;
+  private messageDisposable: vscode.Disposable | undefined;
 
   private constructor(
     extensionUri: vscode.Uri,
@@ -39,7 +40,7 @@ export class ChatPanel extends PanelBase {
     panel.webview.html = this.getWebviewContent("chat/chat.js");
 
     // Listen for messages from the webview
-    panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
+    this.messageDisposable = panel.webview.onDidReceiveMessage((msg: WebviewToExtension) => {
       this.handleWebviewMessage(msg).catch((err) => {
         this.postMessage({
           type: "error",
@@ -113,6 +114,8 @@ export class ChatPanel extends PanelBase {
     };
 
     panel.onDidDispose(() => {
+      this.messageDisposable?.dispose();
+      this.messageDisposable = undefined;
       this.eventDispose?.();
       this.eventDispose = undefined;
       ChatPanel.instance = undefined;

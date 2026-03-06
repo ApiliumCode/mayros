@@ -201,7 +201,9 @@ export function createMattermostConnectOnce(
           });
           try {
             ws.close();
-          } catch {}
+          } catch (closeErr) {
+            console.warn("[mattermost] WebSocket close error during cleanup:", closeErr);
+          }
         });
       });
     } finally {

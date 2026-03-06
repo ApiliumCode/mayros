@@ -311,6 +311,86 @@
         "start": { "label": "start" },
         "wait": { "label": "wait" }
       }
+    },
+    "code_read": {
+      "emoji": "📖",
+      "title": "Read",
+      "detailKeys": ["path"]
+    },
+    "code_write": {
+      "emoji": "✍️",
+      "title": "Write",
+      "detailKeys": ["path"]
+    },
+    "code_edit": {
+      "emoji": "📝",
+      "title": "Edit",
+      "detailKeys": ["path"]
+    },
+    "code_glob": {
+      "emoji": "🔍",
+      "title": "Glob",
+      "detailKeys": ["pattern"]
+    },
+    "code_grep": {
+      "emoji": "🔎",
+      "title": "Grep",
+      "detailKeys": ["pattern"]
+    },
+    "code_ls": {
+      "emoji": "📂",
+      "title": "List",
+      "detailKeys": ["path"]
+    },
+    "code_shell": {
+      "emoji": "🛠️",
+      "title": "Shell",
+      "detailKeys": ["command"]
+    },
+    "code_notebook_read": {
+      "emoji": "📓",
+      "title": "Read Notebook",
+      "detailKeys": ["path"]
+    },
+    "code_notebook_edit": {
+      "emoji": "📓",
+      "title": "Edit Notebook",
+      "detailKeys": ["path", "cell", "action"]
+    },
+    "code_web_search": {
+      "emoji": "🔎",
+      "title": "Web Search",
+      "detailKeys": ["query"]
+    },
+    "code_web_fetch": {
+      "emoji": "🌐",
+      "title": "Web Fetch",
+      "detailKeys": ["url"]
+    },
+    "code_multi_edit": {
+      "emoji": "📝",
+      "title": "Multi Edit",
+      "detailKeys": ["edits"]
+    },
+    "code_shell_interactive": {
+      "emoji": "🖥️",
+      "title": "Interactive Shell",
+      "detailKeys": ["command"]
+    },
+    "git_commit": {
+      "emoji": "📦",
+      "title": "Git Commit",
+      "detailKeys": ["message"]
+    },
+    "git_push": {
+      "emoji": "🚀",
+      "title": "Git Push",
+      "detailKeys": ["branch", "remote"]
+    },
+    "git_create_pr": {
+      "emoji": "🔗",
+      "title": "Create PR",
+      "detailKeys": ["title", "base"]
     }
   }
 }

@@ -233,10 +233,22 @@ const skillHubPlugin = {
           try {
             const skillsDir = api.resolvePath("skills");
 
-            // Resolve dependencies
+            // Resolve dependencies (root + all transitive)
             const info = await hubClient.getSkill(slug, version);
-            // TODO: when Hub API supports dependency metadata, resolve transitive deps
-            const rootDeps = [{ slug, version: version ?? `^${info.version}` }];
+
+            // Seed with the root package and all of its declared direct
+            // dependencies. The DependencyResolver already performs recursive
+            // DFS for each entry, so any transitive deps declared inside those
+            // packages are resolved automatically. We include info.dependencies
+            // here so their version constraints are honoured in the resolution
+            // (rather than being fetched a second time without the declared
+            // range). A depth limit of 5 is enforced inside the resolver via
+            // cycle detection; a seen set prevents redundant resolution passes.
+            const directDeps = (info.dependencies ?? []).map((d) => ({
+              slug: d.slug,
+              version: d.version,
+            }));
+            const rootDeps = [{ slug, version: version ?? `^${info.version}` }, ...directDeps];
             const resolved = await depResolver.resolve(rootDeps, hubClient);
 
             // Install in topological order

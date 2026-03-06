@@ -141,6 +141,8 @@ export type PluginRegistryParams = {
   logger: PluginLogger;
   coreGatewayHandlers?: GatewayRequestHandlers;
   runtime: PluginRuntime;
+  /** Optional LLM call function forwarded to each plugin api as `api.callLlm`. */
+  callLlm?: (prompt: string, opts?: { model?: string; maxTokens?: number }) => Promise<string>;
 };
 
 export function createEmptyPluginRegistry(): PluginRegistry {
@@ -486,6 +488,7 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       pluginConfig: params.pluginConfig,
       runtime: registryParams.runtime,
       logger: normalizeLogger(registryParams.logger),
+      callLlm: registryParams.callLlm,
       registerTool: (tool, opts) => registerTool(record, tool, opts),
       registerHook: (events, handler, opts) =>
         registerHook(record, events, handler, opts, params.config),

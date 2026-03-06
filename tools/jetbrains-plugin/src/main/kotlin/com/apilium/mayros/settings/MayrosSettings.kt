@@ -1,5 +1,8 @@
 package com.apilium.mayros.settings
 
+import com.intellij.credentialStore.CredentialAttributes
+import com.intellij.credentialStore.Credentials
+import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
@@ -24,8 +27,7 @@ class MayrosSettings : PersistentStateComponent<MayrosSettings.State> {
         var gatewayUrl: String = "ws://127.0.0.1:18789",
         var autoConnect: Boolean = true,
         var reconnectDelayMs: Long = 3000,
-        var maxReconnectAttempts: Int = 5,
-        var gatewayToken: String = ""
+        var maxReconnectAttempts: Int = 5
     )
 
     private var state = State()
@@ -52,13 +54,19 @@ class MayrosSettings : PersistentStateComponent<MayrosSettings.State> {
         get() = state.maxReconnectAttempts
         set(value) { state.maxReconnectAttempts = value }
 
-    var gatewayToken: String
-        get() = state.gatewayToken
-        set(value) { state.gatewayToken = value }
-
     companion object {
+        private val credentialAttributes = CredentialAttributes("Mayros Gateway Token")
+
         fun getInstance(): MayrosSettings {
             return ApplicationManager.getApplication().getService(MayrosSettings::class.java)
+        }
+
+        fun getGatewayToken(): String {
+            return PasswordSafe.instance.getPassword(credentialAttributes) ?: ""
+        }
+
+        fun setGatewayToken(token: String) {
+            PasswordSafe.instance.set(credentialAttributes, Credentials("mayros", token))
         }
     }
 }
@@ -84,7 +92,7 @@ class MayrosConfigurable : Configurable {
         autoConnectBox = JCheckBox("Auto-connect on startup", settings.autoConnect)
         reconnectDelayField = JTextField(settings.reconnectDelayMs.toString(), 10)
         maxAttemptsField = JTextField(settings.maxReconnectAttempts.toString(), 10)
-        tokenField = JPasswordField(settings.gatewayToken, 30)
+        tokenField = JPasswordField(MayrosSettings.getGatewayToken(), 30)
 
         val formPanel = JPanel(GridLayout(5, 2, 8, 8)).apply {
             add(JLabel("Gateway URL:"))
@@ -112,16 +120,16 @@ class MayrosConfigurable : Configurable {
             autoConnectBox?.isSelected != settings.autoConnect ||
             reconnectDelayField?.text != settings.reconnectDelayMs.toString() ||
             maxAttemptsField?.text != settings.maxReconnectAttempts.toString() ||
-            String(tokenField?.password ?: charArrayOf()) != settings.gatewayToken
+            String(tokenField?.password ?: charArrayOf()) != MayrosSettings.getGatewayToken()
     }
 
     override fun apply() {
         val settings = MayrosSettings.getInstance()
         settings.gatewayUrl = urlField?.text ?: settings.gatewayUrl
         settings.autoConnect = autoConnectBox?.isSelected ?: settings.autoConnect
-        settings.reconnectDelayMs = reconnectDelayField?.text?.toLongOrNull() ?: settings.reconnectDelayMs
-        settings.maxReconnectAttempts = maxAttemptsField?.text?.toIntOrNull() ?: settings.maxReconnectAttempts
-        settings.gatewayToken = String(tokenField?.password ?: charArrayOf())
+        settings.reconnectDelayMs = reconnectDelayField?.text?.toLongOrNull()?.coerceAtLeast(1000) ?: 5000
+        settings.maxReconnectAttempts = maxAttemptsField?.text?.toIntOrNull()?.coerceIn(1, 100) ?: 10
+        MayrosSettings.setGatewayToken(String(tokenField?.password ?: charArrayOf()))
     }
 
     override fun reset() {
@@ -130,7 +138,7 @@ class MayrosConfigurable : Configurable {
         autoConnectBox?.isSelected = settings.autoConnect
         reconnectDelayField?.text = settings.reconnectDelayMs.toString()
         maxAttemptsField?.text = settings.maxReconnectAttempts.toString()
-        tokenField?.text = settings.gatewayToken
+        tokenField?.text = MayrosSettings.getGatewayToken()
     }
 
     override fun disposeUIResources() {

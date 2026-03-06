@@ -70,7 +70,9 @@ export class TraceEmitter {
       MAX_BACKOFF_INTERVAL_MS,
     );
     this.flushTimer = setInterval(() => {
-      void this.flush();
+      void this.flush().catch((err) => {
+        console.warn(`[trace-emitter] flush failed: ${String(err)}`);
+      });
     }, effectiveInterval);
     // Allow the timer to not block process exit
     if (this.flushTimer && typeof this.flushTimer === "object" && "unref" in this.flushTimer) {
@@ -246,20 +248,22 @@ export class TraceEmitter {
     return id;
   }
 
-  // ---------- Raw emit (for fork/copy) ----------
+  // ---------- Raw emit (used by SessionForkManager) ----------
 
   /**
    * Push a pre-built event into the buffer without generating a new id or
-   * timestamp. Used by SessionForkManager to copy events across sessions.
+   * timestamp.  Used in production by SessionForkManager to copy events
+   * across sessions during fork operations.
    */
   emitRaw(event: TraceEvent): void {
     this.pushEvent(event);
   }
 
-  // ---------- Buffer access (for testing) ----------
+  // ---------- Buffer access ----------
 
   /**
    * Return the current number of buffered events.
+   * Used by the trace status CLI command.
    */
   get bufferedCount(): number {
     return this.buffer.length;
@@ -267,6 +271,7 @@ export class TraceEmitter {
 
   /**
    * Return the count of buffered events, optionally filtered by session.
+   * @internal Test utility -- not used in production code paths.
    */
   getBufferedEventCount(session?: string): number {
     if (!session) return this.buffer.length;
@@ -274,7 +279,8 @@ export class TraceEmitter {
   }
 
   /**
-   * Return a shallow copy of the current buffer (for testing/inspection).
+   * Return a shallow copy of the current buffer.
+   * Used in production by SessionForkManager for checkpoint and fork operations.
    */
   getBufferedEvents(): TraceEvent[] {
     return [...this.buffer];

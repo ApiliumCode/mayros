@@ -90,6 +90,7 @@ export class GatewayClient {
   private connectNonce: string | null = null;
   private connectSent = false;
   private connectTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Track last tick to detect silent stalls.
   private lastTick: number | null = null;
   private tickIntervalMs = 30_000;
@@ -210,6 +211,14 @@ export class GatewayClient {
 
   stop() {
     this.closed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
@@ -400,7 +409,8 @@ export class GatewayClient {
     }
     const delay = this.backoffMs;
     this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
-    setTimeout(() => this.start(), delay).unref();
+    this.reconnectTimer = setTimeout(() => this.start(), delay);
+    this.reconnectTimer.unref();
   }
 
   private flushPendingErrors(err: Error) {
