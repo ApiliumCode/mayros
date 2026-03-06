@@ -67,8 +67,8 @@ function resolveDashboard(client: CortexClient, ns: string): TeamDashboardServic
   const teamMgr = new TeamManager(
     client,
     ns,
-    null as never, // nsMgr: not needed for getTeam/listTeams
-    null as never, // fusion: not needed for getTeam/listTeams
+    null, // nsMgr: not needed for getTeam/listTeams
+    null, // fusion: not needed for getTeam/listTeams
     { maxTeamSize: 8, defaultStrategy: "additive", workflowTimeout: 600 },
   );
   return new TeamDashboardService(teamMgr, mailbox, null, ns);
