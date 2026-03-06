@@ -375,7 +375,6 @@ const llmHooksPlugin = {
                 console.log(`    model: ${hook.model}`);
               }
               console.log(`    source: ${hook.sourcePath}`);
-              console.log();
             }
           });
 
