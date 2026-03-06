@@ -67,10 +67,18 @@ const agentMeshPlugin = {
       defaultStrategy: cfg.teams.defaultStrategy,
       workflowTimeout: cfg.teams.workflowTimeout,
     });
-    const orchestrator = new WorkflowOrchestrator(client, ns, teamMgr, fusion, nsMgr);
     const mailbox = new AgentMailbox(client, ns);
-    const dashboard = new TeamDashboardService(teamMgr, mailbox, null, ns);
     const bgTracker = new BackgroundTracker(client, ns);
+    const orchestrator = new WorkflowOrchestrator(
+      client,
+      ns,
+      teamMgr,
+      fusion,
+      nsMgr,
+      mailbox,
+      bgTracker,
+    );
+    const dashboard = new TeamDashboardService(teamMgr, mailbox, null, ns);
     let cortexAvailable = false;
     const healthMonitor = new HealthMonitor(client, {
       onHealthy: () => {
