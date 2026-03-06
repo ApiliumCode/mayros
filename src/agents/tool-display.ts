@@ -93,6 +93,15 @@ export function resolveToolDisplay(params: {
   if (!detail && (key === "write" || key === "edit" || key === "attach")) {
     detail = resolveWriteDetail(key, params.args);
   }
+  if (!detail && key === "code_shell") {
+    detail = resolveExecDetail(params.args);
+  }
+  if (!detail && (key === "code_read" || key === "code_ls" || key === "code_glob")) {
+    detail = resolveReadDetail(params.args);
+  }
+  if (!detail && (key === "code_write" || key === "code_edit")) {
+    detail = resolveWriteDetail(key, params.args);
+  }
 
   if (!detail && key === "web_search") {
     detail = resolveWebSearchDetail(params.args);
