@@ -22,6 +22,13 @@ import { checkBlocklist, checkDangerousPatterns } from "./command-blocklist.js";
 import { parseCommandChain } from "./command-parser.js";
 import { bashSandboxConfigSchema, type BashSandboxConfig } from "./config.js";
 import { checkDomains } from "./domain-checker.js";
+import { ContainerRuntime, formatRuntimeStatus } from "./container-runtime.js";
+import {
+  validateContainerSecurity,
+  hasBlockingViolation,
+  formatViolations,
+} from "./container-security.js";
+import { NetworkSandbox } from "./network-sandbox.js";
 
 // ============================================================================
 // Helpers
@@ -151,13 +158,18 @@ const bashSandboxPlugin = {
   async register(api: MayrosPluginApi) {
     const cfg = bashSandboxConfigSchema.parse(api.pluginConfig);
     const auditLog = new AuditLog(1000);
+    const networkSandbox = new NetworkSandbox(cfg.network);
+    const containerRuntime = new ContainerRuntime();
 
     // Session-scoped overrides (not persisted)
     const sessionAllowedDomains: string[] = [];
     const sessionBlockedCommands: string[] = [];
 
+    const containerStatus = cfg.container.enabled
+      ? `container: ${cfg.container.runtime}`
+      : "container: off";
     api.logger.info(
-      `bash-sandbox: registered (mode: ${cfg.mode}, blocklist: ${cfg.commandBlocklist.length} commands, allowlist: ${cfg.domainAllowlist.length} domains)`,
+      `bash-sandbox: registered (mode: ${cfg.mode}, blocklist: ${cfg.commandBlocklist.length} commands, allowlist: ${cfg.domainAllowlist.length} domains, network: ${cfg.network.enabled ? cfg.network.mode : "off"}, ${containerStatus})`,
     );
 
     /**
@@ -238,6 +250,88 @@ const bashSandboxPlugin = {
           return;
         }
 
+        // 7. Container sandbox execution
+        if (cfg.container.enabled && cfg.mode !== "off") {
+          const containerCfg = cfg.container;
+          const workdir = typeof params.cwd === "string" ? params.cwd : process.cwd();
+
+          // Security validation before container execution
+          const violations = validateContainerSecurity(
+            command,
+            containerCfg.customMounts,
+            containerCfg.image,
+            containerCfg,
+          );
+
+          if (hasBlockingViolation(violations)) {
+            const msg = formatViolations(violations);
+            auditLog.add({
+              command,
+              action: "blocked",
+              reason: `container-security: ${msg}`,
+              matchedPattern: "container-security",
+            });
+            if (cfg.mode === "enforce") {
+              api.logger.warn(`bash-sandbox: BLOCKED by container security: ${msg}`);
+              return {
+                block: true,
+                blockReason: `Container security violations: ${msg}`,
+              };
+            }
+            api.logger.warn(`bash-sandbox: WARNING (container security): ${msg}`);
+          }
+
+          // Build container run command
+          const result = containerRuntime.buildRunCommand({
+            command,
+            workdir,
+            config: containerCfg,
+          });
+
+          if (result) {
+            const fullCommand = [result.binary, ...result.args].join(" ");
+            auditLog.add({
+              command,
+              action: "allowed",
+              reason: `containerized (${result.runtime})`,
+            });
+            api.logger.info(`bash-sandbox: containerized via ${result.runtime}`);
+            // Replace the command with the containerized version
+            return {
+              replaceParams: {
+                command: fullCommand,
+              },
+            };
+          }
+          // If container build failed (no runtime), fall through to normal execution
+          api.logger.warn("bash-sandbox: container enabled but no runtime found, falling back");
+        }
+
+        // 8. Network sandbox evaluation
+        if (cfg.network.enabled && cfg.mode !== "off") {
+          const netResult = await networkSandbox.evaluate(command);
+          if (!netResult.allowed) {
+            auditLog.add({
+              command,
+              action: "blocked",
+              reason: `network-sandbox: ${netResult.reason}`,
+              matchedPattern: "network-sandbox",
+            });
+            if (cfg.mode === "enforce") {
+              api.logger.warn(`bash-sandbox: BLOCKED by network sandbox: ${netResult.reason}`);
+              return {
+                block: true,
+                blockReason: `Network sandbox blocked this command: ${netResult.reason}`,
+              };
+            }
+            api.logger.warn(
+              `bash-sandbox: WARNING (network sandbox would block): ${netResult.reason}`,
+            );
+          } else if (netResult.strategy !== "passthrough") {
+            api.logger.info(`bash-sandbox: network strategy: ${netResult.strategy}`);
+          }
+        }
+
         auditLog.add({ command, action: "allowed" });
       },
       { priority: 250 },
@@ -301,6 +395,59 @@ const bashSandboxPlugin = {
         },
       },
       { name: "bash_sandbox_test" },
+    );
+
+    // ========================================================================
+    // Tool: bash_container_status — container runtime info
+    // ========================================================================
+
+    api.registerTool(
+      {
+        name: "bash_container_status",
+        label: "Container Sandbox Status",
+        description:
+          "Show container sandbox configuration and detected runtimes (Docker, Podman, gVisor).",
+        parameters: Type.Object({}),
+        async execute() {
+          const lines: string[] = [];
+          lines.push(`Container sandbox: ${cfg.container.enabled ? "ENABLED" : "DISABLED"}`);
+          lines.push(`  runtime: ${cfg.container.runtime}`);
+          lines.push(`  image: ${cfg.container.image}`);
+          lines.push(`  mountPolicy: ${cfg.container.mountPolicy}`);
+          lines.push(`  networkMode: ${cfg.container.networkMode}`);
+          lines.push(
+            `  resourceLimits: cpus=${cfg.container.resourceLimits.cpus}, memory=${cfg.container.resourceLimits.memoryMb}MB, pids=${cfg.container.resourceLimits.pidsLimit}`,
+          );
+          lines.push(`  allowedRegistries: ${cfg.container.allowedRegistries.join(", ")}`);
+          lines.push("");
+
+          const runtimes = containerRuntime.detectAll();
+          lines.push(formatRuntimeStatus(runtimes));
+
+          const selected = containerRuntime.selectRuntime(cfg.container.runtime);
+          if (selected) {
+            lines.push(
+              `\nSelected runtime: ${selected.id} (${selected.binary} v${selected.version})`,
+            );
+          } else {
+            lines.push("\nNo compatible runtime found.");
+          }
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: {
+              enabled: cfg.container.enabled,
+              runtime: cfg.container.runtime,
+              runtimes: runtimes.map((r) => ({
+                id: r.id,
+                available: r.available,
+                version: r.version,
+              })),
+            },
+          };
+        },
+      },
+      { name: "bash_container_status" },
     );
 
     // ========================================================================
@@ -381,6 +528,72 @@ const bashSandboxPlugin = {
             sessionBlockedCommands.push(cmd);
             console.log(`Added "${cmd}" to session blocklist.`);
             console.log(`Session blocklist now has ${sessionBlockedCommands.length} entries.`);
+          });
+
+        // Container subcommands
+        const container = sandbox.command("container").description("Container sandbox management");
+
+        container
+          .command("detect")
+          .description("Detect available container runtimes")
+          .action(async () => {
+            const runtimes = containerRuntime.detectAll();
+            console.log(formatRuntimeStatus(runtimes));
+            const selected = containerRuntime.selectRuntime(cfg.container.runtime);
+            if (selected) {
+              console.log(`\nSelected: ${selected.id} (${selected.binary} v${selected.version})`);
+            } else {
+              console.log("\nNo compatible runtime found.");
+              console.log("Install Docker or Podman to enable container sandbox.");
+            }
+          });
+
+        container
+          .command("status")
+          .description("Show container sandbox configuration")
+          .action(async () => {
+            console.log(`Container sandbox: ${cfg.container.enabled ? "ENABLED" : "DISABLED"}`);
+            console.log(`  runtime: ${cfg.container.runtime}`);
+            console.log(`  image: ${cfg.container.image}`);
+            console.log(`  mountPolicy: ${cfg.container.mountPolicy}`);
+            console.log(`  networkMode: ${cfg.container.networkMode}`);
+            console.log(`  cpus: ${cfg.container.resourceLimits.cpus}`);
+            console.log(`  memory: ${cfg.container.resourceLimits.memoryMb}MB`);
+            console.log(`  pidsLimit: ${cfg.container.resourceLimits.pidsLimit}`);
+            console.log(
+              `  allowedRegistries: ${cfg.container.allowedRegistries.join(", ") || "(all)"}`,
+            );
+            console.log(`  securityFlags:`);
+            console.log(`    blockPrivileged: ${cfg.container.securityFlags.blockPrivileged}`);
+            console.log(`    blockHostNetwork: ${cfg.container.securityFlags.blockHostNetwork}`);
+            console.log(`    blockRootVolume: ${cfg.container.securityFlags.blockRootVolume}`);
+            console.log(`    readOnlyRootfs: ${cfg.container.securityFlags.readOnlyRootfs}`);
+            console.log(`    noNewPrivileges: ${cfg.container.securityFlags.noNewPrivileges}`);
+            console.log(
+              `    dropCapabilities: ${cfg.container.securityFlags.dropCapabilities.join(", ")}`,
+            );
+          });
+
+        container
+          .command("pull")
+          .description("Pull the configured container image")
+          .argument("[image]", "Image to pull (defaults to configured image)")
+          .action(async (image?: string) => {
+            const targetImage = image ?? cfg.container.image;
+            const runtime = containerRuntime.selectRuntime(cfg.container.runtime);
+            if (!runtime) {
+              console.error("No container runtime found. Install Docker or Podman.");
+              process.exitCode = 1;
+              return;
+            }
+            console.log(`Pulling ${targetImage} via ${runtime.binary}...`);
+            const success = containerRuntime.pullImage(targetImage, runtime);
+            if (success) {
+              console.log(`Successfully pulled ${targetImage}`);
+            } else {
+              console.error(`Failed to pull ${targetImage}`);
+              process.exitCode = 1;
+            }
           });
       },
       { commands: ["sandbox"] },
