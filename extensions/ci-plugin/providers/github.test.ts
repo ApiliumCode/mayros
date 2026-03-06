@@ -133,7 +133,12 @@ describe("GitHubProvider", () => {
   });
 
   it("triggerRun sends correct payload", async () => {
-    mf().mockResolvedValue({ ok: true, status: 204 } as Response);
+    // First call is the dispatch (204 no body), subsequent calls are polling
+    mf()
+      .mockResolvedValueOnce({ ok: true, status: 204 } as Response)
+      .mockResolvedValue(
+        jsonResponse({ total_count: 1, workflow_runs: [makeRun({ head_branch: "main" })] }),
+      );
 
     const run = await provider.triggerRun("owner/repo", {
       branch: "main",
@@ -148,7 +153,12 @@ describe("GitHubProvider", () => {
   });
 
   it("triggerRun defaults to ci.yml workflow", async () => {
-    mf().mockResolvedValue({ ok: true, status: 204 } as Response);
+    // First call is the dispatch (204 no body), subsequent calls are polling
+    mf()
+      .mockResolvedValueOnce({ ok: true, status: 204 } as Response)
+      .mockResolvedValue(
+        jsonResponse({ total_count: 1, workflow_runs: [makeRun({ head_branch: "main" })] }),
+      );
 
     await provider.triggerRun("owner/repo", { branch: "main" });
 

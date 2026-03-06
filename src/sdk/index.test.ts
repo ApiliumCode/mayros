@@ -9,6 +9,8 @@ const mockClient = {
   waitForReady: vi.fn().mockResolvedValue(undefined),
   sendChat: vi.fn().mockResolvedValue({ runId: "test-run" }),
   listSessions: vi.fn().mockResolvedValue({ sessions: [] }),
+  abortChat: vi.fn().mockRejectedValue(new Error("no active run")),
+  patchSession: vi.fn().mockResolvedValue(undefined),
   onEvent: null as ((event: { event: string; payload?: unknown }) => void) | null,
   onDisconnected: null as ((reason?: string) => void) | null,
 };
@@ -347,6 +349,24 @@ describe("MayrosClient", () => {
   describe("abort", () => {
     it("disconnects on abort", async () => {
       await client.connect();
+
+      // Simulate an active run by starting sendMessage (which sets activeRunId).
+      // The mock sendChat completes but no chat.final is emitted, so the run
+      // stays "active" from the client's perspective.
+      mockClient.sendChat.mockImplementation(async () => {
+        // Don't emit any events — leave the run in progress
+        return { runId: "run-abort-test" };
+      });
+      // abortChat rejects, causing abort() to fall back to disconnect()
+      mockClient.abortChat.mockRejectedValue(new Error("run already finished"));
+
+      // Start the generator but don't consume it — the run is now active.
+      const gen = client.sendMessage("test");
+      // Kick off the generator so sendChat is invoked and activeRunId is set.
+      const iterPromise = gen.next();
+      // Give the event loop a tick for sendChat to complete and set activeRunId.
+      await new Promise((r) => setTimeout(r, 10));
+
       await client.abort();
       expect(mockClient.stop).toHaveBeenCalled();
     });
