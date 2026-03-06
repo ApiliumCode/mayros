@@ -88,8 +88,8 @@ export class TeamManager {
   constructor(
     private readonly client: CortexClient,
     private readonly ns: string,
-    private readonly nsMgr: NamespaceManager,
-    private readonly fusion: KnowledgeFusion,
+    private readonly nsMgr: NamespaceManager | null,
+    private readonly fusion: KnowledgeFusion | null,
     private readonly config: TeamManagerConfig,
   ) {}
 
@@ -110,6 +110,7 @@ export class TeamManager {
     const subject = teamSubject(this.ns, teamId);
 
     // Create shared namespace for the team
+    if (!this.nsMgr) throw new Error("NamespaceManager required to create teams");
     const agentIds = cfg.members.map((m) => m.agentId);
     const sharedNs = await this.nsMgr.createSharedNamespace(`team-${teamId}`, agentIds);
 
@@ -357,16 +358,20 @@ export class TeamManager {
     }> = [];
     const mergeErrors: Array<{ agentId: string; role: string; error: string }> = [];
 
+    if (!this.nsMgr || !this.fusion) {
+      throw new Error("NamespaceManager and KnowledgeFusion required to finalize teams");
+    }
+
     const additionalNs =
       completedMembers.length >= 3
-        ? completedMembers.map((m) => this.nsMgr.getPrivateNs(m.agentId))
+        ? completedMembers.map((m) => this.nsMgr!.getPrivateNs(m.agentId))
         : undefined;
 
     for (const member of completedMembers) {
-      const memberNs = this.nsMgr.getPrivateNs(member.agentId);
+      const memberNs = this.nsMgr!.getPrivateNs(member.agentId);
 
       try {
-        const report = await this.fusion.merge(
+        const report = await this.fusion!.merge(
           memberNs,
           team.sharedNs,
           team.strategy,
