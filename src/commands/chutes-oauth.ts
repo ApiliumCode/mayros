@@ -122,14 +122,14 @@ async function waitForLocalCallback(params: {
         if (timeout) {
           clearTimeout(timeout);
         }
-        server.close();
         resolve({ code, state });
+        server.close();
       } catch (err) {
         if (timeout) {
           clearTimeout(timeout);
         }
-        server.close();
         reject(err);
+        server.close();
       }
     });
 
@@ -137,18 +137,18 @@ async function waitForLocalCallback(params: {
       if (timeout) {
         clearTimeout(timeout);
       }
-      server.close();
       reject(err);
+      server.close();
     });
     server.listen(port, hostname, () => {
       params.onProgress?.(`Waiting for OAuth callback on ${redirectUrl.origin}${expectedPath}…`);
     });
 
     timeout = setTimeout(() => {
+      reject(new Error("OAuth callback timeout"));
       try {
         server.close();
       } catch {}
-      reject(new Error("OAuth callback timeout"));
     }, params.timeoutMs);
   });
 }
