@@ -96,6 +96,7 @@ class StdioTransport implements McpTransport {
     stdin: { write(data: string): boolean; end(): void };
     stdout: { on(event: string, cb: (data: Buffer) => void): void };
     on(event: string, cb: (...args: unknown[]) => void): void;
+    removeAllListeners(): void;
     kill(): boolean;
   } | null = null;
   private pending = new Map<
@@ -157,6 +158,7 @@ class StdioTransport implements McpTransport {
   async disconnect(): Promise<void> {
     if (this.process) {
       this.process.stdin.end();
+      this.process.removeAllListeners();
       this.process.kill();
       this.process = null;
     }
