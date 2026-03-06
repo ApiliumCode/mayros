@@ -26,10 +26,34 @@ const analyticsPlugin = {
       eventTtlMs: cfg.eventTtlMs,
       clientVersion: version,
       onFlush: async (batch) => {
-        // Log batch locally — delivery to external endpoint is optional
+        // Always log locally
         api.logger.info(`analytics: flushed ${batch.events.length} events`);
-        // Future: POST to analytics endpoint
-        // await fetch("https://analytics.apilium.com/batch", { method: "POST", body: JSON.stringify(batch) });
+
+        // Deliver to remote endpoint if configured
+        if (cfg.endpoint) {
+          try {
+            const response = await fetch(cfg.endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "User-Agent": `mayros/${version}`,
+              },
+              body: JSON.stringify(batch),
+            });
+            if (!response.ok) {
+              api.logger.warn(
+                `analytics: delivery failed (HTTP ${response.status}) — events will be retried`,
+              );
+              throw new Error(`HTTP ${response.status}`);
+            }
+          } catch (err) {
+            api.logger.warn(
+              `analytics: delivery error: ${err instanceof Error ? err.message : String(err)} — events will be retried`,
+            );
+            // Re-throw so EventQueue increments failure count and applies backoff
+            throw err;
+          }
+        }
       },
     });
 
@@ -95,6 +119,7 @@ const analyticsPlugin = {
           const lines = [
             `Analytics: ${cfg.enabled ? "enabled" : "disabled"}`,
             `Privacy:   ${cfg.privacyMode}`,
+            `Endpoint:  ${cfg.endpoint || "(local only)"}`,
             `Buffer:    ${queue.getBufferSize()} events`,
             `Failures:  ${queue.getFailureCount()} consecutive`,
             `Flush:     every ${cfg.flushIntervalMs / 1000}s`,
@@ -104,6 +129,7 @@ const analyticsPlugin = {
             details: {
               enabled: cfg.enabled,
               privacyMode: cfg.privacyMode,
+              endpoint: cfg.endpoint || null,
               bufferSize: queue.getBufferSize(),
               failures: queue.getFailureCount(),
             },
@@ -127,6 +153,7 @@ const analyticsPlugin = {
           .action(() => {
             console.log(`Analytics: ${cfg.enabled ? "enabled" : "disabled"}`);
             console.log(`Privacy:   ${cfg.privacyMode}`);
+            console.log(`Endpoint:  ${cfg.endpoint || "(local only)"}`);
             console.log(`Buffer:    ${queue.getBufferSize()} events`);
             console.log(`Failures:  ${queue.getFailureCount()}`);
           });
