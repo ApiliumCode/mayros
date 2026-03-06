@@ -184,7 +184,9 @@ export async function compactMessages(options: CompactOptions): Promise<CompactR
       await onKnowledgeExtracted(items);
     } catch (err) {
       // Best-effort: log but do not propagate so callers always get a result.
-      console.error("[compact-handler] onKnowledgeExtracted callback failed:", err);
+      process.stderr.write(
+        `[compact-handler] onKnowledgeExtracted callback failed: ${String(err)}\n`,
+      );
     }
   }
 
