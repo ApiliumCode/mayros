@@ -215,6 +215,7 @@ class MayrosClient(
         return latch.await(options.requestTimeoutMs, TimeUnit.MILLISECONDS) && isConnected
     }
 
+    @Synchronized
     fun disconnect() {
         reconnectFuture?.cancel(false)
         reconnectFuture = null
