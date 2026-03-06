@@ -8,6 +8,7 @@ import com.intellij.psi.PsiComment
 import com.intellij.icons.AllIcons
 import com.apilium.mayros.MayrosClient
 import com.apilium.mayros.MayrosService
+import com.intellij.openapi.diagnostic.Logger
 import java.util.UUID
 
 /**
@@ -17,6 +18,10 @@ import java.util.UUID
  * the comment context to Mayros for analysis or resolution.
  */
 class MayrosLineMarkerProvider : LineMarkerProvider {
+
+    companion object {
+        private val LOG = Logger.getInstance(MayrosLineMarkerProvider::class.java)
+    }
 
     override fun getLineMarkerInfo(element: PsiElement): LineMarkerInfo<*>? {
         if (element !is PsiComment) return null
@@ -85,9 +90,9 @@ class MayrosLineMarkerProvider : LineMarkerProvider {
                         idempotencyKey = "jb-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
                     )
                 )
-            } catch (_: Exception) {
-                // Best-effort
+            } catch (e: Exception) {
+                LOG.warn("Failed to send gutter marker request", e)
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 }
