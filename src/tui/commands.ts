@@ -9,7 +9,18 @@ const REASONING_LEVELS = ["on", "off"];
 const ELEVATED_LEVELS = ["on", "off", "ask", "full"];
 const ACTIVATION_LEVELS = ["mention", "always"];
 const USAGE_FOOTER_LEVELS = ["off", "tokens", "full"];
-const THEME_PRESETS = ["dark", "light", "high-contrast"];
+const THEME_PRESETS = [
+  "dark",
+  "light",
+  "high-contrast",
+  "dracula",
+  "github-dark",
+  "github-light",
+  "solarized-dark",
+  "solarized-light",
+  "atom-one-dark",
+  "ayu-dark",
+];
 const OUTPUT_STYLES = ["standard", "explanatory", "learning"];
 const PERMISSION_MODES = ["auto", "ask", "deny"];
 
@@ -47,7 +58,14 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     { name: "help", description: "Show slash command help" },
     { name: "status", description: "Show gateway status summary" },
     { name: "agent", description: "Switch agent or open picker" },
-    { name: "session", description: "Switch session or open picker" },
+    {
+      name: "session",
+      description: "Switch, list, rename, or delete sessions",
+      getArgumentCompletions: (prefix) =>
+        ["list", "rename", "delete"]
+          .filter((v) => v.startsWith(prefix.toLowerCase()))
+          .map((value) => ({ value, label: value })),
+    },
     { name: "model", description: "Set model or open picker" },
     {
       name: "think",
@@ -146,6 +164,10 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
       description: "Toggle fast mode (minimal thinking)",
     },
     {
+      name: "compact",
+      description: "Compact conversation history",
+    },
+    {
       name: "copy",
       description: "Copy last response to clipboard",
     },
@@ -176,10 +198,13 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     { name: "workflow", description: "Run or list workflows" },
     { name: "rules", description: "Show active rules" },
     { name: "mailbox", description: "Check agent mailbox" },
+    { name: "search", description: "Search conversation history across sessions" },
     { name: "batch", description: "Run batch prompt processing" },
     { name: "teleport", description: "Export/import session between devices" },
     { name: "sync", description: "Cortex peer sync status" },
     { name: "onboard", description: "Run onboarding wizard" },
+    { name: "bug", description: "Report a bug or give feedback" },
+    { name: "init", description: "Generate mayros.json project config" },
     { name: "exit", description: "Exit the TUI" },
   ];
 
@@ -220,7 +245,7 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/commands",
     "/status",
     "/agent [id]",
-    "/session [key]",
+    "/session [key|list|rename <name>|delete <key>]",
     "/model [provider/model]",
     `/think <${thinkLevels}>`,
     "/verbose <on|off>",
@@ -228,13 +253,14 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/usage <off|tokens|full>",
     "/elevated <on|off|ask|full>",
     "/activation <mention|always>",
-    "/theme <dark|light|high-contrast>",
+    "/theme <dark|light|high-contrast|dracula|github-dark|github-light|solarized-dark|solarized-light|atom-one-dark|ayu-dark>",
     "/diff [file]",
     "/context",
     "/style <standard|explanatory|learning>",
     "/vim",
     "/permission <auto|ask|deny>",
     "/fast",
+    "/compact",
     "/copy",
     "/export [file]",
     "/undo [list]",
@@ -251,10 +277,13 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/workflow [run|list] [name]",
     "/rules [list|add]",
     "/mailbox [list|send]",
+    "/search <query>",
     "/batch <file>",
     "/teleport [export|import]",
     "/sync [status|pair]",
     "/onboard",
+    "/bug",
+    "/init",
     "",
     "/exit",
   ];

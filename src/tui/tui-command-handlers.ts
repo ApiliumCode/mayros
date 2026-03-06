@@ -13,9 +13,17 @@ import { execSync, spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { helpText, parseCommand } from "./commands.js";
 import { undo, listUndoEntries } from "./undo-manager.js";
-import { exportSession, importSession, type TeleportPayload } from "./session-teleport.js";
+import {
+  exportSession,
+  importSession,
+  validatePayloadSize,
+  MAX_EXPORT_MESSAGES,
+  type TeleportPayload,
+} from "./session-teleport.js";
 import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
+import { compactMessages } from "./compact-handler.js";
+import { SessionManager, formatSessionLine } from "./session-manager.js";
 import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
 import type { OutputStyle } from "./output-styles.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
@@ -301,13 +309,67 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       case "session":
-      case "sessions":
+      case "sessions": {
+        const sessionSubCmd = args.split(/\s+/)[0]?.toLowerCase();
+        const sessionArgs = args.slice((sessionSubCmd ?? "").length).trim();
+
         if (!args) {
           await openSessionSelector();
+        } else if (sessionSubCmd === "list") {
+          try {
+            const mgr = new SessionManager({
+              client,
+              currentAgentId: state.currentAgentId,
+            });
+            const sessions = await mgr.listSessions({ limit: 20 });
+            if (sessions.length === 0) {
+              chatLog.addSystem("no sessions found");
+            } else {
+              const lines = sessions.map((s) => formatSessionLine(s, formatSessionKey));
+              chatLog.addSystem(
+                `Sessions (${sessions.length}):\n${lines.map((l) => `  ${l}`).join("\n")}`,
+              );
+            }
+          } catch (err) {
+            chatLog.addSystem(`session list failed: ${String(err)}`);
+          }
+        } else if (sessionSubCmd === "rename") {
+          if (!sessionArgs) {
+            chatLog.addSystem("usage: /session rename <name>");
+          } else {
+            try {
+              const mgr = new SessionManager({
+                client,
+                currentAgentId: state.currentAgentId,
+              });
+              await mgr.renameSession(state.currentSessionKey, sessionArgs);
+              chatLog.addSystem(`session renamed to "${sessionArgs}"`);
+              await refreshSessionInfo();
+            } catch (err) {
+              chatLog.addSystem(`session rename failed: ${String(err)}`);
+            }
+          }
+        } else if (sessionSubCmd === "delete") {
+          if (!sessionArgs) {
+            chatLog.addSystem("usage: /session delete <key>");
+          } else {
+            try {
+              const mgr = new SessionManager({
+                client,
+                currentAgentId: state.currentAgentId,
+              });
+              await mgr.deleteSession(sessionArgs);
+              chatLog.addSystem(`session ${sessionArgs} deleted`);
+            } catch (err) {
+              chatLog.addSystem(`session delete failed: ${String(err)}`);
+            }
+          }
         } else {
+          // Treat as session key for resume
           await setSession(args);
         }
         break;
+      }
       case "model":
       case "models":
         if (!args) {
@@ -759,6 +821,39 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "compact": {
+        try {
+          const history = (await client.loadHistory({
+            sessionKey: state.currentSessionKey,
+          })) as { messages?: Array<Record<string, unknown>> };
+          const rawMessages = history?.messages ?? [];
+          if (rawMessages.length === 0) {
+            chatLog.addSystem("nothing to compact");
+            break;
+          }
+          const mapped = rawMessages
+            .filter(
+              (m) =>
+                typeof m === "object" &&
+                m !== null &&
+                (m.role === "user" || m.role === "assistant"),
+            )
+            .map((m) => ({
+              role: String(m.role ?? "user"),
+              content: typeof m.content === "string" ? m.content : "",
+            }));
+          const compactResult = compactMessages({
+            messages: mapped,
+            sessionKey: state.currentSessionKey,
+          });
+          chatLog.addSystem(
+            `Compacted ${compactResult.originalCount} messages \u2192 summary (${compactResult.knowledgeItems} knowledge items extracted)`,
+          );
+        } catch (err) {
+          chatLog.addSystem(`compact failed: ${String(err)}`);
+        }
+        break;
+      }
       case "copy": {
         const lastText = chatLog.getLastAssistantText();
         if (!lastText) {
@@ -818,6 +913,48 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "settings":
         openSettings();
         break;
+      case "bug": {
+        const url = "https://github.com/ApiliumCode/mayros/issues/new";
+        try {
+          const openCmd =
+            process.platform === "darwin"
+              ? "open"
+              : process.platform === "win32"
+                ? "start"
+                : "xdg-open";
+          execSync(`${openCmd} ${url}`, { stdio: "ignore" });
+          chatLog.addSystem(`Opened ${url}`);
+        } catch {
+          chatLog.addSystem(`Report bugs at: ${url}`);
+        }
+        break;
+      }
+      case "init": {
+        try {
+          const fs = await import("node:fs");
+          const path = await import("node:path");
+          const configPath = path.join(process.cwd(), "mayros.json");
+          if (fs.existsSync(configPath)) {
+            chatLog.addSystem("mayros.json already exists in this directory");
+            break;
+          }
+          const pkg = fs.existsSync(path.join(process.cwd(), "package.json"))
+            ? JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8"))
+            : null;
+          const projectName = pkg?.name ?? path.basename(process.cwd());
+          const config = {
+            $schema: "https://apilium.com/schemas/mayros/v1.json",
+            meta: { lastTouchedVersion: "0.1.5" },
+            ui: { theme: "dark" },
+            agents: { defaults: { agentId: projectName } },
+          };
+          fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+          chatLog.addSystem(`Created ${configPath}`);
+        } catch (err) {
+          chatLog.addSystem(`init failed: ${String(err)}`);
+        }
+        break;
+      }
       case "exit":
       case "quit":
         client.stop();
@@ -870,6 +1007,38 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "search": {
+        const query = args.trim();
+        if (!query) {
+          chatLog.addSystem("Usage: /search <query>");
+          break;
+        }
+        chatLog.addSystem(`Searching for "${query}"...`);
+        try {
+          const { searchSessions } = await import("../infra/session-search.js");
+          const summary = await searchSessions({ query, limit: 10 });
+          if (summary.results.length === 0) {
+            chatLog.addSystem(
+              `No results found for "${query}" (${summary.sessionsSearched} sessions searched)`,
+            );
+            break;
+          }
+          const lines = [
+            `Found ${summary.totalMatches} result(s) in ${summary.sessionsSearched} sessions:`,
+          ];
+          for (const r of summary.results) {
+            const date = new Date(r.timestamp).toISOString().slice(0, 16).replace("T", " ");
+            const tag = r.role === "user" ? "[You]" : "[AI]";
+            lines.push(
+              `${date} ${tag} (${r.sessionId}): ${r.snippet.replace(/\n/g, " ").slice(0, 100)}`,
+            );
+          }
+          chatLog.addSystem(lines.join("\n"));
+        } catch (err) {
+          chatLog.addSystem(`search failed: ${String(err)}`);
+        }
+        break;
+      }
       case "batch": {
         if (!args) {
           chatLog.addSystem("usage: /batch <file> — run 'mayros batch run <file>' from terminal");
@@ -883,15 +1052,41 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "teleport": {
         const subCmd = args.split(/\s+/)[0]?.toLowerCase();
         if (subCmd === "export") {
-          // Build payload from current session
+          // Populate messages from actual session history
+          let messages: TeleportPayload["messages"] = [];
+          try {
+            const history = await client.loadHistory({
+              sessionKey: state.currentSessionKey,
+              limit: MAX_EXPORT_MESSAGES,
+            });
+            if (Array.isArray(history)) {
+              messages = history.map(
+                (m: { role?: string; content?: string; timestamp?: string }) => ({
+                  role: (m.role as "user" | "assistant" | "system") ?? "user",
+                  content:
+                    typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? ""),
+                  ...(m.timestamp ? { timestamp: m.timestamp } : {}),
+                }),
+              );
+            }
+          } catch {
+            // If history load fails, export with empty messages (degraded mode)
+          }
+
           const payload: TeleportPayload = {
             version: 1,
             timestamp: new Date().toISOString(),
             agentId: state.currentAgentId,
             sessionKey: state.currentSessionKey,
-            messages: [], // Would be populated from actual session history
+            messages,
             metadata: {},
           };
+
+          const sizeError = validatePayloadSize(payload);
+          if (sizeError) {
+            chatLog.addSystem(`Export warning: ${sizeError}`);
+          }
+
           const token = exportSession(payload);
           // Copy to clipboard
           try {
@@ -900,7 +1095,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
               { encoding: "utf-8" },
             );
             chatLog.addSystem(
-              `Session exported to clipboard (${token.length} chars). Share this token to import on another device.`,
+              `Session exported to clipboard (${token.length} chars, ${messages.length} messages). Share this token to import on another device.`,
             );
           } catch {
             chatLog.addSystem(`Session token:\n${token}`);
