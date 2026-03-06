@@ -43,6 +43,10 @@ export function registerWebSearch(api: MayrosPluginApi, _cfg: CodeToolsConfig): 
         type SearchResult = { title: string; url: string; snippet: string };
         const results: SearchResult[] = [];
 
+        // Track whether any search strategy executed successfully vs. failed outright
+        let searchExecuted = false;
+        const searchFailures: string[] = [];
+
         // Strategy 1: Try MAYROS_SEARCH_API_URL env (SearXNG / Brave / custom)
         const searchApiUrl = process.env.MAYROS_SEARCH_API_URL;
         const searchApiKey = process.env.MAYROS_SEARCH_API_KEY;
@@ -65,6 +69,7 @@ export function registerWebSearch(api: MayrosPluginApi, _cfg: CodeToolsConfig): 
               signal: AbortSignal.timeout(10000),
             });
             if (resp.ok) {
+              searchExecuted = true;
               const data = (await resp.json()) as Record<string, unknown>;
               // SearXNG format
               const searxResults = data.results as
@@ -98,8 +103,12 @@ export function registerWebSearch(api: MayrosPluginApi, _cfg: CodeToolsConfig): 
                   }
                 }
               }
+            } else {
+              searchFailures.push(`API returned HTTP ${resp.status}`);
             }
-          } catch {
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            searchFailures.push(`API request failed: ${reason}`);
             // Fall through to DuckDuckGo fallback
           }
         }
@@ -121,6 +130,8 @@ export function registerWebSearch(api: MayrosPluginApi, _cfg: CodeToolsConfig): 
               ],
               { timeout: 15000, maxBuffer: 2 * 1024 * 1024 },
             );
+
+            searchExecuted = true;
 
             // Parse DuckDuckGo HTML results
             const resultPattern =
@@ -155,12 +166,27 @@ export function registerWebSearch(api: MayrosPluginApi, _cfg: CodeToolsConfig): 
                 snippet: snippets[i] ?? "",
               });
             }
-          } catch {
-            // curl failed — no results
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            searchFailures.push(`curl/DuckDuckGo failed: ${reason}`);
           }
         }
 
         if (results.length === 0) {
+          if (!searchExecuted && searchFailures.length > 0) {
+            // All strategies threw — network or configuration error
+            const reason = searchFailures.join("; ");
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Search failed: ${reason}. Check network connectivity.`,
+                },
+              ],
+              details: { query, resultCount: 0, error: reason },
+            };
+          }
+          // Search executed but returned zero results
           return {
             content: [{ type: "text" as const, text: `No results found for: ${query}` }],
             details: { query, resultCount: 0 },
