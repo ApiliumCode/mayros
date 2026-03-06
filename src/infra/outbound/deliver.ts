@@ -263,19 +263,25 @@ export async function deliverOutboundPayloads(
     const results = await deliverOutboundPayloadsCore(wrappedParams);
     if (queueId) {
       if (hadPartialFailure) {
-        await failDelivery(queueId, "partial delivery failure (bestEffort)").catch(() => {});
+        await failDelivery(queueId, "partial delivery failure (bestEffort)").catch((err) =>
+          console.warn("[deliver] queue state update failed:", err),
+        );
       } else {
-        await ackDelivery(queueId).catch(() => {}); // Best-effort cleanup.
+        await ackDelivery(queueId).catch((err) =>
+          console.warn("[deliver] queue state update failed:", err),
+        ); // Best-effort cleanup.
       }
     }
     return results;
   } catch (err) {
     if (queueId) {
       if (isAbortError(err)) {
-        await ackDelivery(queueId).catch(() => {});
+        await ackDelivery(queueId).catch((err2) =>
+          console.warn("[deliver] queue state update failed:", err2),
+        );
       } else {
         await failDelivery(queueId, err instanceof Error ? err.message : String(err)).catch(
-          () => {},
+          (err2) => console.warn("[deliver] queue state update failed:", err2),
         );
       }
     }
@@ -472,7 +478,7 @@ async function deliverOutboundPayloadsCore(
               conversationId: to,
             },
           )
-          .catch(() => {});
+          .catch((err) => console.warn("[deliver] message_sent hook failed:", err));
       }
       if (!sessionKeyForInternalHooks) {
         return;
@@ -488,7 +494,7 @@ async function deliverOutboundPayloadsCore(
           conversationId: to,
           messageId: params.messageId,
         }),
-      ).catch(() => {});
+      ).catch((err) => console.warn("[deliver] internal hook failed:", err));
     };
     try {
       throwIfAborted(abortSignal);
