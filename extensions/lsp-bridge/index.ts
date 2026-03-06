@@ -37,7 +37,6 @@ const lspBridgePlugin = {
     const backend = new LspCortexBackend(client, ns);
 
     let cortexAvailable = false;
-    let diagnosticTimer: ReturnType<typeof setInterval> | undefined;
 
     api.logger.info(`lsp-bridge: registered (ns: ${ns}, servers: ${cfg.servers.length})`);
 
@@ -492,31 +491,14 @@ const lspBridgePlugin = {
         }
       }
 
-      // Start periodic diagnostic sync
-      if (cfg.diagnosticSyncIntervalMs > 0) {
-        diagnosticTimer = setInterval(async () => {
-          try {
-            if (!(await ensureCortex())) return;
-
-            // Query each running server for diagnostics and store in Cortex
-            for (const config of cfg.servers) {
-              if (!serverMgr.isRunning(config.language)) continue;
-              // Diagnostic sync would require textDocument/diagnostic support
-              // which varies by server. For now, diagnostics are stored
-              // when published by the server via notifications.
-            }
-          } catch (err) {
-            api.logger.warn(`lsp-bridge: diagnostic sync failed: ${String(err)}`);
-          }
-        }, cfg.diagnosticSyncIntervalMs);
-      }
+      // Periodic diagnostic polling is not needed: LSP servers push
+      // diagnostics via textDocument/publishDiagnostics notifications,
+      // which are handled by the server manager's notification handler
+      // and stored in Cortex on arrival. Pull-based textDocument/diagnostic
+      // support varies across servers and is not reliably available.
     });
 
     api.on("session_end", async () => {
-      if (diagnosticTimer) {
-        clearInterval(diagnosticTimer);
-        diagnosticTimer = undefined;
-      }
       await serverMgr.stopAll();
     });
 
@@ -530,10 +512,6 @@ const lspBridgePlugin = {
         // Servers are started on session_start
       },
       async stop() {
-        if (diagnosticTimer) {
-          clearInterval(diagnosticTimer);
-          diagnosticTimer = undefined;
-        }
         await serverMgr.stopAll();
         client.destroy();
       },
