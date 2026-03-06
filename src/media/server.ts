@@ -64,7 +64,9 @@ export function attachMediaRoutes(
       // best-effort single-use cleanup after response ends
       res.on("finish", () => {
         const cleanup = () => {
-          void fs.rm(realPath).catch(() => {});
+          void fs
+            .rm(realPath)
+            .catch((err) => console.warn("[media] cleanup failed for", realPath, err));
         };
         // Tests should not pay for time-based cleanup delays.
         if (process.env.VITEST || process.env.NODE_ENV === "test") {
