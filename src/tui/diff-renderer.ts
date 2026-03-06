@@ -75,3 +75,36 @@ export function renderDiffStats(raw: string): DiffStats {
 
   return { files: fileSet.size, additions, deletions };
 }
+
+/**
+ * Format a single-line summary of diff stats with colors.
+ * Example: "+5 -3 (2 files)"
+ */
+export function formatDiffStatsLine(stats: DiffStats): string {
+  const parts: string[] = [];
+  if (stats.additions > 0) parts.push(chalk.green(`+${stats.additions}`));
+  if (stats.deletions > 0) parts.push(chalk.red(`-${stats.deletions}`));
+  const fileLabel = stats.files === 1 ? "1 file" : `${stats.files} files`;
+  return parts.length > 0 ? `${parts.join(" ")} (${fileLabel})` : `(${fileLabel})`;
+}
+
+/**
+ * Pure data extraction — no chalk. Counts additions/deletions from raw diff text.
+ * Works with both standard unified diff and simple +/- line format.
+ */
+export function parseDiffStats(raw: string): DiffStats {
+  const lines = raw.split("\n");
+  let additions = 0;
+  let deletions = 0;
+  let files = 0;
+  for (const line of lines) {
+    if (line.startsWith("diff --git")) {
+      files++;
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      additions++;
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      deletions++;
+    }
+  }
+  return { files: Math.max(files, 1), additions, deletions };
+}
