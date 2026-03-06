@@ -7,6 +7,8 @@
 
 import { readFile, stat, readdir, open } from "node:fs/promises";
 import path from "node:path";
+import type { ChatAttachmentInput } from "./gateway-chat.js";
+import { isMediaFile, resolveMediaMention } from "./media-mention.js";
 
 async function isBinaryFile(filePath: string): Promise<boolean> {
   let handle;
@@ -41,9 +43,15 @@ export type FileMention = {
 export async function expandFileMentions(
   text: string,
   cwd?: string,
-): Promise<{ text: string; mentions: FileMention[]; contextBlock: string }> {
+): Promise<{
+  text: string;
+  mentions: FileMention[];
+  contextBlock: string;
+  mediaAttachments: ChatAttachmentInput[];
+}> {
   const workDir = cwd ?? process.cwd();
   const mentions: FileMention[] = [];
+  const mediaAttachments: ChatAttachmentInput[] = [];
   const seen = new Set<string>();
 
   let match: RegExpExecArray | null;
@@ -63,6 +71,22 @@ export async function expandFileMentions(
     try {
       const fileStat = await stat(resolved);
       if (!fileStat.isFile()) continue;
+
+      // Media files are resolved as attachments, not text context
+      if (isMediaFile(resolved)) {
+        const attachment = await resolveMediaMention(resolved);
+        if (attachment) {
+          mediaAttachments.push(attachment);
+          const fileName = resolved.split("/").pop() ?? resolved;
+          mentions.push({
+            original: `@${filePath}`,
+            resolvedPath: resolved,
+            content: `[Media: ${fileName}]`,
+          });
+        }
+        continue;
+      }
+
       if (fileStat.size > MAX_FILE_SIZE) {
         mentions.push({
           original: `@${filePath}`,
@@ -94,7 +118,7 @@ export async function expandFileMentions(
   }
 
   if (mentions.length === 0) {
-    return { text, mentions: [], contextBlock: "" };
+    return { text, mentions: [], contextBlock: "", mediaAttachments: [] };
   }
 
   // Build context blocks
@@ -106,6 +130,7 @@ export async function expandFileMentions(
     text,
     mentions,
     contextBlock: blocks.join("\n\n"),
+    mediaAttachments,
   };
 }
 

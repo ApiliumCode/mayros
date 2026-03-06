@@ -3,6 +3,9 @@ import {
   exportSession,
   importSession,
   estimateTokenSize,
+  validatePayloadSize,
+  MAX_EXPORT_MESSAGES,
+  MAX_TOKEN_BYTES,
   type TeleportPayload,
 } from "./session-teleport.js";
 
@@ -153,6 +156,74 @@ describe("session-teleport", () => {
       expect(imported.messages).toHaveLength(1000);
       const estimate = estimateTokenSize(token);
       expect(estimate.messageCount).toBe(1000);
+    });
+  });
+
+  describe("validatePayloadSize", () => {
+    it("accepts small payload", () => {
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: [{ role: "user", content: "hi" }],
+      };
+      expect(validatePayloadSize(payload)).toBeNull();
+    });
+
+    it("rejects too many messages", () => {
+      const messages = Array.from({ length: MAX_EXPORT_MESSAGES + 1 }, (_, i) => ({
+        role: "user" as const,
+        content: `msg ${i}`,
+      }));
+      const payload: TeleportPayload = { ...samplePayload, messages };
+      const error = validatePayloadSize(payload);
+      expect(error).toContain("Too many messages");
+      expect(error).toContain(String(MAX_EXPORT_MESSAGES));
+    });
+
+    it("rejects oversized payload", () => {
+      const bigContent = "x".repeat(MAX_TOKEN_BYTES);
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: [{ role: "user", content: bigContent }],
+      };
+      const error = validatePayloadSize(payload);
+      expect(error).toContain("too large");
+    });
+
+    it("accepts payload at exactly MAX_EXPORT_MESSAGES", () => {
+      const messages = Array.from({ length: MAX_EXPORT_MESSAGES }, (_, i) => ({
+        role: "user" as const,
+        content: `msg ${i}`,
+      }));
+      const payload: TeleportPayload = { ...samplePayload, messages };
+      expect(validatePayloadSize(payload)).toBeNull();
+    });
+
+    it("accepts empty messages", () => {
+      const payload: TeleportPayload = { ...samplePayload, messages: [] };
+      expect(validatePayloadSize(payload)).toBeNull();
+    });
+  });
+
+  describe("message timestamp preservation", () => {
+    it("preserves message timestamps through round-trip", () => {
+      const ts = "2026-01-01T00:00:00.000Z";
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: [{ role: "user", content: "test", timestamp: ts }],
+      };
+      const token = exportSession(payload);
+      const result = importSession(token);
+      expect(result.messages[0].timestamp).toBe(ts);
+    });
+
+    it("preserves messages without timestamps", () => {
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: [{ role: "user", content: "no timestamp" }],
+      };
+      const token = exportSession(payload);
+      const result = importSession(token);
+      expect(result.messages[0].timestamp).toBeUndefined();
     });
   });
 });

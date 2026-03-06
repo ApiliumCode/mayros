@@ -21,6 +21,9 @@ export type TeleportPayload = {
   metadata: Record<string, unknown>;
 };
 
+export const MAX_EXPORT_MESSAGES = 100;
+export const MAX_TOKEN_BYTES = 512 * 1024; // 512KB limit
+
 const TELEPORT_MAGIC = "MYR1"; // Version identifier prefix
 
 /**
@@ -55,6 +58,21 @@ export function importSession(token: string): TeleportPayload {
   }
 
   return payload;
+}
+
+/**
+ * Validates that a teleport payload doesn't exceed size limits.
+ * Returns null if valid, or an error message string if invalid.
+ */
+export function validatePayloadSize(payload: TeleportPayload): string | null {
+  if (payload.messages.length > MAX_EXPORT_MESSAGES) {
+    return `Too many messages (${payload.messages.length}). Max: ${MAX_EXPORT_MESSAGES}`;
+  }
+  const json = JSON.stringify(payload);
+  if (json.length > MAX_TOKEN_BYTES) {
+    return `Payload too large (${(json.length / 1024).toFixed(1)}KB). Max: ${(MAX_TOKEN_BYTES / 1024).toFixed(0)}KB`;
+  }
+  return null;
 }
 
 /**
