@@ -176,10 +176,7 @@ export const twitchOutbound: ChannelOutboundAdapter = {
 
     const message = mediaUrl ? `${text || ""} ${mediaUrl}`.trim() : text;
 
-    if (!twitchOutbound.sendText) {
-      throw new Error("sendText not implemented");
-    }
-    return twitchOutbound.sendText({
+    return twitchOutbound.sendText!({
       ...params,
       text: message,
     });
