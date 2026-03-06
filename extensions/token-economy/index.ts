@@ -95,21 +95,22 @@ const tokenEconomyPlugin = {
         // that we could potentially compute savings next time this combination
         // is seen. The cache key was set from llm_input; we skip storing here
         // unless we have a pending key from the llm_input phase.
-        if (pendingCacheKey) {
+        const cacheKey = pendingCacheKeys.get(event.runId);
+        if (cacheKey) {
+          pendingCacheKeys.delete(event.runId);
           const cost = estimateUsageCost({ usage, cost: costConfig }) ?? 0;
-          cache.store(pendingCacheKey, {
+          cache.store(cacheKey, {
             usage: { ...usage },
             costUsd: cost,
             storedAt: Date.now(),
             hitCount: 0,
           });
-          pendingCacheKey = undefined;
         }
       }
     });
 
     // llm_input — check prompt cache for observational tracking
-    let pendingCacheKey: string | undefined;
+    const pendingCacheKeys = new Map<string, string>();
 
     api.on("llm_input", async (event) => {
       if (!cache) return;
@@ -123,10 +124,10 @@ const tokenEconomyPlugin = {
       if (hit) {
         // Observational only: we can't skip the LLM call.
         // The cache already updated estimatedSavingsUsd in lookup().
-        pendingCacheKey = undefined;
+        pendingCacheKeys.delete(event.runId);
       } else {
         // Miss: store the key so llm_output can populate it.
-        pendingCacheKey = key;
+        pendingCacheKeys.set(event.runId, key);
       }
     });
 
