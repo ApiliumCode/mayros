@@ -2,15 +2,15 @@ import { describe, it, expect } from "vitest";
 import { compactMessages } from "./compact-handler.js";
 
 describe("compactMessages", () => {
-  it("returns summary for empty messages", () => {
-    const result = compactMessages({ messages: [], sessionKey: "test" });
+  it("returns summary for empty messages", async () => {
+    const result = await compactMessages({ messages: [], sessionKey: "test" });
     expect(result.originalCount).toBe(0);
     expect(result.summary).toContain("[Compacted from 0 messages]");
     expect(result.knowledgeItems).toBe(0);
   });
 
-  it("extracts changes from assistant messages", () => {
-    const result = compactMessages({
+  it("extracts changes from assistant messages", async () => {
+    const result = await compactMessages({
       messages: [
         {
           role: "assistant",
@@ -23,8 +23,8 @@ describe("compactMessages", () => {
     expect(result.summary).toContain("Changes made:");
   });
 
-  it("extracts findings from assistant messages", () => {
-    const result = compactMessages({
+  it("extracts findings from assistant messages", async () => {
+    const result = await compactMessages({
       messages: [
         {
           role: "assistant",
@@ -37,8 +37,8 @@ describe("compactMessages", () => {
     expect(result.summary).toContain("Findings:");
   });
 
-  it("extracts conventions from user messages", () => {
-    const result = compactMessages({
+  it("extracts conventions from user messages", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "user", content: "We always use camelCase for variable names in this project." },
       ],
@@ -48,8 +48,8 @@ describe("compactMessages", () => {
     expect(result.summary).toContain("Conventions:");
   });
 
-  it("extracts decisions from user messages", () => {
-    const result = compactMessages({
+  it("extracts decisions from user messages", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "user", content: "Let's use Redis for the caching layer instead of memcached." },
       ],
@@ -59,8 +59,8 @@ describe("compactMessages", () => {
     expect(result.summary).toContain("Decisions:");
   });
 
-  it("deduplicates knowledge items", () => {
-    const result = compactMessages({
+  it("deduplicates knowledge items", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "assistant", content: "I've created the new file src/main.ts" },
         { role: "assistant", content: "I've created the new file src/main.ts" },
@@ -71,8 +71,8 @@ describe("compactMessages", () => {
     expect(result.knowledgeItems).toBe(1);
   });
 
-  it("includes last user message in summary", () => {
-    const result = compactMessages({
+  it("includes last user message in summary", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "user", content: "Fix the login bug" },
         {
@@ -87,8 +87,8 @@ describe("compactMessages", () => {
     expect(result.originalCount).toBe(3);
   });
 
-  it("skips short messages", () => {
-    const result = compactMessages({
+  it("skips short messages", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "user", content: "ok" },
         { role: "assistant", content: "done" },
@@ -98,13 +98,50 @@ describe("compactMessages", () => {
     expect(result.knowledgeItems).toBe(0);
   });
 
-  it("skips XML-tagged content", () => {
-    const result = compactMessages({
+  it("skips XML-tagged content", async () => {
+    const result = await compactMessages({
       messages: [
         { role: "assistant", content: "<tool-result>I've created the new file</tool-result>" },
       ],
       sessionKey: "test",
     });
     expect(result.knowledgeItems).toBe(0);
+  });
+
+  it("invokes onKnowledgeExtracted callback with extracted items", async () => {
+    const captured: Array<{ kind: string; text: string }> = [];
+    const result = await compactMessages({
+      messages: [
+        {
+          role: "assistant",
+          content: "I've created the new module in src/lib.ts with the helper functions.",
+        },
+      ],
+      sessionKey: "test",
+      onKnowledgeExtracted: async (items) => {
+        captured.push(...items);
+      },
+    });
+    expect(result.knowledgeItems).toBeGreaterThan(0);
+    expect(captured.length).toBeGreaterThan(0);
+    expect(captured[0]).toHaveProperty("kind");
+    expect(captured[0]).toHaveProperty("text");
+  });
+
+  it("does not throw when onKnowledgeExtracted callback rejects", async () => {
+    await expect(
+      compactMessages({
+        messages: [
+          {
+            role: "assistant",
+            content: "I've created the new module in src/lib.ts with the helper functions.",
+          },
+        ],
+        sessionKey: "test",
+        onKnowledgeExtracted: async () => {
+          throw new Error("Cortex unavailable");
+        },
+      }),
+    ).resolves.toBeDefined();
   });
 });

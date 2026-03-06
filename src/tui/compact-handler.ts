@@ -156,8 +156,8 @@ function buildSummary(
   return parts.join("\n");
 }
 
-export function compactMessages(options: CompactOptions): CompactResult {
-  const { messages } = options;
+export async function compactMessages(options: CompactOptions): Promise<CompactResult> {
+  const { messages, onKnowledgeExtracted } = options;
 
   // Extract knowledge from all messages
   const allKnowledge: ExtractedKnowledge[] = [];
@@ -175,6 +175,18 @@ export function compactMessages(options: CompactOptions): CompactResult {
   });
 
   const summary = buildSummary(messages, uniqueKnowledge);
+
+  // Invoke the knowledge callback defensively — a Cortex write failure must
+  // not prevent the compaction result from being returned to the caller.
+  if (onKnowledgeExtracted && uniqueKnowledge.length > 0) {
+    const items = uniqueKnowledge.map((k) => ({ kind: k.kind, text: k.text }));
+    try {
+      await onKnowledgeExtracted(items);
+    } catch (err) {
+      // Best-effort: log but do not propagate so callers always get a result.
+      console.error("[compact-handler] onKnowledgeExtracted callback failed:", err);
+    }
+  }
 
   return {
     originalCount: messages.length,
