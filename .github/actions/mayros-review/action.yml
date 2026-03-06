@@ -14,75 +14,200 @@ inputs:
     required: false
     default: "Review this pull request. Focus on: code quality, security issues, performance concerns, and adherence to project conventions. Be concise and actionable."
   model:
-    description: "AI model to use"
+    description: "LLM model identifier"
     required: false
     default: "anthropic/claude-sonnet-4-20250514"
   github-token:
     description: "GitHub token for posting comments"
     required: true
+  anthropic-api-key:
+    description: "Anthropic API key for LLM calls"
+    required: true
+  max-diff-lines:
+    description: "Maximum diff lines to include in the review prompt (0 = unlimited)"
+    required: false
+    default: "3000"
+  node-version:
+    description: "Node.js version to use"
+    required: false
+    default: "22"
+
+outputs:
+  review-posted:
+    description: "Whether a review comment was posted (true/false)"
+    value: ${{ steps.post-review.outputs.posted }}
+  review-length:
+    description: "Character count of the generated review"
+    value: ${{ steps.run-review.outputs.review-length }}
+  diff-lines:
+    description: "Number of diff lines analyzed"
+    value: ${{ steps.get-diff.outputs.diff-lines }}
+  diff-truncated:
+    description: "Whether the diff was truncated (true/false)"
+    value: ${{ steps.get-diff.outputs.truncated }}
 
 runs:
   using: "composite"
   steps:
-    - name: Install Mayros
-      shell: bash
-      run: |
-        npm install -g mayros@${{ inputs.mayros-version }} 2>/dev/null || {
-          echo "::warning::Could not install mayros globally, trying npx"
-        }
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
 
-    - name: Get PR diff
+    - name: Install Mayros
+      id: install-mayros
       shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        PR_NUMBER="${{ github.event.pull_request.number }}"
-        if [ -z "$PR_NUMBER" ]; then
-          echo "::error::Not a pull request event"
+        MAYROS_VERSION="${{ inputs.mayros-version }}"
+        # Sanitize version string: only allow semver chars and "latest"
+        if [[ ! "$MAYROS_VERSION" =~ ^[a-zA-Z0-9.\-]+$ ]]; then
+          echo "::error::Invalid mayros-version format: ${MAYROS_VERSION}"
           exit 1
         fi
-        gh pr diff "$PR_NUMBER" > /tmp/pr-diff.txt
-        echo "PR #$PR_NUMBER diff saved ($(wc -l < /tmp/pr-diff.txt) lines)"
 
-    - name: Run Mayros review
+        echo "Installing mayros@${MAYROS_VERSION}..."
+        if npm install -g "mayros@${MAYROS_VERSION}"; then
+          echo "installed=global" >> "$GITHUB_OUTPUT"
+          echo "Mayros installed globally"
+          mayros --version || true
+        else
+          echo "::warning::Global install failed, will fall back to npx"
+          echo "installed=npx" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Get PR diff
+      id: get-diff
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        MAX_DIFF_LINES: ${{ inputs.max-diff-lines }}
       run: |
         PR_NUMBER="${{ github.event.pull_request.number }}"
-        DIFF=$(cat /tmp/pr-diff.txt)
+        if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "" ]; then
+          echo "::error::This action must run on a pull_request event"
+          exit 1
+        fi
 
-        # Build review prompt
-        REVIEW_PROMPT=$(cat <<'PROMPT_EOF'
-        ${{ inputs.prompt }}
+        # Use -- to prevent argument injection
+        if ! gh pr diff -- "$PR_NUMBER" > /tmp/pr-diff-raw.txt 2>/tmp/pr-diff-err.txt; then
+          echo "::error::Failed to fetch diff for PR #${PR_NUMBER}: $(cat /tmp/pr-diff-err.txt)"
+          exit 1
+        fi
 
-        Here is the PR diff to review:
+        TOTAL_LINES=$(wc -l < /tmp/pr-diff-raw.txt | tr -d ' ')
+        echo "diff-lines=${TOTAL_LINES}" >> "$GITHUB_OUTPUT"
 
-        ```diff
-        PROMPT_EOF
-        )
-        REVIEW_PROMPT="${REVIEW_PROMPT}
-        ${DIFF}
-        \`\`\`"
-
-        # Run mayros in headless mode
-        REVIEW=$(npx mayros -p "$REVIEW_PROMPT" --model "${{ inputs.model }}" 2>/dev/null || echo "Review generation failed")
-
-        if [ -z "$REVIEW" ] || [ "$REVIEW" = "Review generation failed" ]; then
-          echo "::warning::Could not generate review"
+        if [ "$TOTAL_LINES" -eq 0 ]; then
+          echo "::warning::PR #${PR_NUMBER} has an empty diff, skipping review"
+          echo "truncated=false" >> "$GITHUB_OUTPUT"
+          echo "empty=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # Post as PR comment
-        COMMENT_BODY=$(cat <<EOF
-        ## Mayros Code Review
+        # Truncate if needed
+        TRUNCATED="false"
+        if [ "$MAX_DIFF_LINES" -gt 0 ] && [ "$TOTAL_LINES" -gt "$MAX_DIFF_LINES" ]; then
+          head -n "$MAX_DIFF_LINES" /tmp/pr-diff-raw.txt > /tmp/pr-diff.txt
+          TRUNCATED="true"
+          echo "::notice::Diff truncated from ${TOTAL_LINES} to ${MAX_DIFF_LINES} lines"
+        else
+          cp /tmp/pr-diff-raw.txt /tmp/pr-diff.txt
+        fi
 
-        $REVIEW
+        # Hard cap at 50K characters to avoid token limits
+        CHAR_COUNT=$(wc -c < /tmp/pr-diff.txt | tr -d ' ')
+        if [ "$CHAR_COUNT" -gt 50000 ]; then
+          head -c 50000 /tmp/pr-diff.txt > /tmp/pr-diff-capped.txt
+          mv /tmp/pr-diff-capped.txt /tmp/pr-diff.txt
+          TRUNCATED="true"
+          echo "::notice::Diff truncated to 50K characters (was ${CHAR_COUNT} chars)"
+        fi
 
-        ---
-        *Automated review by [Mayros](https://mayros.apilium.com)*
-        EOF
-        )
+        echo "truncated=${TRUNCATED}" >> "$GITHUB_OUTPUT"
+        echo "empty=false" >> "$GITHUB_OUTPUT"
+        FINAL_LINES=$(wc -l < /tmp/pr-diff.txt | tr -d ' ')
+        echo "PR #${PR_NUMBER} diff: ${TOTAL_LINES} total lines, ${FINAL_LINES} included (truncated=${TRUNCATED})"
 
-        gh pr comment "$PR_NUMBER" --body "$COMMENT_BODY"
-        echo "Review posted to PR #$PR_NUMBER"
+    - name: Run Mayros review
+      id: run-review
+      if: steps.get-diff.outputs.empty != 'true'
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_PROMPT: ${{ inputs.prompt }}
+        INPUT_MODEL: ${{ inputs.model }}
+      run: |
+        # Build prompt from file to avoid shell quoting issues
+        {
+          echo "${INPUT_PROMPT}"
+          echo ""
+          echo "Here is the PR diff to review:"
+          echo ""
+          echo '```diff'
+          cat /tmp/pr-diff.txt
+          echo '```'
+        } > /tmp/review-prompt.txt
+
+        if [ "${{ steps.get-diff.outputs.truncated }}" = "true" ]; then
+          echo "" >> /tmp/review-prompt.txt
+          echo "NOTE: This diff was truncated. Focus your review on the code shown above." >> /tmp/review-prompt.txt
+        fi
+
+        PROMPT_CONTENT=$(cat /tmp/review-prompt.txt)
+
+        # Run review with proper argument separation
+        set +e
+        REVIEW=$(npx mayros -p "$PROMPT_CONTENT" --model "$INPUT_MODEL" 2>/tmp/mayros-stderr.txt)
+        EXIT_CODE=$?
+        set -e
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          STDERR_MSG=$(cat /tmp/mayros-stderr.txt 2>/dev/null || echo "unknown error")
+          echo "::error::Mayros review failed (exit ${EXIT_CODE}): ${STDERR_MSG}"
+          echo "review-length=0" >> "$GITHUB_OUTPUT"
+          echo "failed=true" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
+        if [ -z "$REVIEW" ]; then
+          echo "::error::Mayros returned an empty review"
+          echo "review-length=0" >> "$GITHUB_OUTPUT"
+          echo "failed=true" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
+        echo "$REVIEW" > /tmp/review-output.txt
+        REVIEW_LEN=${#REVIEW}
+        echo "review-length=${REVIEW_LEN}" >> "$GITHUB_OUTPUT"
+        echo "failed=false" >> "$GITHUB_OUTPUT"
+        echo "Review generated (${REVIEW_LEN} characters)"
+
+    - name: Post review comment
+      id: post-review
+      if: steps.run-review.outputs.failed != 'true' && steps.get-diff.outputs.empty != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        REVIEW=$(cat /tmp/review-output.txt)
+
+        # Build comment body via file to avoid HEREDOC quoting issues
+        {
+          echo "## Mayros Code Review"
+          echo ""
+          echo "$REVIEW"
+          echo ""
+          echo "---"
+          echo "*Automated review by [Mayros](https://mayros.apilium.com)*"
+        } > /tmp/comment-body.txt
+
+        # Post comment using -- to prevent argument injection
+        if gh pr comment -- "$PR_NUMBER" --body-file /tmp/comment-body.txt; then
+          echo "posted=true" >> "$GITHUB_OUTPUT"
+          echo "Review posted to PR #${PR_NUMBER}"
+        else
+          echo "::error::Failed to post review comment to PR #${PR_NUMBER}"
+          echo "posted=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi

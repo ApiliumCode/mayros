@@ -64,6 +64,66 @@ describe("session-teleport", () => {
       const estimate = estimateTokenSize(token);
       expect(estimate.compressedBytes).toBeGreaterThan(0);
     });
+
+    it("returns correct message count", () => {
+      const token = exportSession(samplePayload);
+      const estimate = estimateTokenSize(token);
+      expect(estimate.messageCount).toBe(3);
+    });
+
+    it("returns 0 message count for corrupted token", () => {
+      const estimate = estimateTokenSize("MYR1invaliddata!!!");
+      expect(estimate.messageCount).toBe(0);
+    });
+  });
+
+  describe("missing required fields", () => {
+    it("throws when agentId is missing", () => {
+      const bad = { ...samplePayload, agentId: "" };
+      const token = exportSession(bad);
+      expect(() => importSession(token)).toThrow("missing required fields");
+    });
+
+    it("throws when sessionKey is missing", () => {
+      const bad = { ...samplePayload, sessionKey: "" };
+      const token = exportSession(bad);
+      expect(() => importSession(token)).toThrow("missing required fields");
+    });
+  });
+
+  describe("empty messages", () => {
+    it("accepts an empty messages array", () => {
+      const payload: TeleportPayload = { ...samplePayload, messages: [] };
+      const token = exportSession(payload);
+      const imported = importSession(token);
+      expect(imported.messages).toHaveLength(0);
+    });
+  });
+
+  describe("unicode round-trip", () => {
+    it("preserves unicode content in messages", () => {
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: [
+          { role: "user", content: "Hola, como estas? \u00bfQu\u00e9 tal?" },
+          { role: "assistant", content: "\u3053\u3093\u306b\u3061\u306f\u4e16\u754c \ud83c\udf0d" },
+          {
+            role: "user",
+            content:
+              "\u041f\u0440\u0438\u0432\u0435\u0442 \u00e9\u00e8\u00ea\u00eb \u00fc\u00f6\u00e4",
+          },
+        ],
+      };
+      const token = exportSession(payload);
+      const imported = importSession(token);
+      expect(imported.messages[0].content).toBe("Hola, como estas? \u00bfQu\u00e9 tal?");
+      expect(imported.messages[1].content).toBe(
+        "\u3053\u3093\u306b\u3061\u306f\u4e16\u754c \ud83c\udf0d",
+      );
+      expect(imported.messages[2].content).toBe(
+        "\u041f\u0440\u0438\u0432\u0435\u0442 \u00e9\u00e8\u00ea\u00eb \u00fc\u00f6\u00e4",
+      );
+    });
   });
 
   describe("large payload", () => {
@@ -78,6 +138,21 @@ describe("session-teleport", () => {
       const token = exportSession(largePayload);
       const imported = importSession(token);
       expect(imported.messages).toHaveLength(100);
+    });
+
+    it("compresses and decompresses 1000 messages", () => {
+      const payload: TeleportPayload = {
+        ...samplePayload,
+        messages: Array.from({ length: 1000 }, (_, i) => ({
+          role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+          content: `Message ${i}: some content here`,
+        })),
+      };
+      const token = exportSession(payload);
+      const imported = importSession(token);
+      expect(imported.messages).toHaveLength(1000);
+      const estimate = estimateTokenSize(token);
+      expect(estimate.messageCount).toBe(1000);
     });
   });
 });

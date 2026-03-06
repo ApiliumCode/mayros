@@ -28,9 +28,19 @@ type NotebookJson = {
 };
 
 function parseNotebook(raw: string): NotebookJson {
-  const parsed = JSON.parse(raw) as NotebookJson;
+  let parsed: NotebookJson;
+  try {
+    parsed = JSON.parse(raw) as NotebookJson;
+  } catch (err) {
+    throw new ToolInputError(
+      `Invalid notebook JSON: ${err instanceof SyntaxError ? err.message : "parse error"}`,
+    );
+  }
   if (!parsed.cells || !Array.isArray(parsed.cells)) {
     throw new ToolInputError("Invalid notebook: missing cells array");
+  }
+  if (typeof parsed.nbformat !== "number") {
+    throw new ToolInputError("Invalid notebook: missing nbformat");
   }
   return parsed;
 }

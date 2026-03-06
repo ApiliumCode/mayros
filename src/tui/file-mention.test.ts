@@ -80,6 +80,28 @@ describe("file-mention", () => {
       expect(result.contextBlock).toMatch(/<file-context path="[^"]+x\.ts">/);
       expect(result.contextBlock).toMatch(/<\/file-context>/);
     });
+
+    it("detects binary files and returns placeholder", async () => {
+      const binPath = path.join(tmpDir, "image.png");
+      // Write a buffer containing null bytes (binary signature)
+      const binData = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
+      ]);
+      await fs.writeFile(binPath, binData);
+      const result = await expandFileMentions("@./image.png", tmpDir);
+      expect(result.mentions).toHaveLength(1);
+      expect(result.mentions[0].content).toMatch(/^\[Binary file: \d+ bytes\]$/);
+    });
+
+    it("follows symlinks to regular files", async () => {
+      const realPath = path.join(tmpDir, "real.txt");
+      const linkPath = path.join(tmpDir, "link.txt");
+      await fs.writeFile(realPath, "linked content");
+      await fs.symlink(realPath, linkPath);
+      const result = await expandFileMentions("@./link.txt", tmpDir);
+      expect(result.mentions).toHaveLength(1);
+      expect(result.mentions[0].content).toBe("linked content");
+    });
   });
 
   describe("globFilesForMention", () => {
