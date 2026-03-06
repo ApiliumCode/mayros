@@ -507,6 +507,7 @@ class WebSocketTransport implements McpTransport {
     removeEventListener(event: string, handler: (ev: { data: string }) => void): void;
     readyState: number;
   } | null = null;
+  private messageHandler: ((ev: { data: string }) => void) | null = null;
   private pending = new Map<
     number,
     {
@@ -553,7 +554,7 @@ class WebSocketTransport implements McpTransport {
       target.addEventListener("error", onError);
     });
 
-    ws.addEventListener("message", (event: { data: string }) => {
+    this.messageHandler = (event: { data: string }) => {
       try {
         const response = parseResponse(String(event.data));
         const handler = this.pending.get(response.id);
@@ -564,7 +565,8 @@ class WebSocketTransport implements McpTransport {
       } catch {
         // Ignore non-JSON or notification messages
       }
-    });
+    };
+    ws.addEventListener("message", this.messageHandler);
 
     this.ws = ws as unknown as typeof this.ws;
 
@@ -582,6 +584,10 @@ class WebSocketTransport implements McpTransport {
 
   async disconnect(): Promise<void> {
     if (this.ws) {
+      if (this.messageHandler) {
+        this.ws.removeEventListener("message", this.messageHandler);
+        this.messageHandler = null;
+      }
       this.ws.close();
       this.ws = null;
     }
