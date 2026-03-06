@@ -78,12 +78,14 @@ export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeTool
           let exitCode = -1;
           let exited = false;
           let settled = false;
+          let feedTimer: ReturnType<typeof setTimeout> | undefined;
 
           function settle(fn: () => void) {
             if (settled) return;
             settled = true;
             clearTimeout(hardTimer);
             clearTimeout(timer);
+            if (feedTimer) clearTimeout(feedTimer);
             fn();
           }
 
@@ -155,11 +157,13 @@ export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeTool
               if (lineIdx < inputLines.length && !exited) {
                 proc.write(inputLines[lineIdx] + "\n");
                 lineIdx++;
-                setTimeout(feedNext, 100);
+                feedTimer = setTimeout(feedNext, 100);
+              } else {
+                feedTimer = undefined;
               }
             };
             // Start feeding after a small delay for process startup
-            setTimeout(feedNext, 200);
+            feedTimer = setTimeout(feedNext, 200);
           }
 
           function finish() {
