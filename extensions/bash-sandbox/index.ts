@@ -329,6 +329,23 @@ const bashSandboxPlugin = {
             );
           } else if (netResult.strategy !== "passthrough") {
             api.logger.info(`bash-sandbox: network strategy: ${netResult.strategy}`);
+
+            // Apply the wrapped command and/or environment produced by the
+            // network sandbox strategy (e.g. macos-seatbelt, linux-namespace,
+            // env-proxy). Without this the original unwrapped command executes.
+            if (netResult.wrappedCommand !== undefined || netResult.env !== undefined) {
+              auditLog.add({
+                command,
+                action: "allowed",
+                reason: `network-wrapped (${netResult.strategy})`,
+              });
+              return {
+                replaceParams: {
+                  command: netResult.wrappedCommand ?? command,
+                  ...(netResult.env !== undefined ? { env: netResult.env } : {}),
+                },
+              };
+            }
           }
         }
 

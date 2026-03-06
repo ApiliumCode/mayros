@@ -242,7 +242,15 @@ export class NetworkSandbox {
   }
 
   private buildLinuxStrategy(command: string): NetworkSandboxResult {
-    // Use unshare --net to create isolated network namespace
+    // When allowedDomains is non-empty, `unshare --net` would block everything
+    // including the allowed domains because network namespaces have no iptables
+    // rules that can be injected portably at this layer. Fall back to the
+    // env-proxy strategy so that the allowlist is honoured (weak but correct).
+    if (this.config.mode === "allowlist" && this.config.allowedDomains.length > 0) {
+      return this.buildEnvProxyStrategy();
+    }
+
+    // Full isolation: no allowedDomains, so blocking all outbound is correct.
     const escapedCommand = command.replace(/'/g, "'\\''");
     const wrappedCommand = `unshare --net bash -c '${escapedCommand}'`;
 
