@@ -81,16 +81,31 @@ describe("file-mention", () => {
       expect(result.contextBlock).toMatch(/<\/file-context>/);
     });
 
-    it("detects binary files and returns placeholder", async () => {
-      const binPath = path.join(tmpDir, "image.png");
+    it("detects media files and returns as attachments", async () => {
+      const imgPath = path.join(tmpDir, "image.png");
+      const imgData = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
+      ]);
+      await fs.writeFile(imgPath, imgData);
+      const result = await expandFileMentions("@./image.png", tmpDir);
+      expect(result.mentions).toHaveLength(1);
+      expect(result.mentions[0].content).toBe("[Media: image.png]");
+      expect(result.mediaAttachments).toHaveLength(1);
+      expect(result.mediaAttachments[0].mimeType).toBe("image/png");
+      expect(result.mediaAttachments[0].fileName).toBe("image.png");
+    });
+
+    it("detects binary non-media files and returns placeholder", async () => {
+      const binPath = path.join(tmpDir, "data.bin");
       // Write a buffer containing null bytes (binary signature)
       const binData = Buffer.from([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
       ]);
       await fs.writeFile(binPath, binData);
-      const result = await expandFileMentions("@./image.png", tmpDir);
+      const result = await expandFileMentions("@./data.bin", tmpDir);
       expect(result.mentions).toHaveLength(1);
       expect(result.mentions[0].content).toMatch(/^\[Binary file: \d+ bytes\]$/);
+      expect(result.mediaAttachments).toHaveLength(0);
     });
 
     it("follows symlinks to regular files", async () => {
