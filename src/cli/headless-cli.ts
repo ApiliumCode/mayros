@@ -353,8 +353,9 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
   }
 
   // 6. Wait for result or timeout
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    setTimeout(() => {
+    timeoutTimer = setTimeout(() => {
       reject(new Error("timeout"));
     }, timeoutMs);
   });
@@ -368,6 +369,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
     }
     process.exitCode = 1;
   } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
     client.stop();
   }
 

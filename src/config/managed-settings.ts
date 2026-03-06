@@ -13,6 +13,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
+import { isBlockedObjectKey } from "./prototype-keys.js";
 
 export type ManagedSettingsFile = {
   version: 1;
@@ -40,6 +41,7 @@ function deepMerge(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
+    if (isBlockedObjectKey(key)) continue;
     if (value === null || value === undefined) {
       delete result[key];
     } else if (
