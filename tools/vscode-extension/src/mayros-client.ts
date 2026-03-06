@@ -487,9 +487,6 @@ export class MayrosClient {
     try {
       const auth = payload?.auth as Record<string, unknown> | undefined;
       if (auth?.deviceToken && typeof auth.deviceToken === "string") {
-        const fs = require("node:fs");
-        const path = require("node:path");
-        const os = require("node:os");
         const tokenPath = path.join(os.homedir(), ".mayros", "identity", "device-token.json");
         fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
         fs.writeFileSync(
