@@ -481,9 +481,12 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     const client = new Client(
       {
         baseUrl: "http://localhost",
-        deploySecret: "a",
+        disableDeployRoute: true,
         clientId: applicationId,
-        publicKey: "a",
+        // publicKey is required by Carbon but only used for HTTP webhook
+        // signature verification. Mayros uses gateway (WebSocket) transport,
+        // so we pass the applicationId as a structurally valid placeholder.
+        publicKey: applicationId,
         token,
         autoDeploy: false,
       },
