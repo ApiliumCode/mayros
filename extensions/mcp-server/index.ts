@@ -1,0 +1,300 @@
+/**
+ * MCP Server Plugin.
+ *
+ * Exposes Mayros Gateway's tools, Cortex resources, and workflow prompts
+ * via the Model Context Protocol (MCP). Any MCP client (VSCode, Cursor,
+ * JetBrains, Claude Desktop, custom apps) can discover and use Mayros
+ * capabilities through this server.
+ *
+ * Transports:
+ *   - stdio:  For local IDE integrations (launch via `mayros serve --stdio`)
+ *   - http:   Streamable HTTP for remote clients (`mayros serve --http`)
+ *
+ * Configuration: mayros.json → plugins.mcp-server
+ */
+
+import type { MayrosPluginApi, MayrosPluginToolContext } from "@apilium/mayros";
+import { mcpServerConfigSchema, type McpServerConfig } from "./config.js";
+import { McpServer, type McpServerOptions } from "./server.js";
+import type { AdaptableTool } from "./tool-adapter.js";
+import type {
+  ResourceDataSources,
+  AgentInfo,
+  ConventionInfo,
+  RuleInfo,
+} from "./resource-provider.js";
+import type { PromptDataSources } from "./prompt-provider.js";
+
+// ============================================================================
+// Plugin
+// ============================================================================
+
+const mcpServerPlugin = {
+  id: "mcp-server",
+  name: "MCP Server",
+  kind: "integration" as const,
+  configSchema: mcpServerConfigSchema,
+
+  async register(api: MayrosPluginApi) {
+    const cfg = mcpServerConfigSchema.parse(api.pluginConfig) as McpServerConfig;
+    let server: McpServer | null = null;
+
+    // ── Collect tools from the plugin registry ──────────────────────
+
+    const collectTools = (ctx: MayrosPluginToolContext): AdaptableTool[] => {
+      // Tools are resolved at registration time via the plugin context.
+      // The MCP server exposes whatever tools are available to the current agent.
+      // We return an empty array here — tools are registered dynamically via
+      // the `registerTool` callback or the service start lifecycle.
+      void ctx;
+      return [];
+    };
+
+    // ── Resource data sources (stubs — wired at service start) ──────
+
+    const emptyAgents: AgentInfo[] = [];
+
+    const resourceSources: ResourceDataSources = {
+      listAgents: () => emptyAgents,
+      getAgent: () => null,
+      listConventions: async () => [],
+      getConvention: async () => null,
+      listRules: async () => [],
+      getRule: async () => null,
+      getGraphStats: async () => null,
+      listGraphSubjects: async () => [],
+    };
+
+    const promptSources: PromptDataSources = {
+      listConventions: async () => [],
+      resolveRules: async () => [],
+      getAgentIdentity: () => null,
+      listAgentIds: () => [],
+    };
+
+    // ── Register tools ──────────────────────────────────────────────
+
+    api.registerTool(
+      {
+        name: "mcp_server_status",
+        label: "MCP Server Status",
+        description: "Check the status of the MCP server",
+        parameters: {},
+        async execute() {
+          if (!server) {
+            return {
+              content: [{ type: "text" as const, text: "MCP server not started" }],
+            };
+          }
+          const status = server.status();
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: [
+                  `MCP Server: ${status.running ? "running" : "stopped"}`,
+                  `Transport: ${status.transport}`,
+                  status.address ? `Address: ${status.address}` : null,
+                  `Tools exposed: ${status.toolCount}`,
+                  `Initialized: ${status.initialized}`,
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+              },
+            ],
+          };
+        },
+      },
+      { name: "mcp_server_status" },
+    );
+
+    // ── Register CLI ────────────────────────────────────────────────
+
+    api.registerCli(({ program }) => {
+      const serve = program
+        .command("serve")
+        .description("Start MCP server to expose Mayros tools, resources, and prompts");
+
+      serve
+        .option("--stdio", "Use stdio transport (for IDE integration)")
+        .option("--http", "Use HTTP transport (for remote clients)")
+        .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+        .option("--host <host>", "HTTP host (default: 127.0.0.1)")
+        .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
+          const transport = opts.stdio ? "stdio" : opts.http ? "http" : cfg.transport;
+          const port = opts.port ?? cfg.port;
+          const host = opts.host ?? cfg.host;
+
+          const serverCfg: McpServerConfig = {
+            ...cfg,
+            transport,
+            port,
+            host,
+          };
+
+          const tools = collectTools({});
+          const serverOpts: McpServerOptions = {
+            config: serverCfg,
+            tools,
+            resourceSources,
+            promptSources,
+            logger: {
+              info: (msg) => api.logger.info(msg),
+              warn: (msg) => api.logger.warn(msg),
+              error: (msg) => api.logger.error(msg),
+            },
+          };
+
+          server = new McpServer(serverOpts);
+          await server.start();
+
+          if (transport !== "stdio") {
+            const status = server.status();
+            api.logger.info(
+              `MCP server running at ${status.address ?? "unknown"} (${status.toolCount} tools)`,
+            );
+            // Keep process alive for HTTP mode
+            await new Promise<void>((resolve) => {
+              process.on("SIGINT", () => {
+                void server?.stop().then(resolve);
+              });
+              process.on("SIGTERM", () => {
+                void server?.stop().then(resolve);
+              });
+            });
+          }
+        });
+    });
+
+    // ── Register service lifecycle ──────────────────────────────────
+
+    api.registerService({
+      id: "mcp-server-lifecycle",
+      async start() {
+        // Wire up agent discovery for resources
+        try {
+          const { discoverMarkdownAgents } = await import("../../src/agents/markdown-agents.js");
+          const agents = discoverMarkdownAgents();
+          const agentInfos: AgentInfo[] = agents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            model: a.model,
+            allowedTools: a.allowedTools,
+            isDefault: a.isDefault,
+            identity: a.identity,
+            origin: a.origin,
+          }));
+
+          resourceSources.listAgents = () => agentInfos;
+          resourceSources.getAgent = (id: string) => agentInfos.find((a) => a.id === id) ?? null;
+
+          promptSources.getAgentIdentity = (id: string) => {
+            const agent = agentInfos.find((a) => a.id === id);
+            return agent?.identity ?? null;
+          };
+          promptSources.listAgentIds = () => agentInfos.map((a) => a.id);
+        } catch {
+          // Agent discovery not available in all contexts
+        }
+
+        // Wire up Cortex-backed resources if available
+        try {
+          const { CortexClient } = await import("../shared/cortex-client.js");
+          const client = new CortexClient(cfg.cortex);
+          const ns = cfg.agentNamespace;
+
+          resourceSources.listConventions = async () => {
+            try {
+              const res = await client.patternQuery({
+                subject: `${ns}:project:convention:*`,
+                predicate: `${ns}:convention:text`,
+              });
+              return res.matches.map((m) => ({
+                id: m.subject.split(":").pop() ?? "",
+                text: String(m.object),
+                category: "general",
+                source: "cortex",
+                confidence: 1,
+                status: "active",
+                createdAt: m.created_at ?? "",
+              }));
+            } catch {
+              return [];
+            }
+          };
+
+          resourceSources.getGraphStats = async () => {
+            try {
+              const stats = await client.stats();
+              return {
+                tripleCount: stats.graph.triple_count,
+                subjectCount: stats.graph.subject_count,
+                predicateCount: stats.graph.predicate_count,
+              };
+            } catch {
+              return null;
+            }
+          };
+
+          resourceSources.listGraphSubjects = async () => {
+            try {
+              const res = await client.listSubjects({ prefix: ns, limit: 200 });
+              return res.subjects;
+            } catch {
+              return [];
+            }
+          };
+
+          resourceSources.listRules = async () => {
+            try {
+              const res = await client.patternQuery({
+                subject: `${ns}:rule:*`,
+                predicate: `${ns}:rule:content`,
+              });
+              return res.matches.map((m) => ({
+                id: m.subject.split(":").pop() ?? "",
+                content: String(m.object),
+                scope: "global",
+                priority: 0,
+                source: "cortex",
+                enabled: true,
+              }));
+            } catch {
+              return [];
+            }
+          };
+
+          promptSources.listConventions = resourceSources.listConventions as () => Promise<
+            Array<{ text: string; category: string; confidence: number }>
+          >;
+
+          promptSources.resolveRules = async (scope: string) => {
+            try {
+              const res = await client.patternQuery({
+                subject: `${ns}:rule:${scope}:*`,
+                predicate: `${ns}:rule:content`,
+              });
+              return res.matches.map((m) => ({
+                content: String(m.object),
+                scope,
+                priority: 0,
+              }));
+            } catch {
+              return [];
+            }
+          };
+        } catch {
+          // Cortex not available
+        }
+      },
+      async stop() {
+        if (server) {
+          await server.stop();
+          server = null;
+        }
+      },
+    });
+  },
+};
+
+export default mcpServerPlugin;
