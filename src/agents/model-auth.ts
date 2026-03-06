@@ -47,12 +47,20 @@ function resolveProviderConfig(
   );
 }
 
+// OAuth placeholder values used in models config when a provider is
+// authenticated via OAuth profile. These must not be treated as real API keys.
+const OAUTH_PLACEHOLDER_VALUES = new Set(["minimax-oauth", "qwen-oauth"]);
+
 export function getCustomProviderApiKey(
   cfg: MayrosConfig | undefined,
   provider: string,
 ): string | undefined {
   const entry = resolveProviderConfig(cfg, provider);
-  return normalizeOptionalSecretInput(entry?.apiKey);
+  const key = normalizeOptionalSecretInput(entry?.apiKey);
+  if (key && OAUTH_PLACEHOLDER_VALUES.has(key)) {
+    return undefined;
+  }
+  return key;
 }
 
 function resolveProviderAuthOverride(
