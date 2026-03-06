@@ -30,6 +30,8 @@ export class MayrosClient {
   private client: GatewayChatClient | null = null;
   private readonly opts: Required<Pick<SdkOptions, "timeoutMs">> & SdkOptions;
   private connected = false;
+  private activeRunId: string | null = null;
+  private activeSessionKey: string | null = null;
 
   constructor(opts?: SdkOptions) {
     this.opts = { timeoutMs: DEFAULT_TIMEOUT, ...opts };
@@ -68,8 +70,14 @@ export class MayrosClient {
       throw new Error("Not connected. Call connect() first.");
     }
 
-    const sessionKey = this.opts.session ?? `sdk-${randomUUID()}`;
+    // When a session key is explicitly set, use it. Otherwise, derive a stable
+    // session key from the agent ID (if provided) so that messages to the same
+    // agent land in the same session across sendMessage calls.
+    const sessionKey =
+      this.opts.session ?? (this.opts.agent ? `sdk-${this.opts.agent}` : `sdk-${randomUUID()}`);
     const runId = randomUUID();
+    this.activeRunId = runId;
+    this.activeSessionKey = sessionKey;
 
     // Collect events via callback
     const events: SdkEvent[] = [];
@@ -125,15 +133,21 @@ export class MayrosClient {
               }
             : undefined,
         });
+        this.activeRunId = null;
+        this.activeSessionKey = null;
         done = true;
       } else if (eventName === "chat.error" && data) {
         pushEvent({
           type: "error",
           message: (data.message as string) ?? "Unknown error",
         });
+        this.activeRunId = null;
+        this.activeSessionKey = null;
         done = true;
       } else if (eventName === "chat.aborted") {
         pushEvent({ type: "error", message: "Aborted" });
+        this.activeRunId = null;
+        this.activeSessionKey = null;
         done = true;
       }
     };
@@ -141,6 +155,8 @@ export class MayrosClient {
     this.client.onDisconnected = () => {
       if (!done) {
         error = new Error("Gateway disconnected unexpectedly");
+        this.activeRunId = null;
+        this.activeSessionKey = null;
         done = true;
         if (resolve) {
           const r = resolve;
@@ -149,6 +165,21 @@ export class MayrosClient {
         }
       }
     };
+
+    // Forward model option by patching the session before sending.
+    // agentId is not a patchable session field in the protocol — it is
+    // encoded in the session key itself (agent option is used when computing
+    // the default session key above, so no separate patch is needed).
+    if (this.opts.model) {
+      try {
+        await this.client.patchSession({
+          key: sessionKey,
+          model: this.opts.model,
+        });
+      } catch {
+        // Best-effort: proceed even if patch fails (e.g., model unknown)
+      }
+    }
 
     await this.client.sendChat({
       sessionKey,
@@ -186,10 +217,22 @@ export class MayrosClient {
     return parts.join("");
   }
 
-  /** Abort the current chat. */
+  /** Abort the current chat without tearing down the connection. */
   async abort(): Promise<void> {
-    if (!this.client) return;
-    await this.disconnect();
+    if (!this.client || !this.connected) return;
+    const runId = this.activeRunId;
+    const sessionKey = this.activeSessionKey;
+    if (!runId || !sessionKey) {
+      // No active run — nothing to abort
+      return;
+    }
+    try {
+      await this.client.abortChat({ sessionKey, runId });
+    } catch {
+      // If the abort request fails (e.g. run already finished), disconnect as
+      // a last resort to unblock the caller.
+      await this.disconnect();
+    }
   }
 
   /** List available sessions. */
