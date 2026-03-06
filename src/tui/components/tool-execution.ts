@@ -1,5 +1,6 @@
 import { Box, Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { formatToolDetail, resolveToolDisplay } from "../../agents/tool-display.js";
+import { linkifyFilePaths } from "../linkify-paths.js";
 import { markdownTheme, theme } from "../theme/theme.js";
 import { sanitizeRenderableText } from "../tui-formatters.js";
 
@@ -121,10 +122,12 @@ export class ToolExecutionComponent extends Container {
     this.header.setText(theme.toolTitle(theme.bold(title)));
 
     const argLine = formatArgs(this.toolName, this.args);
-    this.argsLine.setText(argLine ? theme.dim(argLine) : theme.dim(" "));
+    this.argsLine.setText(
+      argLine ? linkifyFilePaths(argLine, { color: theme.filePath }) : theme.dim(" "),
+    );
 
     const raw = extractText(this.result);
-    const text = raw || (this.isPartial ? "…" : "");
+    const text = raw ? linkifyFilePaths(raw, { color: theme.filePath }) : this.isPartial ? "…" : "";
     if (!this.expanded && text) {
       const lines = text.split("\n");
       const preview =

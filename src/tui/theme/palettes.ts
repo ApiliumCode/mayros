@@ -20,6 +20,7 @@ export type Palette = {
   codeBlock: string;
   codeBorder: string;
   link: string;
+  filePath: string;
   error: string;
   success: string;
 };
@@ -44,6 +45,7 @@ export const DARK_PALETTE: Palette = {
   codeBlock: "#1E232A",
   codeBorder: "#343A45",
   link: "#7DD3A5",
+  filePath: "#87CEEB",
   error: "#F97066",
   success: "#7DD3A5",
 };
@@ -68,6 +70,7 @@ export const LIGHT_PALETTE: Palette = {
   codeBlock: "#F5F5F5",
   codeBorder: "#D0D0D0",
   link: "#2E8B57",
+  filePath: "#1E6091",
   error: "#CC3333",
   success: "#2E8B57",
 };
@@ -92,6 +95,7 @@ export const HIGH_CONTRAST_PALETTE: Palette = {
   codeBlock: "#111111",
   codeBorder: "#666666",
   link: "#00FF88",
+  filePath: "#00BFFF",
   error: "#FF4444",
   success: "#00FF88",
 };
