@@ -98,7 +98,12 @@ const interactivePermissionsPlugin = {
             sessionKey,
             timestamp: new Date().toISOString(),
           };
-          await audit.recordDecision(decision);
+          // Audit is best-effort — a Cortex outage must not crash the session.
+          try {
+            await audit.recordDecision(decision);
+          } catch (err) {
+            api.logger.warn(`interactive-permissions: audit record failed (auto_safe): ${err}`);
+          }
           return;
         }
 
@@ -128,7 +133,12 @@ const interactivePermissionsPlugin = {
               sessionKey,
               timestamp: new Date().toISOString(),
             };
-            await audit.recordDecision(decision);
+            // Audit is best-effort — a Cortex outage must not crash the session.
+            try {
+              await audit.recordDecision(decision);
+            } catch (err) {
+              api.logger.warn(`interactive-permissions: audit record failed (policy): ${err}`);
+            }
 
             if (!allowed) {
               return {
@@ -155,7 +165,14 @@ const interactivePermissionsPlugin = {
               sessionKey,
               timestamp: new Date().toISOString(),
             };
-            await audit.recordDecision(decision);
+            // Audit is best-effort — a Cortex outage must not crash the session.
+            try {
+              await audit.recordDecision(decision);
+            } catch (err) {
+              api.logger.warn(
+                `interactive-permissions: audit record failed (deny_default): ${err}`,
+              );
+            }
             return {
               block: true,
               blockReason: `Permission denied (default deny): no policy for tool "${toolName}"`,
@@ -176,7 +193,14 @@ const interactivePermissionsPlugin = {
             sessionKey,
             timestamp: new Date().toISOString(),
           };
-          await audit.recordDecision(decision);
+          // Audit is best-effort — a Cortex outage must not crash the session.
+          try {
+            await audit.recordDecision(decision);
+          } catch (err) {
+            api.logger.warn(
+              `interactive-permissions: audit record failed (deny_default/no-tty): ${err}`,
+            );
+          }
           return {
             block: true,
             blockReason: `Permission denied (default deny, no TTY): ${command ?? toolName}`,
@@ -211,7 +235,12 @@ const interactivePermissionsPlugin = {
           sessionKey,
           timestamp: new Date().toISOString(),
         };
-        await audit.recordDecision(decision);
+        // Audit is best-effort — a Cortex outage must not crash the session.
+        try {
+          await audit.recordDecision(decision);
+        } catch (err) {
+          api.logger.warn(`interactive-permissions: audit record failed (user_prompt): ${err}`);
+        }
 
         if (!promptResult.allowed) {
           return {
