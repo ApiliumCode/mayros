@@ -87,7 +87,9 @@ export async function resolveMediaMention(filePath: string): Promise<ChatAttachm
     const fileName = filePath.split("/").pop() ?? filePath;
 
     return { mimeType, fileName, content };
-  } catch {
+  } catch (err) {
+    // File unreadable or I/O error — log for debuggability
+    process.stderr.write(`[media-mention] failed to read ${filePath}: ${String(err)}\n`);
     return null;
   }
 }

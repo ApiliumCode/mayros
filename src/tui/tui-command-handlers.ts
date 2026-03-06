@@ -800,8 +800,9 @@ export function createCommandHandlers(context: CommandHandlerContext) {
               thinkingLevel: "off",
             });
             applySessionInfoFromPatch(result);
-          } catch {
+          } catch (err) {
             // Best-effort — fast mode works locally even without gateway
+            process.stderr.write(`[fast-mode] failed to set thinking off: ${String(err)}\n`);
           }
           state.outputStyle = "standard";
           chatLog.addSystem("fast mode enabled (thinking: off, style: standard)");
@@ -814,8 +815,11 @@ export function createCommandHandlers(context: CommandHandlerContext) {
               thinkingLevel: prevLevel,
             });
             applySessionInfoFromPatch(result);
-          } catch {
-            // Best-effort
+          } catch (err) {
+            // Best-effort — restore may fail if gateway is unreachable
+            process.stderr.write(
+              `[fast-mode] failed to restore thinking ${prevLevel}: ${String(err)}\n`,
+            );
           }
           chatLog.addSystem(`fast mode disabled (thinking: ${prevLevel})`);
         }
