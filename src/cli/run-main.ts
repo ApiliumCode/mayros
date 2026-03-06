@@ -11,6 +11,7 @@ import { enableConsoleCapture } from "../logging.js";
 import {
   getCommandPath,
   getFlagValue,
+  getPositiveIntFlagValue,
   getPrimaryCommand,
   hasFlag,
   hasHelpOrVersion,
@@ -95,16 +96,61 @@ export async function runCli(argv: string[] = process.argv) {
     getFlagValue(normalizedArgv, "-p") ?? getFlagValue(normalizedArgv, "--prompt");
   if (promptFlagValue !== undefined) {
     const { runHeadless } = await import("./headless-cli.js");
+
+    // Resolve --output-format, with --json as backward-compat shorthand
+    const outputFormatRaw = getFlagValue(normalizedArgv, "--output-format") ?? undefined;
+    const outputFormat: "text" | "json" | "stream-json" =
+      outputFormatRaw === "json" || outputFormatRaw === "stream-json"
+        ? outputFormatRaw
+        : hasFlag(normalizedArgv, "--json")
+          ? "json"
+          : outputFormatRaw === "text"
+            ? "text"
+            : "text";
+
+    // Resolve --model with alias support
+    const modelRaw = getFlagValue(normalizedArgv, "--model") ?? undefined;
+    let model: string | undefined;
+    if (modelRaw) {
+      const { resolveModelAlias } = await import("../models/model-aliases.js");
+      model = resolveModelAlias(modelRaw);
+    }
+
     await runHeadless({
       prompt: promptFlagValue ?? "",
       json: hasFlag(normalizedArgv, "--json"),
+      outputFormat,
       session: getFlagValue(normalizedArgv, "--session") ?? undefined,
       url: getFlagValue(normalizedArgv, "--url") ?? undefined,
       token: getFlagValue(normalizedArgv, "--token") ?? undefined,
       password: getFlagValue(normalizedArgv, "--password") ?? undefined,
       thinking: getFlagValue(normalizedArgv, "--thinking") ?? undefined,
       deliver: hasFlag(normalizedArgv, "--deliver"),
+      model,
+      maxTurns: getPositiveIntFlagValue(normalizedArgv, "--max-turns") ?? undefined,
+      maxBudgetUsd: parseBudgetFlag(getFlagValue(normalizedArgv, "--max-budget-usd")),
+      systemPrompt: getFlagValue(normalizedArgv, "--system-prompt") ?? undefined,
+      appendSystemPrompt: getFlagValue(normalizedArgv, "--append-system-prompt") ?? undefined,
+      tools: getFlagValue(normalizedArgv, "--tools") ?? undefined,
+      jsonSchema: getFlagValue(normalizedArgv, "--json-schema") ?? undefined,
     });
+    return;
+  }
+
+  // Continue last session: -c / --continue bypasses Commander and resumes the latest session.
+  if (hasFlag(normalizedArgv, "-c") || hasFlag(normalizedArgv, "--continue")) {
+    enableConsoleCapture();
+
+    const { buildProgram } = await import("./program.js");
+    const program = buildProgram(normalizedArgv);
+    const { registerCodeCli } = await import("./code-cli.js");
+    registerCodeCli(program);
+    await program.parseAsync([
+      ...normalizedArgv.slice(0, 2),
+      "code",
+      "--continue",
+      ...normalizedArgv.slice(2).filter((a) => a !== "-c" && a !== "--continue"),
+    ]);
     return;
   }
 
@@ -180,4 +226,15 @@ export async function runCli(argv: string[] = process.argv) {
 
 export function isCliMainModule(): boolean {
   return isMainModule({ currentFile: fileURLToPath(import.meta.url) });
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function parseBudgetFlag(raw: string | null | undefined): number | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const parsed = Number.parseFloat(raw);
+  if (Number.isNaN(parsed) || parsed <= 0) return undefined;
+  return parsed;
 }
