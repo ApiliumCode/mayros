@@ -523,7 +523,15 @@ class TalkModeManager(
             language = TalkModeRuntime.validatedLanguage(directive?.language),
             latencyTier = TalkModeRuntime.validatedLatencyTier(directive?.latencyTier),
           )
-        streamAndPlay(voiceId = voiceId!!, apiKey = apiKey!!, request = request)
+        val safeVoiceId = voiceId ?: run {
+          Log.w(tag, "voiceId became null after check, cannot stream")
+          return
+        }
+        val safeApiKey = apiKey ?: run {
+          Log.w(tag, "apiKey became null after check, cannot stream")
+          return
+        }
+        streamAndPlay(voiceId = safeVoiceId, apiKey = safeApiKey, request = request)
         Log.d(tag, "elevenlabs stream ok durMs=${SystemClock.elapsedRealtime() - ttsStarted}")
       }
     } catch (err: Throwable) {
