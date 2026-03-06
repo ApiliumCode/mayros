@@ -54,5 +54,7 @@ export function sendMarker(client: MayrosClient, file: string, line: number, tex
     `\`\`\`\n${text}\n\`\`\`\n\n` +
     `Please analyze this and suggest a resolution or improvement.`;
 
-  client.sendMessage(sessionKey, message).catch(() => {});
+  client.sendMessage(sessionKey, message).catch((e) => {
+    console.error("[Mayros] Failed to send marker analysis:", e);
+  });
 }
