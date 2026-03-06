@@ -167,7 +167,7 @@ export class WelcomeScreen implements Component {
     // Compose lines
     const lines: string[] = [];
 
-    // Top border: ╭─ Mayros v0.1.4 ─...─╮
+    // Top border: ╭─ Mayros v{version} ─...─╮
     const title = ` Mayros v${this.version} `;
     const titleLen = title.length;
     const remainingTop = innerWidth - 1 - titleLen; // -1 for initial ─
