@@ -142,8 +142,8 @@ export async function startTelegramWebhook(opts: {
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   runtime.log?.(`webhook listening on ${publicUrl}`);
 
-  const shutdown = () => {
-    server.close();
+  const shutdown = async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     void bot.stop();
     if (diagnosticsEnabled) {
       stopDiagnosticHeartbeat();
