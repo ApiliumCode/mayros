@@ -56,7 +56,7 @@ export function registerCodeCli(program: Command) {
           message: opts.message as string | undefined,
           timeoutMs,
           historyLimit: Number.isNaN(historyLimit) ? undefined : historyLimit,
-          cleanStart: Boolean(opts.clean),
+          cleanStart: true,
         });
       } catch (err) {
         defaultRuntime.error(String(err));
