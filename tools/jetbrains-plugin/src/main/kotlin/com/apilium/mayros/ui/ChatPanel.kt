@@ -370,7 +370,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     statusLabel.text = " Error "
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun loadSessions() {
@@ -396,7 +396,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     renderMessages()
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun sendMessage() {
@@ -441,7 +441,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     statusLabel.text = " Error "
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     override fun onConnected() {
