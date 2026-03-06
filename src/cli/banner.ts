@@ -65,48 +65,50 @@ export function formatCliBannerLine(version: string, options: BannerOptions = {}
   return `${line1}\n${line2}`;
 }
 
-const MAYROS_ASCII = [
-  "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
-  "██░▄▀▄░██░▄▄▀██░██░██░▄▄▀██░▄▄▄░██░▄▄▄░██",
-  "██░█░█░██░▀▀░██░▀▀░██░▀▀▄██░███░██░▀▀▀▄██",
-  "██░███░██░██░██░██░██░██░██░▀▀▀░██░▀▀▀░██",
-  "▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
-  "                  ⚡🛡️ MAYROS ⚡🛡️                    ",
-  " ",
+// Mayros pixel avatar — gold(G) orange(O) dark(D) face
+// Rendered with ANSI colors in formatCliBannerArt()
+const MAYROS_AVATAR = [
+  "          ▄▄██████▄▄          ",
+  "        ██▓▓▓▓▓▓▓▓▓▓██        ",
+  "      ██▓▓▓▓▓▓▓▓▓▓▓▓▓▓██      ",
+  "    ██▓▓██████████████▓▓██    ",
+  "  ▄▄▓▓██              ██▓▓▄▄  ",
+  "  ██░░██    ▓▓    ▓▓    ██░░██  ",
+  "  ██░░██              ██░░██  ",
+  "  ▀▀▓▓██    ╰━━╯    ██▓▓▀▀  ",
+  "    ██▓▓██████████████▓▓██    ",
+  "      ██░░░░░░░░░░░░░░██      ",
+  "        ██░░░░░░░░░░██        ",
+  "          ▀▀██████▀▀          ",
 ];
 
 export function formatCliBannerArt(options: BannerOptions = {}): string {
   const rich = options.richTty ?? isRich();
+  const label = "        ⚡🛡️ MAYROS ⚡🛡️";
   if (!rich) {
-    return MAYROS_ASCII.join("\n");
+    return [...MAYROS_AVATAR, label].join("\n");
   }
 
-  const colorChar = (ch: string) => {
-    if (ch === "█") {
-      return theme.accentBright(ch);
-    }
-    if (ch === "░") {
-      return theme.accentDim(ch);
-    }
-    if (ch === "▀") {
-      return theme.accent(ch);
-    }
-    return theme.muted(ch);
+  // Gold = ▓▓ parts (helmet/frame), Orange = ░░ (chin/sides)
+  // Dark = ██ inside face, █/▀/▄ = outline
+  const colorChar = (ch: string, _idx: number, line: string, charIdx: number) => {
+    // Detect context: ▓▓ = gold, ░░ = orange, ██ inside = dark face
+    if (ch === "▓") return theme.accentBright(ch);
+    if (ch === "░") return theme.accent(ch);
+    if (ch === "█" || ch === "▄" || ch === "▀") return theme.muted(ch);
+    if (ch === "╰" || ch === "━" || ch === "╯") return theme.accentBright(ch);
+    if (ch === " " && charIdx > 4 && charIdx < line.length - 4) return ch;
+    return ch;
   };
 
-  const colored = MAYROS_ASCII.map((line) => {
-    if (line.includes("MAYROS")) {
-      return (
-        theme.muted("              ") +
-        theme.accent("⚡🛡️") +
-        theme.info(" MAYROS ") +
-        theme.accent("⚡🛡️")
-      );
-    }
-    return splitGraphemes(line).map(colorChar).join("");
+  const colored = MAYROS_AVATAR.map((line) => {
+    return splitGraphemes(line)
+      .map((ch, idx) => colorChar(ch, idx, line, idx))
+      .join("");
   });
-
-  return colored.join("\n");
+  const labelLine =
+    theme.muted("        ") + theme.accent("⚡🛡️") + theme.info(" MAYROS ") + theme.accent("⚡🛡️");
+  return [...colored, labelLine].join("\n");
 }
 
 export function emitCliBanner(version: string, options: BannerOptions = {}) {
