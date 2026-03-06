@@ -14,6 +14,11 @@
 import type { CortexClientLike } from "../shared/cortex-client.js";
 import type { RiskLevel } from "./intent-classifier.js";
 import { riskLevelSatisfies } from "./intent-classifier.js";
+import {
+  isWildcardExpression,
+  parsePermissionWildcard,
+  matchesWildcardPermission,
+} from "./wildcard-matcher.js";
 
 // ============================================================================
 // Types
@@ -240,20 +245,38 @@ export class PolicyStore {
    * Find the first matching policy for a given tool call.
    *
    * Matching precedence:
-   * 1. If command is provided, match against commandPattern or matcher
-   * 2. Match against toolName
-   * 3. If policy has maxRiskLevel, only match if risk <= maxRiskLevel
+   * 1. If matcher is a wildcard expression (e.g. "Bash(git:*)"), use wildcard matching
+   * 2. If command is provided, match against commandPattern or matcher
+   * 3. Match against toolName
+   * 4. If policy has maxRiskLevel, only match if risk <= maxRiskLevel
    */
   findMatchingPolicy(
     toolName: string,
     command?: string,
     riskLevel?: RiskLevel,
+    args?: Record<string, unknown>,
   ): PermissionPolicy | undefined {
     for (const policy of this.policies.values()) {
       // Check maxRiskLevel constraint
       if (policy.maxRiskLevel && riskLevel) {
         if (!riskLevelSatisfies(riskLevel, policy.maxRiskLevel)) {
           continue;
+        }
+      }
+
+      // Check wildcard permission expressions (e.g. "Bash(git:*)")
+      if (isWildcardExpression(policy.matcher)) {
+        const parsed = parsePermissionWildcard(policy.matcher);
+        if (parsed) {
+          // Build args from explicit args param or synthesize from command
+          const effectiveArgs: Record<string, unknown> = args ?? {};
+          if (command && !effectiveArgs.command) {
+            effectiveArgs.command = command;
+          }
+          if (matchesWildcardPermission(toolName, effectiveArgs, parsed)) {
+            return policy;
+          }
+          continue; // Wildcard expression checked — skip legacy matching
         }
       }
 
