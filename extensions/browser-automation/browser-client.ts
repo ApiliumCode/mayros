@@ -195,6 +195,10 @@ export class BrowserClient {
 
   /**
    * Navigate to URL.
+   *
+   * Security: Uses CDP `Runtime.evaluate` to read page title/URL from the
+   * browser page context (same trust boundary as Puppeteer's page.evaluate).
+   * The evaluated expression is a static string with no user input.
    */
   async navigate(url: string): Promise<NavigateResult> {
     const result = (await this.sendCommand("Page.navigate", { url })) as Record<string, unknown>;
@@ -248,6 +252,12 @@ export class BrowserClient {
 
   /**
    * Click element by CSS selector.
+   *
+   * Security: The expression string is evaluated inside the inspected browser
+   * page via the Chrome DevTools Protocol (CDP) `Runtime.evaluate`.  This is
+   * the same trust boundary as Puppeteer's `page.evaluate` -- the code runs
+   * in the *target page's* JS context, not in the Node host process.  The
+   * selector is escaped to prevent injection into the evaluated expression.
    */
   async click(selector: string): Promise<void> {
     const escapedSelector = selector.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -288,6 +298,14 @@ export class BrowserClient {
 
   /**
    * Evaluate JavaScript in page context.
+   *
+   * Security: The expression is evaluated via CDP `Runtime.evaluate` inside
+   * the *inspected browser page*, not the Node host.  This is functionally
+   * identical to Puppeteer's `page.evaluate` pattern -- the host process
+   * sends a string over the CDP WebSocket and the browser's V8 instance
+   * executes it.  The Node process itself never calls `eval()` or
+   * `new Function()`.  Callers are responsible for sanitizing user-supplied
+   * input before embedding it in the expression string.
    */
   async evaluate(expression: string): Promise<unknown> {
     const result = (await this.sendCommand("Runtime.evaluate", {
@@ -305,6 +323,9 @@ export class BrowserClient {
 
   /**
    * Get page HTML content.
+   *
+   * Security: Reads the page DOM via CDP `Runtime.evaluate` with a static
+   * expression.  Executes in the browser page context, not in Node.
    */
   async getContent(): Promise<string> {
     const result = (await this.sendCommand("Runtime.evaluate", {
