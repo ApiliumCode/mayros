@@ -158,13 +158,20 @@ export class BrowserClient {
 
   /**
    * Disconnect from Chrome.
+   * Rejects all in-flight CDP commands before clearing the pending map so
+   * callers are not left with promises that never settle.
    */
   async disconnect(): Promise<void> {
+    // Reject all in-flight CDP commands before clearing
+    for (const [id, { reject }] of this.pending) {
+      reject(new Error(`CDP command ${id} aborted: client disconnected`));
+    }
+    this.pending.clear();
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    this.pending.clear();
   }
 
   /**
