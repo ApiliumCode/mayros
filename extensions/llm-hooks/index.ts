@@ -47,6 +47,14 @@ const llmHooksPlugin = {
     const cache = new HookCache(cfg.globalCacheTtlMs);
     let llmCallFn: LlmCallFn | undefined;
 
+    // Tracks whether event handlers have already been registered.
+    // registerEventHandlers() must be idempotent: calling it more than once
+    // (e.g. via the `llm-hooks reload` CLI command) would stack duplicate
+    // handlers on the same events, causing hooks to fire multiple times per
+    // event. The flag is reset in stop() so a full service restart re-registers
+    // cleanly.
+    let handlersRegistered = false;
+
     // Concurrency limiter
     let activeEvals = 0;
 
@@ -153,6 +161,14 @@ const llmHooksPlugin = {
     // ========================================================================
 
     function registerEventHandlers(): void {
+      // Guard against duplicate registration. On reload the hook definitions
+      // are refreshed in-memory (reloadHooks()), but the api.on() handlers
+      // already registered will pick up the updated `hooks` array because they
+      // close over it via runHooksForEvent(). Re-calling api.on() would stack
+      // a second (and subsequent) copy of each handler on every reload.
+      if (handlersRegistered) return;
+      handlersRegistered = true;
+
       // Collect unique event names from all hooks
       const eventNames = new Set<string>();
       for (const hook of hooks) {
@@ -464,6 +480,7 @@ const llmHooksPlugin = {
       async stop() {
         cache.clearAll();
         hooks = [];
+        handlersRegistered = false;
         api.logger.info("llm-hooks: service stopped");
       },
     });
