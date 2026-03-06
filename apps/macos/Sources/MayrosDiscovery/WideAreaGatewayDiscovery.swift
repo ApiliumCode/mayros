@@ -240,7 +240,7 @@ enum WideAreaGatewayDiscovery {
         }
         process.waitUntilExit()
 
-        let data = (try? outPipe.fileHandleForReading.readToEnd()) ?? Data()
+        let data = outPipe.fileHandleForReading.readToEndSafely()
         let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         return output?.isEmpty == false ? output : nil
     }
