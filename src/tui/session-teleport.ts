@@ -65,8 +65,17 @@ export function estimateTokenSize(token: string): {
   messageCount: number;
 } {
   const base64 = token.slice(TELEPORT_MAGIC.length);
-  return {
-    compressedBytes: Math.ceil(base64.length * 0.75),
-    messageCount: 0, // Would need to decompress to count
-  };
+  const compressedBytes = Math.ceil(base64.length * 0.75);
+
+  let messageCount = 0;
+  try {
+    const compressed = Buffer.from(base64, "base64url");
+    const json = inflateSync(compressed).toString("utf-8");
+    const payload = JSON.parse(json) as { messages?: unknown[] };
+    messageCount = Array.isArray(payload.messages) ? payload.messages.length : 0;
+  } catch {
+    // Best-effort — corrupted tokens return 0
+  }
+
+  return { compressedBytes, messageCount };
 }

@@ -5,8 +5,22 @@
  * and appends their contents as context blocks.
  */
 
-import { readFile, stat, readdir } from "node:fs/promises";
+import { readFile, stat, readdir, open } from "node:fs/promises";
 import path from "node:path";
+
+async function isBinaryFile(filePath: string): Promise<boolean> {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+    const buf = Buffer.alloc(512);
+    const { bytesRead } = await handle.read(buf, 0, 512, 0);
+    return buf.subarray(0, bytesRead).includes(0);
+  } catch {
+    return false;
+  } finally {
+    await handle?.close();
+  }
+}
 
 /** Regex to match @file mentions in user text */
 const FILE_MENTION_PATTERN = /@((?:~\/|\.\/|\/|[\w][\w.-]*\/)[\w./-]+)/g;
@@ -54,6 +68,16 @@ export async function expandFileMentions(
           original: `@${filePath}`,
           resolvedPath: resolved,
           content: `[File too large: ${fileStat.size} bytes]`,
+        });
+        continue;
+      }
+
+      // Check for binary content
+      if (await isBinaryFile(resolved)) {
+        mentions.push({
+          original: `@${filePath}`,
+          resolvedPath: resolved,
+          content: `[Binary file: ${fileStat.size} bytes]`,
         });
         continue;
       }
