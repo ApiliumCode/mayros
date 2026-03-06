@@ -102,7 +102,7 @@ class TracesPanel(@Suppress("unused") private val project: Project) : JPanel(Bor
                     statusLabel.text = "Error: ${e.message}"
                 }
             }
-        }.start()
+        }.apply { isDaemon = true }.start()
     }
 
     private fun clearRegisteredListeners() {

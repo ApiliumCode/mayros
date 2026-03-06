@@ -1,6 +1,7 @@
 package com.apilium.mayros.ui
 
 import com.apilium.mayros.MayrosService
+import com.intellij.openapi.Disposable
 import java.awt.BorderLayout
 import java.awt.GridLayout
 import javax.swing.*
@@ -11,7 +12,7 @@ import javax.swing.*
  * Provides connect/disconnect buttons and displays connection status.
  * For full settings, use the IDE Settings > Tools > Mayros configurable.
  */
-class SettingsPanel : JPanel(BorderLayout()), MayrosService.ConnectionListener {
+class SettingsPanel : JPanel(BorderLayout()), MayrosService.ConnectionListener, Disposable {
 
     private val connectButton = JButton("Connect")
     private val disconnectButton = JButton("Disconnect")
@@ -41,7 +42,7 @@ class SettingsPanel : JPanel(BorderLayout()), MayrosService.ConnectionListener {
                     statusLabel.text = if (ok) "Connected" else "Connection failed"
                     updateButtonState()
                 }
-            }.start()
+            }.apply { isDaemon = true }.start()
         }
 
         disconnectButton.addActionListener {
@@ -67,5 +68,9 @@ class SettingsPanel : JPanel(BorderLayout()), MayrosService.ConnectionListener {
             statusLabel.text = "Disconnected: $reason"
             updateButtonState()
         }
+    }
+
+    override fun dispose() {
+        service.removeListener(this)
     }
 }
