@@ -133,6 +133,8 @@ async function grepBuiltin(
   return matches;
 }
 
+export { grepBuiltin };
+
 export function registerCodeGrep(api: MayrosPluginApi, cfg: CodeToolsConfig): void {
   api.registerTool(
     {

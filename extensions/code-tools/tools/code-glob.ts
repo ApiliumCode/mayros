@@ -6,6 +6,46 @@ import { ToolInputError } from "../../../src/agents/tools/common.js";
 import type { CodeToolsConfig } from "../config.js";
 import { resolveSafePath, isPathInside } from "../path-utils.js";
 
+/**
+ * Core glob logic extracted for testability.
+ * Finds files matching a pattern, sorted by mtime (newest first),
+ * respecting standard ignore rules.
+ */
+export async function globFiles(
+  pattern: string,
+  basePath: string,
+  maxResults: number,
+): Promise<{ files: string[]; totalFound: number; truncated: boolean }> {
+  const files = await fg(pattern, {
+    cwd: basePath,
+    dot: false,
+    ignore: ["**/node_modules/**", "**/.git/**"],
+    onlyFiles: true,
+    followSymbolicLinks: false,
+    suppressErrors: true,
+  });
+
+  const withStats = await Promise.all(
+    files.slice(0, maxResults * 2).map(async (file) => {
+      try {
+        const stat = await fs.stat(`${basePath}/${file}`);
+        return { file, mtime: stat.mtimeMs };
+      } catch {
+        return { file, mtime: 0 };
+      }
+    }),
+  );
+
+  withStats.sort((a, b) => b.mtime - a.mtime);
+  const limited = withStats.slice(0, maxResults);
+
+  return {
+    files: limited.map((e) => e.file),
+    totalFound: files.length,
+    truncated: files.length > maxResults,
+  };
+}
+
 export function registerCodeGlob(api: MayrosPluginApi, cfg: CodeToolsConfig): void {
   api.registerTool(
     {

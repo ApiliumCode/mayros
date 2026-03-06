@@ -12,11 +12,50 @@ import { ToolInputError } from "../../../src/agents/tools/common.js";
 import type { CodeToolsConfig } from "../config.js";
 import { resolveSafePath } from "../path-utils.js";
 
-type LsEntry = {
+export type LsEntry = {
   name: string;
   type: "file" | "directory" | "symlink";
   size?: number;
 };
+
+/**
+ * Core listing logic extracted for testability.
+ * Lists entries in a directory, sorted: directories first, then files, alphabetical.
+ */
+export async function listDirectory(dirPath: string): Promise<LsEntry[]> {
+  const dirents = await fs.readdir(dirPath, { withFileTypes: true });
+
+  const entries: LsEntry[] = [];
+  for (const d of dirents) {
+    const entryType = d.isSymbolicLink()
+      ? ("symlink" as const)
+      : d.isDirectory()
+        ? ("directory" as const)
+        : ("file" as const);
+
+    const entry: LsEntry = { name: d.name, type: entryType };
+
+    if (entryType === "file") {
+      try {
+        const stat = await fs.stat(path.join(dirPath, d.name));
+        entry.size = stat.size;
+      } catch {
+        // size unavailable
+      }
+    }
+
+    entries.push(entry);
+  }
+
+  // Sort: directories first, then files, alphabetical within each group
+  entries.sort((a, b) => {
+    if (a.type === "directory" && b.type !== "directory") return -1;
+    if (a.type !== "directory" && b.type === "directory") return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return entries;
+}
 
 export function registerCodeLs(api: MayrosPluginApi, cfg: CodeToolsConfig): void {
   api.registerTool(
