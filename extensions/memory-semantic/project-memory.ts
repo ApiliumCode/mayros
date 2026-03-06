@@ -204,7 +204,20 @@ export function formatFindingsForPrompt(findings: SessionFinding[]): string {
 // ProjectMemory class
 // ============================================================================
 
+// ============================================================================
+// Stats cache
+// ============================================================================
+
+type StatsCache = {
+  value: { conventions: number; decisions: number; findings: number };
+  expiresAt: number;
+};
+
+const STATS_TTL_MS = 30_000;
+
 export class ProjectMemory {
+  private statsCache: StatsCache | null = null;
+
   constructor(
     private readonly client: CortexClient,
     private readonly ns: string,
@@ -562,32 +575,46 @@ export class ProjectMemory {
     decisions: number;
     findings: number;
   }> {
+    // Return cached value if still fresh
+    const now = Date.now();
+    if (this.statsCache !== null && now < this.statsCache.expiresAt) {
+      return this.statsCache.value;
+    }
+
     let conventions = 0;
     let decisions = 0;
     let findings = 0;
 
     try {
-      const statusMatches = await this.client.patternQuery({
-        predicate: projectPredicate(this.ns, "status"),
-        object: "active",
-        limit: 10000,
-      });
+      // Limit to 100 — we only need counts, not full content
+      const [statusMatches, sessionMatches] = await Promise.all([
+        this.client.patternQuery({
+          predicate: projectPredicate(this.ns, "status"),
+          object: "active",
+          limit: 100,
+        }),
+        this.client.patternQuery({
+          predicate: `${this.ns}:session:type`,
+          limit: 100,
+        }),
+      ]);
 
       for (const match of statusMatches.matches) {
         if (match.subject.includes(":project:convention:")) conventions++;
         else if (match.subject.includes(":project:decision:")) decisions++;
       }
 
-      const sessionMatches = await this.client.patternQuery({
-        predicate: `${this.ns}:session:type`,
-        limit: 10000,
-      });
       findings = sessionMatches.matches.length;
     } catch {
-      // Stats unavailable
+      // Stats unavailable — return stale cache if present, otherwise zeros
+      if (this.statsCache !== null) {
+        return this.statsCache.value;
+      }
     }
 
-    return { conventions, decisions, findings };
+    const value = { conventions, decisions, findings };
+    this.statsCache = { value, expiresAt: now + STATS_TTL_MS };
+    return value;
   }
 }
 
