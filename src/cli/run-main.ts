@@ -169,8 +169,10 @@ export async function runCli(argv: string[] = process.argv) {
   installUnhandledRejectionHandler();
 
   process.on("uncaughtException", (error) => {
-    console.error("[mayros] Uncaught exception:", formatUncaughtError(error));
-    process.exit(1);
+    const msg = `[mayros] Uncaught exception: ${formatUncaughtError(error)}\n`;
+    process.stderr.write(msg, () => {
+      process.exit(1);
+    });
   });
 
   const parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
