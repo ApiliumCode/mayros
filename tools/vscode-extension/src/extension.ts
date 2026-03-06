@@ -36,8 +36,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand("mayros.connect", async () => {
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
       try {
-        await client!.connect();
+        await client.connect();
         vscode.window.showInformationMessage("Connected to Mayros gateway");
         refreshAll();
       } catch (e) {
@@ -48,7 +52,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("mayros.disconnect", async () => {
-      await client!.disconnect();
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      await client.disconnect();
       vscode.window.showInformationMessage("Disconnected from Mayros gateway");
       refreshAll();
     }),
@@ -58,34 +66,62 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("mayros.openChat", () => {
-      ChatPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      ChatPanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openPlan", () => {
-      PlanPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      PlanPanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openTrace", () => {
-      TracePanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      TracePanel.createOrShow(context.extensionUri, client);
     }),
 
     vscode.commands.registerCommand("mayros.openKg", () => {
-      KgPanel.createOrShow(context.extensionUri, client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      KgPanel.createOrShow(context.extensionUri, client);
     }),
 
     // Editor context actions
     vscode.commands.registerCommand("mayros.explainCode", () => {
-      explainCode(client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      explainCode(client);
     }),
 
     vscode.commands.registerCommand("mayros.sendSelection", () => {
-      sendSelection(client!);
+      if (!client) {
+        vscode.window.showWarningMessage("Mayros client not initialized");
+        return;
+      }
+      sendSelection(client);
     }),
 
     vscode.commands.registerCommand(
       "mayros.sendMarker",
       (file: string, line: number, text: string) => {
-        sendMarker(client!, file, line, text);
+        if (!client) {
+          vscode.window.showWarningMessage("Mayros client not initialized");
+          return;
+        }
+        sendMarker(client, file, line, text);
       },
     ),
 
@@ -96,33 +132,32 @@ export function activate(context: vscode.ExtensionContext): void {
   // React to configuration changes
   context.subscriptions.push(
     onConfigChange((newConfig) => {
-      if (client && client.connected) {
-        client
-          .disconnect()
-          .then(() => {
-            client = new MayrosClient(newConfig.gatewayUrl, {
-              maxReconnectAttempts: newConfig.maxReconnectAttempts,
-              reconnectDelayMs: newConfig.reconnectDelayMs,
-              token: newConfig.gatewayToken || undefined,
-            });
-            // Re-wire tree providers
-            sessionsProvider.setClient(client!);
-            agentsProvider.setClient(client!);
-            skillsProvider.setClient(client!);
-            if (newConfig.autoConnect) {
-              client!.connect().catch(() => {});
-            }
-          })
-          .catch(() => {});
-      } else {
+      const rewireClient = (): void => {
         client = new MayrosClient(newConfig.gatewayUrl, {
           maxReconnectAttempts: newConfig.maxReconnectAttempts,
           reconnectDelayMs: newConfig.reconnectDelayMs,
           token: newConfig.gatewayToken || undefined,
         });
-        sessionsProvider.setClient(client!);
-        agentsProvider.setClient(client!);
-        skillsProvider.setClient(client!);
+        sessionsProvider.setClient(client);
+        agentsProvider.setClient(client);
+        skillsProvider.setClient(client);
+        if (newConfig.autoConnect) {
+          client.connect().catch((e) => {
+            console.error("[Mayros] Auto-reconnect after config change failed:", e);
+          });
+        }
+      };
+
+      if (client && client.connected) {
+        client
+          .disconnect()
+          .then(rewireClient)
+          .catch((e) => {
+            console.error("[Mayros] Disconnect during config change failed:", e);
+            rewireClient();
+          });
+      } else {
+        rewireClient();
       }
     }),
   );
@@ -134,12 +169,15 @@ export function activate(context: vscode.ExtensionContext): void {
       .then(() => {
         refreshAll();
       })
-      .catch(() => {
+      .catch((e) => {
+        console.error("[Mayros] Initial auto-connect failed, retrying in 2s:", e);
         setTimeout(() => {
           client
             ?.connect()
             .then(() => refreshAll())
-            .catch(() => {});
+            .catch((retryErr) => {
+              console.error("[Mayros] Auto-connect retry failed:", retryErr);
+            });
         }, 2000);
       });
   }

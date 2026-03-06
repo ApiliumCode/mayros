@@ -21,7 +21,9 @@ export async function explainCode(client: MayrosClient): Promise<void> {
     `\`\`\`${language}\n${text}\n\`\`\`\n\n` +
     `Please explain what this code does, its purpose, and any notable patterns or concerns.`;
 
-  client.sendMessage(explainSessionKey, message).catch(() => {});
+  client.sendMessage(explainSessionKey, message).catch((e) => {
+    console.error("[Mayros] Failed to send explain request:", e);
+  });
 }
 
 /**
@@ -38,7 +40,9 @@ export async function sendSelection(client: MayrosClient): Promise<void> {
   const message =
     `Here is code from \`${fileName}\`${langSuffix}:\n\n` + `\`\`\`${language}\n${text}\n\`\`\``;
 
-  client.sendMessage(actionsSessionKey, message).catch(() => {});
+  client.sendMessage(actionsSessionKey, message).catch((e) => {
+    console.error("[Mayros] Failed to send selection:", e);
+  });
 }
 
 /* ------------------------------------------------------------------ */
