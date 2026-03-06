@@ -27,6 +27,11 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SkillTreeItem
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  /** Dispose the internal event emitter. */
+  dispose(): void {
+    this._onDidChangeTreeData.dispose();
+  }
+
   getTreeItem(element: SkillTreeItem): vscode.TreeItem {
     return element;
   }
