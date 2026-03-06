@@ -13,9 +13,22 @@ export type AnalyticsConfig = {
   flushIntervalMs: number;
   /** Event TTL in ms (default: 3_600_000). */
   eventTtlMs: number;
+  /**
+   * HTTP endpoint for batch event delivery (default: "" — local-only logging).
+   * When non-empty, events are POSTed as JSON to this URL.
+   * Example: "https://analytics.apilium.com/batch"
+   */
+  endpoint: string;
 };
 
-const ALLOWED_KEYS = ["enabled", "privacyMode", "maxBufferSize", "flushIntervalMs", "eventTtlMs"];
+const ALLOWED_KEYS = [
+  "enabled",
+  "privacyMode",
+  "maxBufferSize",
+  "flushIntervalMs",
+  "eventTtlMs",
+  "endpoint",
+];
 
 function assertAllowedKeys(value: Record<string, unknown>, allowed: string[], label: string) {
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
@@ -40,6 +53,7 @@ export function parseAnalyticsConfig(value: unknown): AnalyticsConfig {
       maxBufferSize: 500,
       flushIntervalMs: 30_000,
       eventTtlMs: 3_600_000,
+      endpoint: "",
     };
   }
 
@@ -64,6 +78,8 @@ export function parseAnalyticsConfig(value: unknown): AnalyticsConfig {
       typeof cfg.eventTtlMs === "number" && cfg.eventTtlMs >= 60_000
         ? Math.floor(cfg.eventTtlMs)
         : 3_600_000,
+    endpoint:
+      typeof cfg.endpoint === "string" && cfg.endpoint.trim().length > 0 ? cfg.endpoint.trim() : "",
   };
 }
 
