@@ -1,0 +1,50 @@
+{
+  "id": "analytics",
+  "kind": "observability",
+  "uiHints": {
+    "enabled": {
+      "label": "Enable Analytics",
+      "help": "Opt-in usage analytics collection (default: false)"
+    },
+    "privacyMode": {
+      "label": "Privacy Mode",
+      "placeholder": "anonymous",
+      "help": "\"anonymous\" hashes IDs, \"identified\" keeps raw, \"off\" disables collection"
+    },
+    "endpoint": {
+      "label": "Endpoint",
+      "placeholder": "https://analytics.apilium.com/batch",
+      "help": "HTTP endpoint for batch event delivery (empty = local-only logging)"
+    },
+    "maxBufferSize": {
+      "label": "Max Buffer Size",
+      "placeholder": "500",
+      "advanced": true,
+      "help": "Maximum events in buffer before flush"
+    },
+    "flushIntervalMs": {
+      "label": "Flush Interval (ms)",
+      "placeholder": "30000",
+      "advanced": true,
+      "help": "Interval between automatic flushes"
+    },
+    "eventTtlMs": {
+      "label": "Event TTL (ms)",
+      "placeholder": "3600000",
+      "advanced": true,
+      "help": "Time-to-live for buffered events"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "privacyMode": { "type": "string", "enum": ["anonymous", "identified", "off"] },
+      "endpoint": { "type": "string" },
+      "maxBufferSize": { "type": "number", "minimum": 1, "maximum": 10000 },
+      "flushIntervalMs": { "type": "number", "minimum": 1000 },
+      "eventTtlMs": { "type": "number", "minimum": 60000 }
+    }
+  }
+}
