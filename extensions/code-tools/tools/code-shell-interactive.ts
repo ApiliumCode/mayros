@@ -1,0 +1,147 @@
+/**
+ * code_shell_interactive tool — Execute interactive commands via PTY.
+ *
+ * Uses node-pty for commands that require a terminal (vim, git rebase -i, etc.).
+ * Input lines can be fed sequentially.
+ */
+
+import { Type } from "@sinclair/typebox";
+import type { MayrosPluginApi } from "mayros/plugin-sdk";
+import { ToolInputError } from "../../../src/agents/tools/common.js";
+import type { CodeToolsConfig } from "../config.js";
+
+// ANSI escape code stripping
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+    .replace(/\x1b\][^\x07]*\x07/g, "") // OSC sequences
+    .replace(/\x1b[()][AB012]/g, "") // Character set
+    .replace(/\x1b[[()#;?]*[0-9;]*[a-zA-Z]/g, "");
+}
+
+export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeToolsConfig): void {
+  api.registerTool(
+    {
+      name: "code_shell_interactive",
+      label: "Interactive Shell",
+      description:
+        "Execute an interactive command in a pseudo-terminal (PTY). Useful for commands that require terminal input like git rebase -i, python REPL, or less. Input lines are fed sequentially.",
+      parameters: Type.Object({
+        command: Type.String({ description: "Shell command to execute in PTY" }),
+        timeout: Type.Optional(
+          Type.Number({ description: "Timeout in milliseconds (default: 30000)" }),
+        ),
+        input: Type.Optional(
+          Type.Array(Type.String(), { description: "Lines of input to feed to the process" }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        if (!cfg.shellEnabled) {
+          throw new ToolInputError("Shell tool is disabled in configuration");
+        }
+
+        const p = params as { command?: string; timeout?: number; input?: string[] };
+        if (typeof p.command !== "string" || !p.command.trim()) {
+          throw new ToolInputError("command required");
+        }
+
+        const command = p.command.trim();
+        const timeout =
+          typeof p.timeout === "number"
+            ? Math.max(1000, Math.min(Math.trunc(p.timeout), cfg.shellTimeout))
+            : 30000;
+        const inputLines = Array.isArray(p.input)
+          ? p.input.filter((l) => typeof l === "string")
+          : [];
+
+        const MAX_OUTPUT = 1024 * 1024; // 1MB
+
+        // Dynamic import node-pty
+        let pty: typeof import("@lydell/node-pty");
+        try {
+          pty = await import("@lydell/node-pty");
+        } catch {
+          throw new ToolInputError(
+            "node-pty is not available. Install @lydell/node-pty for interactive shell support.",
+          );
+        }
+
+        const startTime = Date.now();
+
+        return new Promise((resolve) => {
+          let output = "";
+          let exitCode = -1;
+          let exited = false;
+
+          const shell = process.env.SHELL ?? "/bin/bash";
+          const proc = pty.spawn(shell, ["-c", command], {
+            name: "xterm-256color",
+            cols: 120,
+            rows: 40,
+            cwd: cfg.workspaceRoot,
+            env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
+          });
+
+          const timer = setTimeout(() => {
+            if (!exited) {
+              proc.kill();
+              output += "\n[Process killed after timeout]";
+              exitCode = 137;
+              finish();
+            }
+          }, timeout);
+
+          proc.onData((data: string) => {
+            if (output.length < MAX_OUTPUT) {
+              output += data;
+            }
+          });
+
+          proc.onExit(({ exitCode: code }) => {
+            exited = true;
+            exitCode = code;
+            clearTimeout(timer);
+            finish();
+          });
+
+          // Feed input lines with delays
+          if (inputLines.length > 0) {
+            let lineIdx = 0;
+            const feedNext = () => {
+              if (lineIdx < inputLines.length && !exited) {
+                proc.write(inputLines[lineIdx] + "\n");
+                lineIdx++;
+                setTimeout(feedNext, 100);
+              }
+            };
+            // Start feeding after a small delay for process startup
+            setTimeout(feedNext, 200);
+          }
+
+          function finish() {
+            const duration = Date.now() - startTime;
+            const cleanOutput = stripAnsi(output).trim();
+            const truncated = output.length >= MAX_OUTPUT;
+
+            const parts: string[] = [];
+            if (cleanOutput) {
+              parts.push(truncated ? cleanOutput + "\n[Output truncated at 1MB]" : cleanOutput);
+            }
+            if (exitCode !== 0) {
+              parts.push(`[exit code: ${exitCode}]`);
+            }
+
+            const text = parts.join("\n\n") || "(no output)";
+
+            resolve({
+              content: [{ type: "text" as const, text }],
+              details: { command, exitCode, duration },
+            });
+          }
+        });
+      },
+    },
+    { name: "code_shell_interactive" },
+  );
+}
