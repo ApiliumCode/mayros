@@ -1,5 +1,5 @@
 {
-  "name": "@apilium/mayros-plugin-analytics",
+  "name": "@apilium/mayros-analytics",
   "version": "0.1.0",
   "private": true,
   "type": "module",
