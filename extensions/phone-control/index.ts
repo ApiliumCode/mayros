@@ -307,10 +307,14 @@ export default function register(api: MayrosPluginApi) {
       };
 
       // Best effort; don't crash the gateway if state is corrupt.
-      await tick().catch(() => {});
+      await tick().catch((err) => {
+        api.logger.warn(`phone-control: initial tick failed: ${String(err)}`);
+      });
 
       expiryInterval = setInterval(() => {
-        tick().catch(() => {});
+        tick().catch((err) => {
+          api.logger.warn(`phone-control: expiry tick failed: ${String(err)}`);
+        });
       }, 15_000);
       expiryInterval.unref?.();
 
