@@ -36,7 +36,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
     private var currentSessionKey: String? = null
 
     private val registeredListeners = mutableListOf<Pair<String, (JsonObject) -> Unit>>()
-    private val streamBuffer = StringBuilder()
+    private val streamBuffer = StringBuffer()
     private val messages = mutableListOf<ChatBubble>()
 
     private data class SessionItem(val key: String, val displayName: String) {
@@ -113,7 +113,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                 "final" -> {
                     SwingUtilities.invokeLater {
                         val finalText = cleanGatewayText(streamBuffer.toString().trim())
-                        streamBuffer.clear()
+                        streamBuffer.setLength(0)
                         if (finalText.isNotEmpty()) {
                             messages.add(ChatBubble("assistant", finalText))
                         }
@@ -125,7 +125,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
                     val errorText = message?.get("error")?.asString
                         ?: extractTextFromMessage(message).ifEmpty { "Unknown error" }
                     SwingUtilities.invokeLater {
-                        streamBuffer.clear()
+                        streamBuffer.setLength(0)
                         messages.add(ChatBubble("error", errorText))
                         renderMessages()
                         statusLabel.text = " Error "
@@ -412,7 +412,7 @@ class ChatPanel(private val project: Project) : JPanel(BorderLayout()), MayrosSe
 
         inputField.text = ""
         messages.add(ChatBubble("user", text))
-        streamBuffer.clear()
+        streamBuffer.setLength(0)
         renderMessages()
         statusLabel.text = " Sending... "
 
