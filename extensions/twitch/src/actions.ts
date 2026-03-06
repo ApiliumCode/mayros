@@ -145,12 +145,8 @@ export const twitchMessageActions: ChannelMessageActionAdapter = {
       return errorResponse("No channel specified and no default channel in account config");
     }
 
-    if (!twitchOutbound.sendText) {
-      return errorResponse("sendText not implemented");
-    }
-
     try {
-      const result = await twitchOutbound.sendText({
+      const result = await twitchOutbound.sendText!({
         cfg: ctx.cfg,
         to: targetChannel,
         text: message ?? "",
