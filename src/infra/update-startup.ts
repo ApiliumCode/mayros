@@ -224,5 +224,7 @@ export function scheduleGatewayUpdateCheck(params: {
   isNixMode: boolean;
   onUpdateAvailableChange?: (updateAvailable: UpdateAvailable | null) => void;
 }): void {
-  void runGatewayUpdateCheck(params).catch(() => {});
+  void runGatewayUpdateCheck(params).catch((err) =>
+    console.warn("[update] gateway update check failed:", err),
+  );
 }

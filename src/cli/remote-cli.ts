@@ -185,7 +185,7 @@ export function registerRemoteCli(program: Command) {
 
       // Keep alive until interrupted
       await new Promise<void>((resolve) => {
-        process.on("SIGINT", () => {
+        process.once("SIGINT", () => {
           server.close();
           resolve();
         });
