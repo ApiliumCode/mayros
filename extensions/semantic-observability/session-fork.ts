@@ -280,72 +280,127 @@ export class SessionForkManager {
 
   /**
    * Get events for a session from the emitter buffer and/or Cortex.
+   *
+   * Fetches Cortex events in pages of 50 instead of a single limit:5000 query.
+   * Skips per-event listTriples calls for events that don't belong to the
+   * requested session. The entire Cortex fetch is bounded by a 30-second timeout.
    */
-  private async getSessionEvents(sessionKey: string): Promise<TraceEvent[]> {
+  private async getSessionEvents(sessionKey: string, timeoutMs = 30_000): Promise<TraceEvent[]> {
     // First check the local buffer
     const buffered = this.emitter.getBufferedEvents().filter((e) => e.session === sessionKey);
 
     // Also query Cortex for previously flushed events
-    try {
-      const result = await this.client.patternQuery({
-        predicate: `${this.ns}:event:type`,
-        limit: 5000,
-      });
+    const flushed = await this.fetchFlushedEvents(sessionKey, timeoutMs, buffered);
 
+    return [...flushed, ...buffered].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+  }
+
+  /**
+   * Paginate through Cortex events in batches of 50, reconstructing only those
+   * that belong to the requested session. Aborts if the timeout elapses.
+   */
+  private async fetchFlushedEvents(
+    sessionKey: string,
+    timeoutMs: number,
+    buffered: TraceEvent[],
+  ): Promise<TraceEvent[]> {
+    const PAGE_SIZE = 50;
+    const deadline = Date.now() + timeoutMs;
+
+    try {
       const flushed: TraceEvent[] = [];
       const prefix = `${this.ns}:event:`;
       const bufferedIds = new Set(buffered.map((e) => e.id));
 
-      for (const match of result.matches) {
-        if (!match.subject.startsWith(prefix)) continue;
+      let offset = 0;
+      let hasMore = true;
 
-        const eventId = match.subject.slice(prefix.length);
-        if (bufferedIds.has(eventId)) continue;
+      while (hasMore) {
+        if (Date.now() >= deadline) break;
 
-        // Reconstruct minimal event from triples
-        const triples = await this.client.listTriples({
-          subject: match.subject,
-          limit: 20,
+        const result = await this.client.patternQuery({
+          predicate: `${this.ns}:event:type`,
+          limit: PAGE_SIZE,
+          ...(offset > 0 ? { offset } : {}),
         });
 
-        let session: string | undefined;
-        let timestamp = "";
-        let type = "";
-        let agentId = "";
-        const fields: Record<string, string> = {};
+        const matches = result.matches;
+        hasMore = matches.length === PAGE_SIZE;
+        offset += matches.length;
 
-        for (const t of triples.triples) {
-          const p = String(t.predicate);
-          const o = String(t.object);
-          if (p.endsWith(":session")) session = o;
-          else if (p.endsWith(":timestamp")) timestamp = o;
-          else if (p.endsWith(":type")) type = o;
-          else if (p.endsWith(":agentId")) agentId = o;
-          else {
-            const fieldName = p.split(":").pop() ?? p;
-            fields[fieldName] = o;
-          }
-        }
+        // Fetch triple detail for each candidate in parallel (capped at PAGE_SIZE)
+        const candidates = matches.filter(
+          (m) =>
+            String(m.subject).startsWith(prefix) &&
+            !bufferedIds.has(String(m.subject).slice(prefix.length)),
+        );
 
-        if (session === sessionKey) {
-          flushed.push({
-            id: eventId,
-            type: type as TraceEvent["type"],
-            agentId,
-            timestamp,
-            session,
-            fields,
-          });
+        const reconstructed = await Promise.all(
+          candidates.map((match) =>
+            this.reconstructEventIfSession(match.subject, sessionKey, prefix),
+          ),
+        );
+
+        for (const evt of reconstructed) {
+          if (evt !== null) flushed.push(evt);
         }
       }
 
-      return [...flushed, ...buffered].sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      );
+      return flushed;
     } catch {
-      // Cortex unavailable — return buffered events only
-      return buffered;
+      // Cortex unavailable — return empty; caller merges with buffered events
+      return [];
     }
+  }
+
+  /**
+   * Reconstruct a single TraceEvent from Cortex triples, returning null if the
+   * event does not belong to the requested session.
+   */
+  private async reconstructEventIfSession(
+    subject: unknown,
+    sessionKey: string,
+    prefix: string,
+  ): Promise<TraceEvent | null> {
+    const subjectStr = String(subject);
+    const eventId = subjectStr.slice(prefix.length);
+
+    const triples = await this.client.listTriples({
+      subject: subjectStr,
+      limit: 20,
+    });
+
+    let session: string | undefined;
+    let timestamp = "";
+    let type = "";
+    let agentId = "";
+    const fields: Record<string, string> = {};
+
+    for (const t of triples.triples) {
+      const p = String(t.predicate);
+      const o = String(t.object);
+      if (p.endsWith(":session")) session = o;
+      else if (p.endsWith(":timestamp")) timestamp = o;
+      else if (p.endsWith(":type")) type = o;
+      else if (p.endsWith(":agentId")) agentId = o;
+      else {
+        const fieldName = p.split(":").pop() ?? p;
+        fields[fieldName] = o;
+      }
+    }
+
+    if (session !== sessionKey) return null;
+
+    return {
+      id: eventId,
+      type: type as TraceEvent["type"],
+      agentId,
+      timestamp,
+      session,
+      fields,
+    };
   }
 
   /**
