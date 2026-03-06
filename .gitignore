@@ -136,6 +136,13 @@ CLAUDE.md
 .claude/RULES.md
 
 docs/evolution/
+docs/experiments/
+docs/refactor/
+docs/STRATEGY_COMPETITIVE_ANALYSIS.md
+docs/competitive-analysis-coding-cli.md
+
+# Strategic/competitive analysis (secret sauce)
+secret/
 
 # JetBrains plugin build artifacts
 tools/jetbrains-plugin/.gradle/
