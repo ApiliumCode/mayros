@@ -30,6 +30,7 @@ const eventsDiv = document.getElementById("events")!;
 const eventDetail = document.getElementById("event-detail")!;
 
 let allEvents: TraceEventView[] = [];
+const MAX_TRACE_EVENTS = 5000;
 
 /* ---- UI events ---- */
 
@@ -75,9 +76,12 @@ function handleTraceData(events: TraceEventView[]): void {
     const evt = events[0];
     if (!allEvents.some((e) => e.id === evt.id)) {
       allEvents.push(evt);
+      if (allEvents.length > MAX_TRACE_EVENTS) {
+        allEvents = allEvents.slice(-MAX_TRACE_EVENTS);
+      }
     }
   } else {
-    allEvents = events;
+    allEvents = events.length > MAX_TRACE_EVENTS ? events.slice(-MAX_TRACE_EVENTS) : events;
   }
   renderEvents();
 }

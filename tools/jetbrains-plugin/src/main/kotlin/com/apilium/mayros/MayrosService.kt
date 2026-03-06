@@ -54,7 +54,7 @@ class MayrosService : Disposable {
                 maxReconnectAttempts = settings.maxReconnectAttempts,
                 reconnectDelayMs = settings.reconnectDelayMs,
                 requestTimeoutMs = 30000,
-                token = settings.gatewayToken.takeIf { it.isNotBlank() }
+                token = MayrosSettings.getGatewayToken().takeIf { it.isNotBlank() }
             )
         )
 

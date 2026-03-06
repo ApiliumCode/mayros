@@ -217,6 +217,39 @@ export class GatewayChatClient {
     return await this.client.request<SessionsPatchResult>("sessions.patch", opts);
   }
 
+  async injectChat(opts: { sessionKey: string; message: string; label?: string }): Promise<void> {
+    await this.client.request("chat.inject", {
+      sessionKey: opts.sessionKey,
+      message: opts.message,
+      ...(opts.label !== undefined ? { label: opts.label } : {}),
+    });
+  }
+
+  async compactSession(opts: {
+    key: string;
+    summaryMessage?: string;
+  }): Promise<{ ok: boolean; compacted: boolean; reason?: string }> {
+    const result = await this.client.request<{
+      ok: boolean;
+      compacted: boolean;
+      reason?: string;
+    }>("sessions.compact", { key: opts.key });
+    // After the gateway truncates the transcript, inject the summary as a
+    // system message so the agent retains the condensed context.
+    if (opts.summaryMessage) {
+      try {
+        await this.injectChat({
+          sessionKey: opts.key,
+          message: opts.summaryMessage,
+          label: "compact-summary",
+        });
+      } catch {
+        // Best-effort — summary injection failure must not mask compaction result.
+      }
+    }
+    return result ?? { ok: true, compacted: false };
+  }
+
   async resetSession(key: string, reason?: "new" | "reset") {
     return await this.client.request("sessions.reset", {
       key,

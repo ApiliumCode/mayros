@@ -40,9 +40,10 @@ export type TeamStatus = "pending" | "running" | "completed" | "failed";
 
 export type TeamResult = {
   summary: string;
-  memberResults: Array<{ agentId: string; role: string; findings: number }>;
+  memberResults: Array<{ agentId: string; role: string; findings: number; error?: string }>;
   conflicts: number;
   fusionReport?: FusionReport;
+  mergeErrors?: Array<{ agentId: string; role: string; error: string }>;
 };
 
 export type TeamEntry = {
@@ -87,8 +88,8 @@ export class TeamManager {
   constructor(
     private readonly client: CortexClient,
     private readonly ns: string,
-    private readonly nsMgr: NamespaceManager,
-    private readonly fusion: KnowledgeFusion,
+    private readonly nsMgr: NamespaceManager | null,
+    private readonly fusion: KnowledgeFusion | null,
     private readonly config: TeamManagerConfig,
   ) {}
 
@@ -109,6 +110,7 @@ export class TeamManager {
     const subject = teamSubject(this.ns, teamId);
 
     // Create shared namespace for the team
+    if (!this.nsMgr) throw new Error("NamespaceManager required to create teams");
     const agentIds = cfg.members.map((m) => m.agentId);
     const sharedNs = await this.nsMgr.createSharedNamespace(`team-${teamId}`, agentIds);
 
@@ -348,18 +350,28 @@ export class TeamManager {
     // Merge each member's private namespace into the shared namespace
     let totalConflicts = 0;
     let lastReport: FusionReport | undefined;
-    const memberResults: Array<{ agentId: string; role: string; findings: number }> = [];
+    const memberResults: Array<{
+      agentId: string;
+      role: string;
+      findings: number;
+      error?: string;
+    }> = [];
+    const mergeErrors: Array<{ agentId: string; role: string; error: string }> = [];
+
+    if (!this.nsMgr || !this.fusion) {
+      throw new Error("NamespaceManager and KnowledgeFusion required to finalize teams");
+    }
 
     const additionalNs =
       completedMembers.length >= 3
-        ? completedMembers.map((m) => this.nsMgr.getPrivateNs(m.agentId))
+        ? completedMembers.map((m) => this.nsMgr!.getPrivateNs(m.agentId))
         : undefined;
 
     for (const member of completedMembers) {
-      const memberNs = this.nsMgr.getPrivateNs(member.agentId);
+      const memberNs = this.nsMgr!.getPrivateNs(member.agentId);
 
       try {
-        const report = await this.fusion.merge(
+        const report = await this.fusion!.merge(
           memberNs,
           team.sharedNs,
           team.strategy,
@@ -372,20 +384,27 @@ export class TeamManager {
           role: member.role,
           findings: report.added,
         });
-      } catch {
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[TeamManager] merge failed for agent "${member.agentId}" (role: ${member.role}): ${errMsg}`,
+        );
+        mergeErrors.push({ agentId: member.agentId, role: member.role, error: errMsg });
         memberResults.push({
           agentId: member.agentId,
           role: member.role,
-          findings: 0,
+          findings: -1,
+          error: errMsg,
         });
       }
     }
 
     const teamResult: TeamResult = {
-      summary: `Merged ${completedMembers.length} member(s) with ${team.strategy} strategy`,
+      summary: `Merged ${completedMembers.length} member(s) with ${team.strategy} strategy${mergeErrors.length > 0 ? ` (${mergeErrors.length} merge failure(s))` : ""}`,
       memberResults,
       conflicts: totalConflicts,
       fusionReport: lastReport,
+      ...(mergeErrors.length > 0 && { mergeErrors }),
     };
 
     // Persist result

@@ -30,6 +30,7 @@ import { THEME_PRESETS } from "./theme/palettes.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
+import { MouseHandler, createMouseInputListener } from "./mouse-handler.js";
 import { VimHandler } from "./vim-handler.js";
 import { formatTokens } from "./tui-formatters.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
@@ -267,6 +268,15 @@ export function createBackspaceDeduper(params?: { dedupeWindowMs?: number; now?:
 
 export async function runTui(opts: TuiOptions) {
   const config = loadConfig();
+
+  // Accessibility mode: redirect to linear TUI
+  const { isA11yMode } = await import("./a11y-renderer.js");
+  if (isA11yMode() || config.ui?.accessibility) {
+    const { runA11yTui } = await import("./a11y-tui.js");
+    await runA11yTui(opts);
+    return;
+  }
+
   const configTheme = config.ui?.theme;
   if (configTheme && THEME_PRESETS.includes(configTheme as ThemePreset)) {
     setThemePreset(configTheme as ThemePreset);
@@ -298,6 +308,11 @@ export async function runTui(opts: TuiOptions) {
   let previousThinkingLevel: string | undefined;
   let vimEnabled = config.ui?.vim ?? false;
   const vimHandler = new VimHandler();
+  const mouseHandler = new MouseHandler({
+    scrollLines: 3,
+    scrollAcceleration: true,
+    maxAcceleration: 5,
+  });
   const pendingImages = new Map<string, PendingImage>();
   const localRunIds = new Set<string>();
 
@@ -509,6 +524,7 @@ export async function runTui(opts: TuiOptions) {
     }
     return { data: next };
   });
+  tui.addInputListener(createMouseInputListener(mouseHandler));
   const header = new Text("", 1, 0);
   const statusContainer = new Container();
   const footer = new Text("", 1, 0);
@@ -523,6 +539,18 @@ export async function runTui(opts: TuiOptions) {
   if (vimEnabled) {
     vimHandler.enable();
   }
+
+  // Mouse scroll → ChatLog scroll + re-render
+  mouseHandler.onScroll((direction, lines) => {
+    if (direction === "up") {
+      chatLog.scrollBy(lines);
+    } else {
+      chatLog.scrollBy(-lines);
+    }
+    tui.requestRender();
+  });
+  mouseHandler.enable();
+
   const root = new Container();
   root.addChild(header);
   root.addChild(chatLog);
@@ -880,6 +908,7 @@ export async function runTui(opts: TuiOptions) {
       return;
     }
     if (now - lastCtrlCAt < 1000) {
+      mouseHandler.disable();
       client.stop();
       tui.stop();
       process.exit(0);
@@ -889,6 +918,7 @@ export async function runTui(opts: TuiOptions) {
     tui.requestRender();
   };
   editor.onCtrlD = () => {
+    mouseHandler.disable();
     client.stop();
     tui.stop();
     process.exit(0);

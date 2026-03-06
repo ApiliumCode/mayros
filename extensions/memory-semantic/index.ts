@@ -41,6 +41,7 @@ import { CompactionExtractor } from "./compaction-extractor.js";
 import { RulesEngine } from "./rules-engine.js";
 import { AgentMemory } from "./agent-memory.js";
 import { ContextualAwareness } from "./contextual-awareness.js";
+import { loadContextFiles, formatContextForPrompt, contextToTriples } from "./context-loader.js";
 import { findMarkdownAgent } from "../../src/agents/markdown-agents.js";
 
 // ============================================================================
@@ -985,7 +986,7 @@ const semanticMemoryPlugin = {
     );
 
     // Identity + project context injection into system prompt
-    api.on("before_prompt_build", async () => {
+    api.on("before_prompt_build", async (event) => {
       const parts: string[] = [];
 
       // 1. Identity (existing)
@@ -1057,8 +1058,47 @@ const semanticMemoryPlugin = {
         }
       }
 
-      if (parts.length > 0) {
-        return { systemPrompt: parts.join("\n\n") };
+      // 7. Project context (.mayros/context.md, MAYROS.md)
+      try {
+        const ctx = await loadContextFiles();
+        const formatted = formatContextForPrompt(ctx);
+        if (formatted) {
+          parts.unshift(formatted); // Prepend context so it appears first
+        }
+        // Index into Cortex (best-effort)
+        if (ctx.sources.length > 0 && (await ensureCortex())) {
+          const triples = contextToTriples(ns, ctx);
+          for (const t of triples) {
+            try {
+              await client.createTriple(t);
+            } catch {
+              // Non-critical
+            }
+          }
+        }
+      } catch {
+        // Non-fatal: context loading failed
+      }
+
+      // 8. Auto-compaction trigger at 95% context usage
+      let shouldCompact = false;
+      if (event && typeof event === "object") {
+        const evt = event as { messages?: unknown[]; contextTokens?: number; totalTokens?: number };
+        const contextWindow = typeof evt.contextTokens === "number" ? evt.contextTokens : 128_000;
+        const usedTokens = typeof evt.totalTokens === "number" ? evt.totalTokens : 0;
+        if (contextWindow > 0 && usedTokens / contextWindow > 0.95) {
+          shouldCompact = true;
+          api.logger.info(
+            `memory-semantic: auto-compaction triggered (${usedTokens}/${contextWindow} tokens, ${Math.round((usedTokens / contextWindow) * 100)}%)`,
+          );
+        }
+      }
+
+      if (parts.length > 0 || shouldCompact) {
+        return {
+          ...(parts.length > 0 ? { systemPrompt: parts.join("\n\n") } : {}),
+          ...(shouldCompact ? { compact: true } : {}),
+        };
       }
     });
 

@@ -11,12 +11,21 @@ export type BudgetStatus = {
   percent?: number;
 };
 
+export type ModelUsageEntry = {
+  provider: string;
+  model: string;
+  calls: number;
+  tokens: NormalizedUsage;
+  costUsd: number;
+};
+
 export type BudgetSummary = {
   session: BudgetStatus;
   daily: BudgetStatus;
   monthly: BudgetStatus;
   callCount: number;
   tokens: NormalizedUsage;
+  modelUsage: ModelUsageEntry[];
   cacheHits?: number;
   cacheMisses?: number;
   estimatedSavingsUsd?: number;
@@ -33,13 +42,19 @@ export class BudgetTracker {
     cacheWrite: 0,
     total: 0,
   };
+  private modelUsageMap = new Map<string, ModelUsageEntry>();
 
   constructor(
     private config: TokenBudgetConfig,
     private persisted: PersistedBudget,
   ) {}
 
-  recordUsage(usage: NormalizedUsage, costConfig?: ModelCostConfig): void {
+  recordUsage(
+    usage: NormalizedUsage,
+    costConfig?: ModelCostConfig,
+    provider?: string,
+    model?: string,
+  ): void {
     this.callCount++;
     this.tokenTotals.input = (this.tokenTotals.input ?? 0) + (usage.input ?? 0);
     this.tokenTotals.output = (this.tokenTotals.output ?? 0) + (usage.output ?? 0);
@@ -52,6 +67,48 @@ export class BudgetTracker {
     this.persisted.dailyCostUsd += cost;
     this.persisted.monthlyCostUsd += cost;
     this.persisted.lastFlushedAt = Date.now();
+
+    // Per-model tracking
+    if (provider && model) {
+      const key = `${provider}:${model}`;
+      const existing = this.modelUsageMap.get(key);
+      if (existing) {
+        existing.calls++;
+        existing.costUsd += cost;
+        existing.tokens.input = (existing.tokens.input ?? 0) + (usage.input ?? 0);
+        existing.tokens.output = (existing.tokens.output ?? 0) + (usage.output ?? 0);
+        existing.tokens.cacheRead = (existing.tokens.cacheRead ?? 0) + (usage.cacheRead ?? 0);
+        existing.tokens.cacheWrite = (existing.tokens.cacheWrite ?? 0) + (usage.cacheWrite ?? 0);
+        existing.tokens.total = (existing.tokens.total ?? 0) + (usage.total ?? 0);
+      } else {
+        this.modelUsageMap.set(key, {
+          provider,
+          model,
+          calls: 1,
+          tokens: { ...usage },
+          costUsd: cost,
+        });
+      }
+
+      // Update persisted per-model usage
+      const persistedKey = key;
+      const pm = this.persisted.modelUsage ?? {};
+      const pe = pm[persistedKey];
+      if (pe) {
+        pe.calls++;
+        pe.costUsd += cost;
+        pe.tokens += usage.total ?? (usage.input ?? 0) + (usage.output ?? 0);
+      } else {
+        pm[persistedKey] = {
+          provider,
+          model,
+          calls: 1,
+          tokens: usage.total ?? (usage.input ?? 0) + (usage.output ?? 0),
+          costUsd: cost,
+        };
+      }
+      this.persisted.modelUsage = pm;
+    }
   }
 
   getSessionStatus(): BudgetStatus {
@@ -76,6 +133,11 @@ export class BudgetTracker {
     return statuses[0]!;
   }
 
+  /** Get per-model usage breakdown for the current session. */
+  getModelUsage(): ModelUsageEntry[] {
+    return Array.from(this.modelUsageMap.values()).sort((a, b) => b.costUsd - a.costUsd);
+  }
+
   getSummary(): BudgetSummary {
     return {
       session: this.getSessionStatus(),
@@ -83,6 +145,7 @@ export class BudgetTracker {
       monthly: this.getMonthlyStatus(),
       callCount: this.callCount,
       tokens: { ...this.tokenTotals },
+      modelUsage: this.getModelUsage(),
     };
   }
 
@@ -123,6 +186,7 @@ export class BudgetTracker {
     this.callCount = 0;
     this.toolCallsSinceExceeded = 0;
     this.tokenTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+    this.modelUsageMap.clear();
   }
 
   resetDaily(): void {

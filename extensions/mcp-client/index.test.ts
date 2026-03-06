@@ -255,7 +255,7 @@ describe("mcp-client config", () => {
     expect(config.servers[0].transport.authToken).toBe("Bearer secret");
   });
 
-  it("parses server with oauthClientId in transport", async () => {
+  it("parses server with oauth2 config in transport", async () => {
     const { mcpClientConfigSchema } = await import("./config.js");
 
     const config = mcpClientConfigSchema.parse({
@@ -265,14 +265,21 @@ describe("mcp-client config", () => {
           transport: {
             type: "http",
             url: "http://localhost:3000",
-            oauthClientId: "my-client-id",
+            oauth2: {
+              clientId: "my-client-id",
+              scopes: ["openid", "profile"],
+              authorizationEndpoint: "https://auth.test/authorize",
+              tokenEndpoint: "https://auth.test/token",
+            },
           },
           autoConnect: false,
         },
       ],
     });
 
-    expect(config.servers[0].transport.oauthClientId).toBe("my-client-id");
+    expect(config.servers[0].transport.oauth2).toBeDefined();
+    expect(config.servers[0].transport.oauth2!.clientId).toBe("my-client-id");
+    expect(config.servers[0].transport.oauth2!.scopes).toEqual(["openid", "profile"]);
   });
 });
 

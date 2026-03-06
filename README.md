@@ -1,177 +1,220 @@
-# ⚡🛡️ Mayros — Personal AI Assistant
+# ⚡🛡️ Mayros
 
 <p align="center">
     <img src="docs/assets/mayros-logo.svg" alt="Mayros" width="200">
 </p>
 
 <p align="center">
+  <strong>AI agent framework · Coding CLI · Personal assistant</strong><br>
+  <em>One platform. Your terminal, your channels, your devices.</em>
+</p>
+
+<p align="center">
   <a href="https://github.com/ApiliumCode/mayros/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/ApiliumCode/mayros/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
+  <a href="https://www.npmjs.com/package/@apilium/mayros"><img src="https://img.shields.io/npm/v/@apilium/mayros?style=for-the-badge&color=cb3837" alt="npm version"></a>
   <a href="https://github.com/ApiliumCode/mayros/releases"><img src="https://img.shields.io/github/v/release/ApiliumCode/mayros?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
   <a href="https://discord.com/channels/1476351587105636404"><img src="https://img.shields.io/discord/1476351587105636404?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-**Mayros** is a _personal AI assistant_ you run on your own devices.
-It answers you on the channels you already use (WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, WebChat), plus extension channels like BlueBubbles, Matrix, Zalo, and Zalo Personal. It can speak and listen on macOS/iOS/Android, and can render a live Canvas you control. The Gateway is just the control plane — the product is the assistant.
+<p align="center">
+  <a href="https://apilium.com/en/products/mayros">Product</a> · <a href="https://mayros.apilium.com">Download</a> · <a href="https://apilium.com/en/doc/mayros">Docs</a> · <a href="https://apilium.com/en/doc/mayros/start/getting-started">Getting Started</a> · <a href="VISION.md">Vision</a> · <a href="https://discord.com/channels/1476351587105636404">Discord</a>
+</p>
 
-If you want a personal, single-user assistant that feels local, fast, and always-on, this is it.
+---
 
-[Product](https://apilium.com/en/products/mayros) · [Download](https://mayros.apilium.com) · [Docs](https://apilium.com/en/doc/mayros) · [Vision](VISION.md) · [Getting Started](https://apilium.com/en/doc/mayros/start/getting-started) · [Updating](https://apilium.com/en/doc/mayros/install/updating) · [Docker](https://apilium.com/en/doc/mayros/install/docker)
+**Mayros** is an open-source AI agent framework that runs on your own devices. It ships with an interactive **coding CLI** (`mayros code`), connects to **17 messaging channels** (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, and more), speaks and listens on **macOS/iOS/Android**, and has a **knowledge graph** that remembers everything across sessions. All backed by a local-first Gateway and an 18-layer security architecture.
 
-Preferred setup: run the onboarding wizard (`mayros onboard`) in your terminal.
-The wizard guides you step by step through setting up the gateway, workspace, channels, and skills. The CLI wizard is the recommended path and works on **macOS, Linux, and Windows (via WSL2; strongly recommended)**.
-Works with npm, pnpm, or bun.
-New install? Start here: [Getting started](https://apilium.com/en/doc/mayros/start/getting-started)
-
-## Models (selection + auth)
-
-- Models config + CLI: [Models](https://apilium.com/en/doc/mayros/concepts/models)
-- Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://apilium.com/en/doc/mayros/concepts/model-failover)
-
-## Install (recommended)
-
-Runtime: **Node ≥22**.
+> **55 extensions · 9,200+ tests · 29 hooks · MCP support · Multi-model · Multi-agent**
 
 ```bash
-npm install -g mayros@latest
-# or: pnpm add -g mayros@latest
+npm install -g @apilium/mayros@latest
+mayros onboard
+mayros code   # interactive coding CLI
+```
+
+---
+
+## Why Mayros?
+
+|                        | Mayros                                                                                               | Others                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------- |
+| 🧠 **Knowledge Graph** | AIngle Cortex — persistent memory across sessions, projects, and agents                              | Flat conversation history |
+| 🤖 **Multi-Agent**     | Teams, workflows, mailbox, background tasks, git worktree isolation                                  | Single agent              |
+| 📱 **Multi-Channel**   | 17 channels — WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, Matrix, WebChat, and more | Terminal only             |
+| 🔒 **Security**        | 18 layers — WASM sandbox, bash scanner, interactive permissions, namespace isolation, rate limiter   | Basic sandboxing          |
+| 🎙️ **Voice**           | Always-on Voice Wake + Talk Mode on macOS, iOS, Android                                              | None                      |
+| 🖥️ **IDE**             | VSCode + JetBrains plugins with chat, plan, traces, KG                                               | VSCode only               |
+| 📊 **Observability**   | Full trace system, decision graph, session fork/rewind                                               | Basic logging             |
+| 🔌 **Extensions**      | 55 plugin extensions, 29 hook types, MCP client (4 transports)                                       | Limited plugins           |
+| 🗺️ **Plan Mode**       | Cortex-backed semantic planning: explore → assert → approve → execute                                | Simple plan files         |
+
+---
+
+## Install
+
+Runtime: **Node ≥ 22**. Works with npm, pnpm, or bun.
+
+```bash
+npm install -g @apilium/mayros@latest
+# or: pnpm add -g @apilium/mayros@latest
 
 mayros onboard --install-daemon
 ```
 
-The wizard installs the Gateway daemon (launchd/systemd user service) so it stays running.
+The wizard sets up the Gateway, workspace, channels, and skills. It installs the Gateway as a background daemon (launchd/systemd) so it stays running.
 
-## Quick start (TL;DR)
+New install? Start here: **[Getting Started](https://apilium.com/en/doc/mayros/start/getting-started)** · Upgrading? **[Updating guide](https://apilium.com/en/doc/mayros/install/updating)** (and run `mayros doctor`)
 
-Runtime: **Node ≥22**.
+---
 
-Full beginner guide (auth, pairing, channels): [Getting started](https://apilium.com/en/doc/mayros/start/getting-started)
+## Coding CLI
 
-```bash
-mayros onboard --install-daemon
+`mayros code` is an interactive terminal UI for coding, conversation, and agent-driven workflows.
 
-mayros gateway --port 18789 --verbose
-
-# Send a message
-mayros message send --to +1234567890 --message "Hello from Mayros"
-
-# Talk to the assistant (optionally deliver back to any connected channel: WhatsApp/Telegram/Slack/Discord/Google Chat/Signal/iMessage/BlueBubbles/Microsoft Teams/Matrix/Zalo/Zalo Personal/WebChat)
-mayros agent --message "Ship checklist" --thinking high
-```
-
-Upgrading? [Updating guide](https://apilium.com/en/doc/mayros/install/updating) (and run `mayros doctor`).
-
-## Development channels
-
-- **stable**: tagged releases (`vYYYY.M.D` or `vYYYY.M.D-<patch>`), npm dist-tag `latest`.
-- **beta**: prerelease tags (`vYYYY.M.D-beta.N`), npm dist-tag `beta` (macOS app may be missing).
-- **dev**: moving head of `main`, npm dist-tag `dev` (when published).
-
-Switch channels (git + npm): `mayros update --channel stable|beta|dev`.
-Details: [Development channels](https://apilium.com/en/doc/mayros/install/development-channels).
-
-## From source (development)
-
-Prefer `pnpm` for builds from source. Bun is optional for running TypeScript directly.
+<p align="center">
+  <img src="docs/assets/mayros-coding-cli-terminal-interface.png" alt="Mayros coding CLI terminal interface — welcome screen with mascot, quick start commands, session info, and status bar" width="720">
+</p>
 
 ```bash
-git clone https://github.com/ApiliumCode/mayros.git
-cd mayros
-
-pnpm install
-pnpm ui:build # auto-installs UI deps on first run
-pnpm build
-
-pnpm mayros onboard --install-daemon
-
-# Dev loop (auto-reload on TS changes)
-pnpm gateway:watch
+mayros code                    # interactive TUI session
+mayros tui                     # alias
+mayros -p "refactor auth flow" # headless mode (non-interactive)
 ```
-
-Note: `pnpm mayros ...` runs TypeScript directly (via `tsx`). `pnpm build` produces `dist/` for running via Node / the packaged `mayros` binary.
-
-## Security defaults (DM access)
-
-Mayros connects to real messaging surfaces. Treat inbound DMs as **untrusted input**.
-
-Full security guide: [Security](https://apilium.com/en/doc/mayros/gateway/security)
-
-Default behavior on Telegram/WhatsApp/Signal/iMessage/Microsoft Teams/Discord/Google Chat/Slack:
-
-- **DM pairing** (`dmPolicy="pairing"` / `channels.discord.dmPolicy="pairing"` / `channels.slack.dmPolicy="pairing"`; legacy: `channels.discord.dm.policy`, `channels.slack.dm.policy`): unknown senders receive a short pairing code and the bot does not process their message.
-- Approve with: `mayros pairing approve <channel> <code>` (then the sender is added to a local allowlist store).
-- Public inbound DMs require an explicit opt-in: set `dmPolicy="open"` and include `"*"` in the channel allowlist (`allowFrom` / `channels.discord.allowFrom` / `channels.slack.allowFrom`; legacy: `channels.discord.dm.allowFrom`, `channels.slack.dm.allowFrom`).
-
-Run `mayros doctor` to surface risky/misconfigured DM policies.
-
-## Highlights
-
-- **[Local-first Gateway](https://apilium.com/en/doc/mayros/gateway)** — single control plane for sessions, channels, tools, and events.
-- **[Multi-channel inbox](https://apilium.com/en/doc/mayros/channels)** — WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, BlueBubbles (iMessage), iMessage (legacy), Microsoft Teams, Matrix, Zalo, Zalo Personal, WebChat, macOS, iOS/Android.
-- **[Multi-agent routing](https://apilium.com/en/doc/mayros/gateway/configuration)** — route inbound channels/accounts/peers to isolated agents (workspaces + per-agent sessions).
-- **[Voice Wake](https://apilium.com/en/doc/mayros/nodes/voicewake) + [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk)** — always-on speech for macOS/iOS/Android with ElevenLabs.
-- **[Live Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas)** — agent-driven visual workspace with [A2UI](https://apilium.com/en/doc/mayros/platforms/mac/canvas#canvas-a2ui).
-- **[First-class tools](https://apilium.com/en/doc/mayros/tools)** — browser, canvas, nodes, cron, sessions, and Discord/Slack actions.
-- **[Companion apps](https://apilium.com/en/doc/mayros/platforms/macos)** — macOS menu bar app + iOS/Android [nodes](https://apilium.com/en/doc/mayros/nodes).
-- **[Onboarding](https://apilium.com/en/doc/mayros/start/wizard) + [skills](https://apilium.com/en/doc/mayros/tools/skills)** — wizard-driven setup with bundled/managed/workspace skills.
-- **Terminal UI** — interactive TUI with themes, vim mode, image paste, slash commands.
-- **IDE plugins** — VSCode + JetBrains extensions connected via Gateway WebSocket.
-- **Knowledge Graph** — project memory, code indexer, cross-session recall via Cortex.
-- **Multi-agent mesh** — teams, workflows, agent mailbox, background tasks.
-- **Semantic plan mode** — explore, assert, approve, execute with Cortex backing.
-- **50+ extensions** — security sandbox, permissions, MCP client, observability, 17 channels.
-
-## Terminal UI
-
-Mayros includes an interactive terminal interface for direct coding and conversation.
-
-**Entry points:**
-
-- `mayros code` — main interactive TUI session
-- `mayros tui` — alias for `mayros code`
-- `mayros -p "query"` — headless mode (non-interactive, streams response to stdout)
 
 **Features:**
 
-- Welcome screen with shield mascot and two-column info panel
-- 3 themes (dark, light, high-contrast) — switch with `/theme`
-- 3 output styles (standard, explanatory, learning) — switch with `/style`
-- Vim mode with motions, operators, and undo — toggle with `/vim`
-- `Ctrl+V` image paste from clipboard
-- `/copy` pipes last response to system clipboard; `/export [file]` writes to file
-- `/diff` inline diff viewer with stats
-- `/context` token usage bar chart
-- `/plan` semantic plan mode (Cortex-backed)
+- 🎨 3 themes (dark, light, high-contrast) — `/theme`
+- 📝 3 output styles (standard, explanatory, learning) — `/style`
+- ⌨️ Vim mode with motions, operators, undo — `/vim`
+- 📋 `Ctrl+V` image paste from clipboard
+- 📊 `/diff` inline diff viewer · `/context` token usage chart
+- 🗺️ `/plan` semantic plan mode (Cortex-backed)
+- 📎 `/copy` to clipboard · `/export [file]` to disk
+- 🔀 `/model` switch models · `/think` set thinking level · `/fast` toggle fast mode
 
-**Key slash commands:**
+**Slash commands (30+):**
 
-| Command          | Description                 |
-| ---------------- | --------------------------- |
-| `/help`          | List all available commands |
-| `/new`, `/reset` | Reset session               |
-| `/compact`       | Compact session context     |
-| `/think <level>` | Set thinking level          |
-| `/model <name>`  | Switch model                |
-| `/plan`          | Enter semantic plan mode    |
-| `/diff`          | Show pending changes        |
-| `/context`       | Visualize token usage       |
-| `/theme`         | Cycle themes                |
-| `/style`         | Cycle output styles         |
-| `/vim`           | Toggle vim mode             |
-| `/copy`          | Copy last response          |
-| `/export [file]` | Export session              |
-| `/permission`    | Set permission mode         |
-| `/fast`          | Toggle fast mode            |
+| Command          | Description       | Command          | Description          |
+| ---------------- | ----------------- | ---------------- | -------------------- |
+| `/help`          | List all commands | `/plan`          | Semantic plan mode   |
+| `/new`           | Reset session     | `/diff`          | Show pending changes |
+| `/compact`       | Compact context   | `/context`       | Token usage chart    |
+| `/think <level>` | Set thinking      | `/theme`         | Cycle themes         |
+| `/model <name>`  | Switch model      | `/vim`           | Toggle vim mode      |
+| `/permission`    | Permission mode   | `/copy`          | Copy last response   |
+| `/fast`          | Fast mode         | `/export [file]` | Export session       |
 
 **Markdown-driven extensibility:**
 
 - Custom agents: `~/.mayros/agents/*.md` — define persona, tools, and behavior in markdown
 - Custom commands: `~/.mayros/commands/*.md` — define slash commands as markdown templates
-- Interactive selectors when commands run without required arguments
+
+---
+
+## Quick Start
+
+```bash
+# 1. Install and onboard
+mayros onboard --install-daemon
+
+# 2. Start the Gateway
+mayros gateway --port 18789 --verbose
+
+# 3. Code interactively
+mayros code
+
+# 4. Or use the agent directly
+mayros agent --message "Ship checklist" --thinking high
+
+# 5. Or send a message to any channel
+mayros message send --to +1234567890 --message "Hello from Mayros"
+```
+
+Full beginner guide: **[Getting started](https://apilium.com/en/doc/mayros/start/getting-started)**
+
+---
+
+## Architecture
+
+```
+  WhatsApp · Telegram · Slack · Discord · Signal · iMessage · Teams · Matrix · WebChat
+                                    │
+                                    ▼
+                    ┌───────────────────────────────┐
+                    │          ⚡ Gateway             │
+                    │     (local control plane)      │
+                    │     ws://127.0.0.1:18789       │
+                    └──────────────┬────────────────┘
+                                   │
+          ┌────────────┬───────────┼───────────┬────────────┐
+          │            │           │           │            │
+     mayros code   VSCode /   Pi Agent    macOS App    iOS/Android
+      (TUI)       JetBrains   (RPC)      (menu bar)     Nodes
+```
+
+The Gateway is the single control plane — every client, channel, tool, and event connects through it.
+
+---
+
+## Multi-Channel Inbox
+
+Mayros connects to the channels you already use. One assistant, everywhere.
+
+| Channel                                                              | Transport  | Channel                                                                                                                   | Transport              |
+| -------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| [WhatsApp](https://apilium.com/en/doc/mayros/channels/whatsapp)      | Baileys    | [Microsoft Teams](https://apilium.com/en/doc/mayros/channels/msteams)                                                     | Bot Framework          |
+| [Telegram](https://apilium.com/en/doc/mayros/channels/telegram)      | grammY     | [Matrix](https://apilium.com/en/doc/mayros/channels/matrix)                                                               | matrix-js-sdk          |
+| [Slack](https://apilium.com/en/doc/mayros/channels/slack)            | Bolt       | [BlueBubbles](https://apilium.com/en/doc/mayros/channels/bluebubbles)                                                     | iMessage (recommended) |
+| [Discord](https://apilium.com/en/doc/mayros/channels/discord)        | discord.js | [iMessage](https://apilium.com/en/doc/mayros/channels/imessage)                                                           | Legacy macOS           |
+| [Google Chat](https://apilium.com/en/doc/mayros/channels/googlechat) | Chat API   | [Zalo](https://apilium.com/en/doc/mayros/channels/zalo) / [Personal](https://apilium.com/en/doc/mayros/channels/zalouser) | Extension              |
+| [Signal](https://apilium.com/en/doc/mayros/channels/signal)          | signal-cli | [WebChat](https://apilium.com/en/doc/mayros/web/webchat)                                                                  | Gateway WS             |
+
+**Security defaults:** DM pairing — unknown senders get a pairing code. You approve with `mayros pairing approve <channel> <code>`. Public DMs require explicit opt-in.
+
+---
+
+## Knowledge Graph (AIngle Cortex)
+
+Mayros remembers. Not just conversation history — semantic knowledge stored as RDF triples in [AIngle Cortex](https://github.com/ApiliumCode/aingle).
+
+**Three-tier memory:**
+
+1. **MAYROS.md** — flat-file persona and instructions, always loaded into the system prompt
+2. **AIngle Cortex** — RDF triple store (`subject → predicate → object`) scoped by namespace. Optional: falls back to file-based memory when unavailable
+3. **Titans STM/LTM** — short-term and long-term memory with temporal recall
+
+**Built on top:**
+
+- **Code indexer** — scans your codebase → RDF triples in Cortex (incremental, only re-indexes changed files)
+- **Project memory** — persists conventions, findings, and architecture decisions across sessions
+- **Smart compaction** — extracts key information before context pruning
+- **Cross-session recall** — injects relevant knowledge from previous sessions into new prompts
+
+**Design principles:** namespace isolation (no cross-namespace reads), graceful degradation (Cortex is a sidecar, not an FFI binding), circuit breaker with exponential backoff.
+
+CLI: `mayros kg search|explore|query|stats|triples|namespaces|export|import`
+
+---
+
+## Multi-Agent Mesh
+
+Agents that work together. Mayros supports coordinated multi-agent workflows with shared knowledge.
+
+- **Team manager** — Cortex-backed lifecycle: create, assign roles, merge results, disband
+- **Workflow orchestrator** — built-in workflows (code-review, research, refactor) + custom definitions
+- **Agent mailbox** — persistent inter-agent messaging (send/inbox/outbox/archive)
+- **Background task tracker** — long-running tasks with status and cancellation
+- **Git worktree isolation** — each agent works in its own worktree to avoid conflicts
+- **Session fork/rewind** — checkpoint-based exploration with rewind capability
+
+CLI: `mayros workflow run|list` · `mayros dashboard team|summary|agent` · `mayros tasks list|status|cancel|summary` · `mayros mailbox list|read|send|archive|stats`
+
+---
 
 ## IDE Plugins
 
-Mayros provides IDE extensions that connect to the running Gateway via WebSocket.
+Mayros lives inside your editor, connected via Gateway WebSocket.
 
 **VSCode** (`tools/vscode-extension/`):
 
@@ -184,63 +227,23 @@ Mayros provides IDE extensions that connect to the running Gateway via WebSocket
 - Unified tabbed panel with the same feature set
 - Protocol v3 compatibility
 
-Both plugins connect via WebSocket to `ws://127.0.0.1:18789` (the Gateway).
+Both connect to `ws://127.0.0.1:18789`.
 
-## Semantic Memory (AIngle Cortex)
+---
 
-Mayros includes a three-tier memory architecture so the assistant remembers context across conversations and channels:
+## Voice & Companion Apps
 
-1. **MAYROS.md** — flat-file persona and instructions, always loaded into the system prompt.
-2. **[AIngle Cortex](https://github.com/ApiliumCode/aingle)** — an RDF triple store that runs as an HTTP sidecar. Skills and the agent read/write semantic triples (`subject → predicate → object`) scoped by namespace. Cortex is optional: when unavailable the assistant falls back to markdown-based memory.
-3. **Titans STM/LTM** — short-term and long-term memory layers that complement the graph with temporal recall.
+- **[Voice Wake](https://apilium.com/en/doc/mayros/nodes/voicewake) + [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk)** — always-on speech for macOS/iOS/Android with ElevenLabs
+- **[Live Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas)** — agent-driven visual workspace with [A2UI](https://apilium.com/en/doc/mayros/platforms/mac/canvas#canvas-a2ui)
+- **[macOS app](https://apilium.com/en/doc/mayros/platforms/macos)** — menu bar control, Voice Wake, Talk Mode overlay, WebChat, debug tools
+- **[iOS node](https://apilium.com/en/doc/mayros/platforms/ios)** — Canvas, Voice Wake, Talk Mode, camera, screen recording, Bonjour pairing
+- **[Android node](https://apilium.com/en/doc/mayros/platforms/android)** — Canvas, Talk Mode, camera, screen recording, optional SMS
 
-Key design points:
-
-- **Namespace isolation** — every query is forced to `{ns}:` prefix; no cross-namespace reads.
-- **Graceful degradation** — Cortex is an HTTP sidecar, not an FFI binding. If the sidecar is down, the gateway continues working with file-based memory.
-- **Circuit breaker** — `cortex-resilience.ts` wraps all Cortex calls with a 3-state circuit breaker and exponential backoff.
-- **Skill access** — skills interact with memory through 6 semantic tools (`skill_graph_query`, `skill_assert`, `skill_memory_context`, etc.) inside the QuickJS WASM sandbox.
-
-Cortex version: **aingle_cortex 0.2.6** · AIngle crate: **0.0.101** · Zome types: **0.0.4**
-
-## Knowledge Graph & Code Indexer
-
-The code indexer scans your codebase and maps it to RDF triples stored in Cortex. Combined with project memory, this gives the assistant deep, persistent understanding of your project.
-
-- **Code indexer** — scans source files → RDF triples in Cortex (incremental, only re-indexes changed files)
-- **Project memory** — persists conventions, findings, and architecture decisions across sessions
-- **Smart compaction** — extracts key information before context pruning so nothing important is lost
-- **Cross-session recall** — injects relevant knowledge from previous sessions into new prompts
-
-CLI: `mayros kg search|explore|query|stats|triples|namespaces|export|import`
-
-## Multi-Agent Mesh
-
-Mayros supports coordinated multi-agent workflows where agents can form teams, delegate work, and communicate asynchronously.
-
-- **Team manager** — Cortex-backed lifecycle: create, assign roles, disband
-- **Workflow orchestrator** — built-in workflow definitions (code-review, research, refactor) + custom definitions via registry
-- **Agent mailbox** — persistent inter-agent messaging (send/inbox/outbox/archive)
-- **Background task tracker** — track long-running agent tasks with status and cancellation
-- **Git worktree isolation** — each agent can work in its own worktree to avoid conflicts
-
-CLI: `mayros workflow run|list`, `mayros dashboard team|summary|agent`, `mayros tasks list|status|cancel|summary`, `mayros mailbox list|read|send|archive|stats`
-
-## Plan Mode
-
-Cortex-backed semantic planning for complex multi-step tasks.
-
-- **Explore** — gather context from the codebase and Cortex graph
-- **Assert** — declare facts and constraints the plan must satisfy
-- **Approve** — review the plan before execution
-- **Execute** — run the approved plan with progress tracking
-
-CLI: `mayros plan start|explore|assert|show|approve|execute|done|list|status`
-TUI: `/plan` slash command
+---
 
 ## Extensions Ecosystem
 
-Mayros ships with 50+ extensions organized by category:
+55 extensions loaded as plugins at startup:
 
 | Category      | Extension                 | Purpose                                                                   |
 | ------------- | ------------------------- | ------------------------------------------------------------------------- |
@@ -252,226 +255,62 @@ Mayros ships with 50+ extensions organized by category:
 | Security      | `bash-sandbox`            | Command parsing, domain checker, blocklist, audit log                     |
 | Permissions   | `interactive-permissions` | Runtime permission dialogs, intent classification, policy store           |
 | Hooks         | `llm-hooks`               | Markdown-defined hook evaluation with safe condition parser               |
-| MCP           | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP transports)    |
+| MCP           | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP)               |
 | Economy       | `token-economy`           | Budget tracking, prompt cache optimization                                |
 | Hub           | `skill-hub`               | Apilium Hub marketplace, Ed25519 signing, dependency audit                |
 | IoT           | `iot-bridge`              | IoT node fleet management                                                 |
-| Channels      | 17 channel plugins        | Discord, Telegram, WhatsApp, Slack, Signal, iMessage, Teams, Matrix, etc. |
+| Channels      | 17 plugins                | Discord, Telegram, WhatsApp, Slack, Signal, iMessage, Teams, Matrix, etc. |
 
-Extensions live in `extensions/` and are loaded as plugins at startup.
+---
 
 ## Hooks System
 
-Mayros exposes 29 hook types across the assistant lifecycle:
-
-- **Lifecycle hooks** — `before_prompt_build`, `after_response`, `before_compaction`, `agent_end`, etc.
-- **Security hooks** — `permission_request` (modifying: allow/deny/ask), `config_change`
-- **Coordination hooks** — `teammate_idle`, `task_completed`, `notification` (info/warn/error)
-- **HTTP webhook dispatcher** — POST delivery with HMAC-SHA256 signatures, retry + exponential backoff
-- **Async hook queue** — background execution with concurrency limits and dead-letter queue
-- **Markdown-defined hooks** — place `.md` files in `~/.mayros/hooks/` for custom hook logic
-
-## Everything we built so far
-
-### Core platform
-
-- [Gateway WS control plane](https://apilium.com/en/doc/mayros/gateway) with sessions, presence, config, cron, webhooks, [Control UI](https://apilium.com/en/doc/mayros/web), and [Canvas host](https://apilium.com/en/doc/mayros/platforms/mac/canvas#canvas-a2ui).
-- [CLI surface](https://apilium.com/en/doc/mayros/tools/agent-send): gateway, agent, send, [wizard](https://apilium.com/en/doc/mayros/start/wizard), and [doctor](https://apilium.com/en/doc/mayros/gateway/doctor).
-- [Pi agent runtime](https://apilium.com/en/doc/mayros/concepts/agent) in RPC mode with tool streaming and block streaming.
-- [Session model](https://apilium.com/en/doc/mayros/concepts/session): `main` for direct chats, group isolation, activation modes, queue modes, reply-back..
-- [Media pipeline](https://apilium.com/en/doc/mayros/nodes/images): images/audio/video, transcription hooks, size caps, temp file lifecycle. Audio details: [Audio](https://apilium.com/en/doc/mayros/nodes/audio).
-
-### Channels
-
-- [Channels](https://apilium.com/en/doc/mayros/channels): [WhatsApp](https://apilium.com/en/doc/mayros/channels/whatsapp) (Baileys), [Telegram](https://apilium.com/en/doc/mayros/channels/telegram) (grammY), [Slack](https://apilium.com/en/doc/mayros/channels/slack) (Bolt), [Discord](https://apilium.com/en/doc/mayros/channels/discord) (discord.js), [Google Chat](https://apilium.com/en/doc/mayros/channels/googlechat) (Chat API), [Signal](https://apilium.com/en/doc/mayros/channels/signal) (signal-cli), [BlueBubbles](https://apilium.com/en/doc/mayros/channels/bluebubbles) (iMessage, recommended), [iMessage](https://apilium.com/en/doc/mayros/channels/imessage) (legacy imsg), [Microsoft Teams](https://apilium.com/en/doc/mayros/channels/msteams) (extension), [Matrix](https://apilium.com/en/doc/mayros/channels/matrix) (extension), [Zalo](https://apilium.com/en/doc/mayros/channels/zalo) (extension), [Zalo Personal](https://apilium.com/en/doc/mayros/channels/zalouser) (extension), [WebChat](https://apilium.com/en/doc/mayros/web/webchat).
-- Mention gating, reply tags, per-channel chunking and routing. Channel rules: [Channels](https://apilium.com/en/doc/mayros/channels).
-
-### Apps + nodes
-
-- [macOS app](https://apilium.com/en/doc/mayros/platforms/macos): menu bar control plane, [Voice Wake](https://apilium.com/en/doc/mayros/nodes/voicewake)/PTT, [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk) overlay, [WebChat](https://apilium.com/en/doc/mayros/web/webchat), debug tools, [remote gateway](https://apilium.com/en/doc/mayros/gateway/remote) control.
-- [iOS node](https://apilium.com/en/doc/mayros/platforms/ios): [Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas), [Voice Wake](https://apilium.com/en/doc/mayros/nodes/voicewake), [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk), camera, screen recording, Bonjour pairing.
-- [Android node](https://apilium.com/en/doc/mayros/platforms/android): [Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas), [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk), camera, screen recording, optional SMS.
-- [macOS node mode](https://apilium.com/en/doc/mayros/nodes): system.run/notify + canvas/camera exposure.
-
-### Tools + automation
-
-- [Browser control](https://apilium.com/en/doc/mayros/tools/browser): dedicated mayros Chrome/Chromium, snapshots, actions, uploads, profiles.
-- [Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas): [A2UI](https://apilium.com/en/doc/mayros/platforms/mac/canvas#canvas-a2ui) push/reset, eval, snapshot.
-- [Nodes](https://apilium.com/en/doc/mayros/nodes): camera snap/clip, screen record, [location.get](https://apilium.com/en/doc/mayros/nodes/location-command), notifications.
-- [Cron + wakeups](https://apilium.com/en/doc/mayros/automation/cron-jobs); [webhooks](https://apilium.com/en/doc/mayros/automation/webhook); [Gmail Pub/Sub](https://apilium.com/en/doc/mayros/automation/gmail-pubsub).
-- [Skills platform](https://apilium.com/en/doc/mayros/tools/skills): bundled, managed, and workspace skills with install gating + UI.
-
-### Runtime + safety
-
-- [Retry policy](https://apilium.com/en/doc/mayros/concepts/retry) and [streaming/chunking](https://apilium.com/en/doc/mayros/concepts/streaming).
-- [Presence](https://apilium.com/en/doc/mayros/concepts/presence), [typing indicators](https://apilium.com/en/doc/mayros/concepts/typing-indicators), and [usage tracking](https://apilium.com/en/doc/mayros/concepts/usage-tracking).
-- [Models](https://apilium.com/en/doc/mayros/concepts/models), [model failover](https://apilium.com/en/doc/mayros/concepts/model-failover), and [session pruning](https://apilium.com/en/doc/mayros/concepts/session-pruning).
-- [Security](https://apilium.com/en/doc/mayros/gateway/security) and [troubleshooting](https://apilium.com/en/doc/mayros/channels/troubleshooting).
-
-### Ops + packaging
-
-- [Control UI](https://apilium.com/en/doc/mayros/web) + [WebChat](https://apilium.com/en/doc/mayros/web/webchat) served directly from the Gateway.
-- [Tailscale Serve/Funnel](https://apilium.com/en/doc/mayros/gateway/tailscale) or [SSH tunnels](https://apilium.com/en/doc/mayros/gateway/remote) with token/password auth.
-- [Docker](https://apilium.com/en/doc/mayros/install/docker)-based installs.
-- [Doctor](https://apilium.com/en/doc/mayros/gateway/doctor) migrations, [logging](https://apilium.com/en/doc/mayros/logging).
-
-### Developer tools
-
-- Terminal UI (`mayros code`) with themes, vim mode, slash commands, image paste, and headless mode (`mayros -p`).
-- VSCode and JetBrains IDE plugins connected via Gateway WebSocket.
-- Trace CLI (`mayros trace`), plan CLI (`mayros plan`), knowledge graph CLI (`mayros kg`).
-
-### Agent coordination
-
-- Teams, workflows, agent mailbox, background task tracker.
-- Session fork/rewind for checkpoint-based exploration.
-- Rules engine with hierarchical Cortex-backed rules.
-- Agent persistent memory and contextual awareness notifications.
-
-### Security layers
-
-- 18-layer security architecture: QuickJS WASM sandbox, static scanner (16 rules), enrichment sanitizer, bash sandbox, interactive permissions, namespace isolation, tool allowlist (intersection model), rate limiter, query/write limits, enrichment timeout, hot-reload validation, path traversal protection, verify-then-promote, circuit breaker, audit logging, and more.
-
-## How it works (short)
-
-```
-WhatsApp / Telegram / Slack / Discord / Google Chat / Signal / iMessage / BlueBubbles / Microsoft Teams / Matrix / Zalo / Zalo Personal / WebChat
-               │
-               ▼
-┌───────────────────────────────┐
-│            Gateway            │
-│       (control plane)         │
-│     ws://127.0.0.1:18789      │
-└──────────────┬────────────────┘
-               │
-               ├─ TUI (mayros code)
-               ├─ VSCode / JetBrains
-               ├─ Pi agent (RPC)
-               ├─ CLI (mayros …)
-               ├─ WebChat UI
-               ├─ macOS app
-               └─ iOS / Android nodes
-```
-
-## Key subsystems
-
-- **[Gateway WebSocket network](https://apilium.com/en/doc/mayros/concepts/architecture)** — single WS control plane for clients, tools, and events (plus ops: [Gateway runbook](https://apilium.com/en/doc/mayros/gateway)).
-- **[Tailscale exposure](https://apilium.com/en/doc/mayros/gateway/tailscale)** — Serve/Funnel for the Gateway dashboard + WS (remote access: [Remote](https://apilium.com/en/doc/mayros/gateway/remote)).
-- **[Browser control](https://apilium.com/en/doc/mayros/tools/browser)** — mayros‑managed Chrome/Chromium with CDP control.
-- **[Canvas + A2UI](https://apilium.com/en/doc/mayros/platforms/mac/canvas)** — agent‑driven visual workspace (A2UI host: [Canvas/A2UI](https://apilium.com/en/doc/mayros/platforms/mac/canvas#canvas-a2ui)).
-- **[Voice Wake](https://apilium.com/en/doc/mayros/nodes/voicewake) + [Talk Mode](https://apilium.com/en/doc/mayros/nodes/talk)** — always‑on speech and continuous conversation.
-- **[Nodes](https://apilium.com/en/doc/mayros/nodes)** — Canvas, camera snap/clip, screen record, `location.get`, notifications, plus macOS‑only `system.run`/`system.notify`.
-
-## Tailscale access (Gateway dashboard)
-
-Mayros can auto-configure Tailscale **Serve** (tailnet-only) or **Funnel** (public) while the Gateway stays bound to loopback. Configure `gateway.tailscale.mode`:
-
-- `off`: no Tailscale automation (default).
-- `serve`: tailnet-only HTTPS via `tailscale serve` (uses Tailscale identity headers by default).
-- `funnel`: public HTTPS via `tailscale funnel` (requires shared password auth).
-
-Notes:
-
-- `gateway.bind` must stay `loopback` when Serve/Funnel is enabled (Mayros enforces this).
-- Serve can be forced to require a password by setting `gateway.auth.mode: "password"` or `gateway.auth.allowTailscale: false`.
-- Funnel refuses to start unless `gateway.auth.mode: "password"` is set.
-- Optional: `gateway.tailscale.resetOnExit` to undo Serve/Funnel on shutdown.
-
-Details: [Tailscale guide](https://apilium.com/en/doc/mayros/gateway/tailscale) · [Web surfaces](https://apilium.com/en/doc/mayros/web)
-
-## Remote Gateway (Linux is great)
-
-It’s perfectly fine to run the Gateway on a small Linux instance. Clients (macOS app, CLI, WebChat) can connect over **Tailscale Serve/Funnel** or **SSH tunnels**, and you can still pair device nodes (macOS/iOS/Android) to execute device‑local actions when needed.
-
-- **Gateway host** runs the exec tool and channel connections by default.
-- **Device nodes** run device‑local actions (`system.run`, camera, screen recording, notifications) via `node.invoke`.
-  In short: exec runs where the Gateway lives; device actions run where the device lives.
-
-Details: [Remote access](https://apilium.com/en/doc/mayros/gateway/remote) · [Nodes](https://apilium.com/en/doc/mayros/nodes) · [Security](https://apilium.com/en/doc/mayros/gateway/security)
-
-## macOS permissions via the Gateway protocol
-
-The macOS app can run in **node mode** and advertises its capabilities + permission map over the Gateway WebSocket (`node.list` / `node.describe`). Clients can then execute local actions via `node.invoke`:
-
-- `system.run` runs a local command and returns stdout/stderr/exit code; set `needsScreenRecording: true` to require screen-recording permission (otherwise you’ll get `PERMISSION_MISSING`).
-- `system.notify` posts a user notification and fails if notifications are denied.
-- `canvas.*`, `camera.*`, `screen.record`, and `location.get` are also routed via `node.invoke` and follow TCC permission status.
-
-Elevated bash (host permissions) is separate from macOS TCC:
-
-- Use `/elevated on|off` to toggle per‑session elevated access when enabled + allowlisted.
-- Gateway persists the per‑session toggle via `sessions.patch` (WS method) alongside `thinkingLevel`, `verboseLevel`, `model`, `sendPolicy`, and `groupActivation`.
-
-Details: [Nodes](https://apilium.com/en/doc/mayros/nodes) · [macOS app](https://apilium.com/en/doc/mayros/platforms/macos) · [Gateway protocol](https://apilium.com/en/doc/mayros/concepts/architecture)
-
-## Agent to Agent (sessions\_\* tools)
-
-- Use these to coordinate work across sessions without jumping between chat surfaces.
-- `sessions_list` — discover active sessions (agents) and their metadata.
-- `sessions_history` — fetch transcript logs for a session.
-- `sessions_send` — message another session; optional reply‑back ping‑pong + announce step (`REPLY_SKIP`, `ANNOUNCE_SKIP`).
-
-Details: [Session tools](https://apilium.com/en/doc/mayros/concepts/session-tool)
-
-## Skills registry (Skills Hub)
-
-Skills Hub is a minimal skill registry. With Skills Hub enabled, the agent can search for skills automatically and pull in new ones as needed.
-
-[Skills Hub](https://hub.apilium.com)
-
-## Chat commands
-
-The Terminal UI (`mayros code`) supports 30+ slash commands — run `/help` for the full list.
-
-Send these in WhatsApp/Telegram/Slack/Google Chat/Microsoft Teams/WebChat (group commands are owner-only):
-
-- `/status` — compact session status (model + tokens, cost when available)
-- `/new` or `/reset` — reset the session
-- `/compact` — compact session context (summary)
-- `/think <level>` — off|minimal|low|medium|high|xhigh (GPT-5.2 + Codex models only)
-- `/verbose on|off`
-- `/usage off|tokens|full` — per-response usage footer
-- `/restart` — restart the gateway (owner-only in groups)
-- `/activation mention|always` — group activation toggle (groups only)
-
-## Apps (optional)
-
-The Gateway alone delivers a great experience. All apps are optional and add extra features.
-
-If you plan to build/run companion apps, follow the platform runbooks below.
-
-### macOS (Mayros.app) (optional)
-
-- Menu bar control for the Gateway and health.
-- Voice Wake + push-to-talk overlay.
-- WebChat + debug tools.
-- Remote gateway control over SSH.
-
-Note: signed builds required for macOS permissions to stick across rebuilds (see `docs/mac/permissions.md`).
-
-### iOS node (optional)
-
-- Pairs as a node via the Bridge.
-- Voice trigger forwarding + Canvas surface.
-- Controlled via `mayros nodes …`.
-
-Runbook: [iOS connect](https://apilium.com/en/doc/mayros/platforms/ios).
-
-### Android node (optional)
-
-- Pairs via the same Bridge + pairing flow as iOS.
-- Exposes Canvas, Camera, and Screen capture commands.
-- Runbook: [Android connect](https://apilium.com/en/doc/mayros/platforms/android).
-
-## Agent workspace + skills
-
-- Workspace root: `~/.mayros/workspace` (configurable via `agents.defaults.workspace`).
-- Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`.
-- Skills: `~/.mayros/workspace/skills/<skill>/SKILL.md`.
-
-## Configuration
-
-Minimal `~/.mayros/mayros.json` (model + defaults):
+29 hook types across the assistant lifecycle:
+
+- **Lifecycle** — `before_prompt_build`, `after_response`, `before_compaction`, `agent_end`, etc.
+- **Security** — `permission_request` (modifying: allow/deny/ask), `config_change`
+- **Coordination** — `teammate_idle`, `task_completed`, `notification`
+- **HTTP webhooks** — POST delivery with HMAC-SHA256 signatures, retry + exponential backoff
+- **Async queue** — background execution with concurrency limits and dead-letter queue
+- **Markdown hooks** — place `.md` files in `~/.mayros/hooks/` for custom logic
+
+---
+
+## Security (18 layers)
+
+Mayros takes security seriously. 18 layers of defense:
+
+| Layer                       | Description                                                     |
+| --------------------------- | --------------------------------------------------------------- |
+| QuickJS WASM Sandbox        | Skills run in isolated WASM — no fs, net, process, eval         |
+| Static Scanner              | 16 rules + anti-evasion preprocessing                           |
+| Enrichment Sanitizer        | Unicode normalization, injection detection, depth limits        |
+| Bash Sandbox                | Command parsing, domain blocklist, audit logging                |
+| Interactive Permissions     | Runtime dialogs, intent classification, policy store            |
+| Namespace Isolation         | All queries forced to `{ns}:` prefix — no cross-namespace reads |
+| Tool Allowlist              | Intersection model — ALL active skills must allow a tool        |
+| Rate Limiter                | Sliding window per skill (default: 60 calls/min)                |
+| Query/Write Limits          | Per-skill caps on graph reads and writes                        |
+| Enrichment Timeout          | 2s timeout prevents DoS via slow enrichment                     |
+| Hot-Reload Validation       | Atomic swap, manifest validation, downgrade blocking            |
+| Path Traversal Protection   | Reject `..` + `isPathInside()` double-check                     |
+| Verify-then-Promote         | Temp extract → verify hashes → atomic promote                   |
+| Circuit Breaker             | 3-state (closed/open/half-open) + exponential backoff           |
+| DM Pairing                  | Unknown senders get pairing code, not access                    |
+| Audit Logging               | Skill name + operation tagged on all sandbox writes             |
+| Docker Sandboxing           | Per-session Docker containers for non-main sessions             |
+| Enterprise Managed Settings | Enforced config overrides with locked keys                      |
+
+---
+
+## Models
+
+Mayros is multi-model. Bring any provider.
+
+- Models config + CLI: **[Models](https://apilium.com/en/doc/mayros/concepts/models)**
+- Auth profile rotation (OAuth vs API keys) + fallbacks: **[Model failover](https://apilium.com/en/doc/mayros/concepts/model-failover)**
+
+Minimal config:
 
 ```json5
 {
@@ -481,157 +320,183 @@ Minimal `~/.mayros/mayros.json` (model + defaults):
 }
 ```
 
-[Full configuration reference (all keys + examples).](https://apilium.com/en/doc/mayros/gateway/configuration)
+Full reference: **[Configuration](https://apilium.com/en/doc/mayros/gateway/configuration)**
 
-## Security model (important)
+---
 
-- **Default:** tools run on the host for the **main** session, so the agent has full access when it’s just you.
-- **Group/channel safety:** set `agents.defaults.sandbox.mode: "non-main"` to run **non‑main sessions** (groups/channels) inside per‑session Docker sandboxes; bash then runs in Docker for those sessions.
-- **Sandbox defaults:** allowlist `bash`, `process`, `read`, `write`, `edit`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`; denylist `browser`, `canvas`, `nodes`, `cron`, `discord`, `gateway`.
+## Plan Mode
 
-Details: [Security guide](https://apilium.com/en/doc/mayros/gateway/security) · [Docker + sandboxing](https://apilium.com/en/doc/mayros/install/docker) · [Sandbox config](https://apilium.com/en/doc/mayros/gateway/configuration)
+Cortex-backed semantic planning for complex multi-step tasks.
 
-### [WhatsApp](https://apilium.com/en/doc/mayros/channels/whatsapp)
+- **Explore** — gather context from the codebase and Cortex graph
+- **Assert** — declare facts and constraints the plan must satisfy
+- **Approve** — review the plan before execution
+- **Execute** — run the approved plan with progress tracking
 
-- Link the device: `pnpm mayros channels login` (stores creds in `~/.mayros/credentials`).
-- Allowlist who can talk to the assistant via `channels.whatsapp.allowFrom`.
-- If `channels.whatsapp.groups` is set, it becomes a group allowlist; include `"*"` to allow all.
+CLI: `mayros plan start|explore|assert|show|approve|execute|done|list|status` · TUI: `/plan`
 
-### [Telegram](https://apilium.com/en/doc/mayros/channels/telegram)
+---
 
-- Set `TELEGRAM_BOT_TOKEN` or `channels.telegram.botToken` (env wins).
-- Optional: set `channels.telegram.groups` (with `channels.telegram.groups."*".requireMention`); when set, it is a group allowlist (include `"*"` to allow all). Also `channels.telegram.allowFrom` or `channels.telegram.webhookUrl` + `channels.telegram.webhookSecret` as needed.
+## Remote Gateway
 
-```json5
-{
-  channels: {
-    telegram: {
-      botToken: "123456:ABCDEF",
-    },
-  },
-}
+Run the Gateway on a small Linux instance. Clients connect over **Tailscale Serve/Funnel** or **SSH tunnels**, and device nodes (macOS/iOS/Android) handle local actions via `node.invoke`.
+
+Tailscale modes: `off` (default) · `serve` (tailnet-only HTTPS) · `funnel` (public HTTPS, requires password auth).
+
+Details: **[Remote access](https://apilium.com/en/doc/mayros/gateway/remote)** · **[Tailscale guide](https://apilium.com/en/doc/mayros/gateway/tailscale)** · **[Docker](https://apilium.com/en/doc/mayros/install/docker)**
+
+---
+
+## Chat Commands (Channels)
+
+Send these in WhatsApp/Telegram/Slack/Discord/Google Chat/Microsoft Teams/WebChat:
+
+| Command                       | Description                                            |
+| ----------------------------- | ------------------------------------------------------ |
+| `/status`                     | Session status (model, tokens, cost)                   |
+| `/new`, `/reset`              | Reset the session                                      |
+| `/compact`                    | Compact session context                                |
+| `/think <level>`              | Set thinking level (off/minimal/low/medium/high/xhigh) |
+| `/verbose on\|off`            | Toggle verbose mode                                    |
+| `/usage off\|tokens\|full`    | Per-response usage footer                              |
+| `/restart`                    | Restart the gateway (owner-only)                       |
+| `/activation mention\|always` | Group activation (groups only)                         |
+
+---
+
+## From Source
+
+```bash
+git clone https://github.com/ApiliumCode/mayros.git
+cd mayros
+
+pnpm install
+pnpm ui:build   # auto-installs UI deps on first run
+pnpm build
+
+pnpm mayros onboard --install-daemon
+
+# Dev loop (auto-reload)
+pnpm gateway:watch
 ```
 
-### [Slack](https://apilium.com/en/doc/mayros/channels/slack)
+`pnpm mayros ...` runs TypeScript directly (via `tsx`). `pnpm build` produces `dist/`.
 
-- Set `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` (or `channels.slack.botToken` + `channels.slack.appToken`).
+**Development channels:**
 
-### [Discord](https://apilium.com/en/doc/mayros/channels/discord)
+- **stable** — tagged releases, npm dist-tag `latest`
+- **beta** — prerelease tags, npm dist-tag `beta`
+- **dev** — moving head of `main`, npm dist-tag `dev`
 
-- Set `DISCORD_BOT_TOKEN` or `channels.discord.token` (env wins).
-- Optional: set `commands.native`, `commands.text`, or `commands.useAccessGroups`, plus `channels.discord.allowFrom`, `channels.discord.guilds`, or `channels.discord.mediaMaxMb` as needed.
+Switch: `mayros update --channel stable|beta|dev`. Details: **[Development channels](https://apilium.com/en/doc/mayros/install/development-channels)**
 
-```json5
-{
-  channels: {
-    discord: {
-      token: "1234abcd",
-    },
-  },
-}
-```
+---
 
-### [Signal](https://apilium.com/en/doc/mayros/channels/signal)
+## Skills Hub
 
-- Requires `signal-cli` and a `channels.signal` config section.
+[Skills Hub](https://hub.apilium.com) is a skill marketplace. With it enabled, the agent can search for skills automatically and pull in new ones.
 
-### [BlueBubbles (iMessage)](https://apilium.com/en/doc/mayros/channels/bluebubbles)
+- Workspace root: `~/.mayros/workspace`
+- Skills: `~/.mayros/workspace/skills/<skill>/SKILL.md`
+- Injected prompt files: `AGENTS.md`, `SOUL.md`, `TOOLS.md`
 
-- **Recommended** iMessage integration.
-- Configure `channels.bluebubbles.serverUrl` + `channels.bluebubbles.password` and a webhook (`channels.bluebubbles.webhookPath`).
-- The BlueBubbles server runs on macOS; the Gateway can run on macOS or elsewhere.
+---
 
-### [iMessage (legacy)](https://apilium.com/en/doc/mayros/channels/imessage)
+## Channel Setup
 
-- Legacy macOS-only integration via `imsg` (Messages must be signed in).
-- If `channels.imessage.groups` is set, it becomes a group allowlist; include `"*"` to allow all.
+<details>
+<summary><strong>WhatsApp</strong></summary>
 
-### [Microsoft Teams](https://apilium.com/en/doc/mayros/channels/msteams)
+- Link the device: `pnpm mayros channels login` (stores creds in `~/.mayros/credentials`)
+- Allowlist: `channels.whatsapp.allowFrom`
+- Groups: `channels.whatsapp.groups` (include `"*"` to allow all)
 
-- Configure a Teams app + Bot Framework, then add a `msteams` config section.
-- Allowlist who can talk via `msteams.allowFrom`; group access via `msteams.groupAllowFrom` or `msteams.groupPolicy: "open"`.
+[Full guide →](https://apilium.com/en/doc/mayros/channels/whatsapp)
 
-### [WebChat](https://apilium.com/en/doc/mayros/web/webchat)
+</details>
 
-- Uses the Gateway WebSocket; no separate WebChat port/config.
+<details>
+<summary><strong>Telegram</strong></summary>
 
-Browser control (optional):
+Set `TELEGRAM_BOT_TOKEN` or `channels.telegram.botToken`:
 
 ```json5
-{
-  browser: {
-    enabled: true,
-    color: "#FF4500",
-  },
-}
+{ channels: { telegram: { botToken: "123456:ABCDEF" } } }
 ```
 
-## Docs
+[Full guide →](https://apilium.com/en/doc/mayros/channels/telegram)
 
-Use these when you’re past the onboarding flow and want the deeper reference.
+</details>
 
-- [Start with the docs index for navigation and “what’s where.”](https://apilium.com/en/doc/mayros)
-- [Read the architecture overview for the gateway + protocol model.](https://apilium.com/en/doc/mayros/concepts/architecture)
-- [Use the full configuration reference when you need every key and example.](https://apilium.com/en/doc/mayros/gateway/configuration)
-- [Run the Gateway by the book with the operational runbook.](https://apilium.com/en/doc/mayros/gateway)
-- [Learn how the Control UI/Web surfaces work and how to expose them safely.](https://apilium.com/en/doc/mayros/web)
-- [Understand remote access over SSH tunnels or tailnets.](https://apilium.com/en/doc/mayros/gateway/remote)
-- [Follow the onboarding wizard flow for a guided setup.](https://apilium.com/en/doc/mayros/start/wizard)
-- [Wire external triggers via the webhook surface.](https://apilium.com/en/doc/mayros/automation/webhook)
-- [Set up Gmail Pub/Sub triggers.](https://apilium.com/en/doc/mayros/automation/gmail-pubsub)
-- [Learn the macOS menu bar companion details.](https://apilium.com/en/doc/mayros/platforms/mac/menu-bar)
-- [Platform guides: Windows (WSL2)](https://apilium.com/en/doc/mayros/platforms/windows), [Linux](https://apilium.com/en/doc/mayros/platforms/linux), [macOS](https://apilium.com/en/doc/mayros/platforms/macos), [iOS](https://apilium.com/en/doc/mayros/platforms/ios), [Android](https://apilium.com/en/doc/mayros/platforms/android)
-- [Debug common failures with the troubleshooting guide.](https://apilium.com/en/doc/mayros/channels/troubleshooting)
-- [Review security guidance before exposing anything.](https://apilium.com/en/doc/mayros/gateway/security)
+<details>
+<summary><strong>Slack</strong></summary>
 
-## Advanced docs (discovery + control)
+Set `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` (or config equivalents).
 
-- [Discovery + transports](https://apilium.com/en/doc/mayros/gateway/discovery)
-- [Bonjour/mDNS](https://apilium.com/en/doc/mayros/gateway/bonjour)
-- [Gateway pairing](https://apilium.com/en/doc/mayros/gateway/pairing)
-- [Remote gateway README](https://apilium.com/en/doc/mayros/gateway/remote-gateway-readme)
-- [Control UI](https://apilium.com/en/doc/mayros/web/control-ui)
-- [Dashboard](https://apilium.com/en/doc/mayros/web/dashboard)
+[Full guide →](https://apilium.com/en/doc/mayros/channels/slack)
 
-## Operations & troubleshooting
+</details>
 
-- [Health checks](https://apilium.com/en/doc/mayros/gateway/health)
-- [Gateway lock](https://apilium.com/en/doc/mayros/gateway/gateway-lock)
-- [Background process](https://apilium.com/en/doc/mayros/gateway/background-process)
-- [Browser troubleshooting (Linux)](https://apilium.com/en/doc/mayros/tools/browser-linux-troubleshooting)
-- [Logging](https://apilium.com/en/doc/mayros/logging)
+<details>
+<summary><strong>Discord</strong></summary>
 
-## Deep dives
+Set `DISCORD_BOT_TOKEN` or `channels.discord.token`:
 
-- [Agent loop](https://apilium.com/en/doc/mayros/concepts/agent-loop)
-- [Presence](https://apilium.com/en/doc/mayros/concepts/presence)
-- [TypeBox schemas](https://apilium.com/en/doc/mayros/concepts/typebox)
-- [RPC adapters](https://apilium.com/en/doc/mayros/reference/rpc)
-- [Queue](https://apilium.com/en/doc/mayros/concepts/queue)
+```json5
+{ channels: { discord: { token: "1234abcd" } } }
+```
 
-## Workspace & skills
+[Full guide →](https://apilium.com/en/doc/mayros/channels/discord)
 
-- [Skills config](https://apilium.com/en/doc/mayros/tools/skills-config)
-- [Default AGENTS](https://apilium.com/en/doc/mayros/reference/AGENTS.default)
-- [Templates: AGENTS](https://apilium.com/en/doc/mayros/reference/templates/AGENTS)
-- [Templates: BOOTSTRAP](https://apilium.com/en/doc/mayros/reference/templates/BOOTSTRAP)
-- [Templates: IDENTITY](https://apilium.com/en/doc/mayros/reference/templates/IDENTITY)
-- [Templates: TOOLS](https://apilium.com/en/doc/mayros/reference/templates/TOOLS)
-- [Templates: USER](https://apilium.com/en/doc/mayros/reference/templates/USER)
+</details>
 
-## Platform internals
+<details>
+<summary><strong>Signal · BlueBubbles · iMessage · Teams · Matrix · Zalo · WebChat</strong></summary>
 
-- [macOS dev setup](https://apilium.com/en/doc/mayros/platforms/mac/dev-setup)
-- [macOS menu bar](https://apilium.com/en/doc/mayros/platforms/mac/menu-bar)
-- [macOS voice wake](https://apilium.com/en/doc/mayros/platforms/mac/voicewake)
-- [iOS node](https://apilium.com/en/doc/mayros/platforms/ios)
-- [Android node](https://apilium.com/en/doc/mayros/platforms/android)
-- [Windows (WSL2)](https://apilium.com/en/doc/mayros/platforms/windows)
-- [Linux app](https://apilium.com/en/doc/mayros/platforms/linux)
+- **Signal** — requires `signal-cli` + config section
+- **BlueBubbles** (recommended iMessage) — `channels.bluebubbles.serverUrl` + `password` + webhook
+- **iMessage** (legacy) — macOS-only via `imsg`
+- **Microsoft Teams** — Bot Framework app + `msteams` config
+- **Matrix** — `matrix-js-sdk` extension
+- **Zalo / Zalo Personal** — extension channels
+- **WebChat** — uses Gateway WebSocket directly
 
-## Email hooks (Gmail)
+[Channel docs →](https://apilium.com/en/doc/mayros/channels)
 
-- [apilium.com/en/doc/mayros/gmail-pubsub](https://apilium.com/en/doc/mayros/automation/gmail-pubsub)
+</details>
+
+---
+
+## Documentation
+
+**Start here:**
+
+- [Getting started](https://apilium.com/en/doc/mayros/start/getting-started) — first-time setup
+- [Architecture](https://apilium.com/en/doc/mayros/concepts/architecture) — gateway + protocol model
+- [Configuration](https://apilium.com/en/doc/mayros/gateway/configuration) — every key + examples
+- [Security](https://apilium.com/en/doc/mayros/gateway/security) — security model and guidance
+
+**Platform guides:**
+
+[macOS](https://apilium.com/en/doc/mayros/platforms/macos) · [iOS](https://apilium.com/en/doc/mayros/platforms/ios) · [Android](https://apilium.com/en/doc/mayros/platforms/android) · [Linux](https://apilium.com/en/doc/mayros/platforms/linux) · [Windows (WSL2)](https://apilium.com/en/doc/mayros/platforms/windows)
+
+**Operations:**
+
+[Gateway runbook](https://apilium.com/en/doc/mayros/gateway) · [Docker](https://apilium.com/en/doc/mayros/install/docker) · [Health checks](https://apilium.com/en/doc/mayros/gateway/health) · [Doctor](https://apilium.com/en/doc/mayros/gateway/doctor) · [Logging](https://apilium.com/en/doc/mayros/logging) · [Troubleshooting](https://apilium.com/en/doc/mayros/channels/troubleshooting)
+
+**Deep dives:**
+
+[Agent loop](https://apilium.com/en/doc/mayros/concepts/agent-loop) · [Sessions](https://apilium.com/en/doc/mayros/concepts/session) · [Models](https://apilium.com/en/doc/mayros/concepts/models) · [Presence](https://apilium.com/en/doc/mayros/concepts/presence) · [Streaming](https://apilium.com/en/doc/mayros/concepts/streaming) · [Skills](https://apilium.com/en/doc/mayros/tools/skills) · [Browser](https://apilium.com/en/doc/mayros/tools/browser) · [Canvas](https://apilium.com/en/doc/mayros/platforms/mac/canvas) · [Nodes](https://apilium.com/en/doc/mayros/nodes) · [Cron](https://apilium.com/en/doc/mayros/automation/cron-jobs) · [Webhooks](https://apilium.com/en/doc/mayros/automation/webhook) · [Gmail Pub/Sub](https://apilium.com/en/doc/mayros/automation/gmail-pubsub)
+
+**Advanced:**
+
+[Discovery + transports](https://apilium.com/en/doc/mayros/gateway/discovery) · [Bonjour/mDNS](https://apilium.com/en/doc/mayros/gateway/bonjour) · [Gateway pairing](https://apilium.com/en/doc/mayros/gateway/pairing) · [Tailscale](https://apilium.com/en/doc/mayros/gateway/tailscale) · [Remote gateway](https://apilium.com/en/doc/mayros/gateway/remote) · [Control UI](https://apilium.com/en/doc/mayros/web/control-ui) · [RPC adapters](https://apilium.com/en/doc/mayros/reference/rpc) · [TypeBox schemas](https://apilium.com/en/doc/mayros/concepts/typebox)
+
+**Templates:**
+
+[AGENTS](https://apilium.com/en/doc/mayros/reference/templates/AGENTS) · [BOOTSTRAP](https://apilium.com/en/doc/mayros/reference/templates/BOOTSTRAP) · [IDENTITY](https://apilium.com/en/doc/mayros/reference/templates/IDENTITY) · [TOOLS](https://apilium.com/en/doc/mayros/reference/templates/TOOLS) · [USER](https://apilium.com/en/doc/mayros/reference/templates/USER) · [Default AGENTS](https://apilium.com/en/doc/mayros/reference/AGENTS.default) · [Skills config](https://apilium.com/en/doc/mayros/tools/skills-config)
+
+---
 
 ## Community
 
