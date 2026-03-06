@@ -1,0 +1,88 @@
+name: "Mayros PR Review"
+description: "Automated code review using Mayros CLI"
+branding:
+  icon: "code"
+  color: "blue"
+
+inputs:
+  mayros-version:
+    description: "Mayros CLI version to install"
+    required: false
+    default: "latest"
+  prompt:
+    description: "Custom review prompt"
+    required: false
+    default: "Review this pull request. Focus on: code quality, security issues, performance concerns, and adherence to project conventions. Be concise and actionable."
+  model:
+    description: "AI model to use"
+    required: false
+    default: "anthropic/claude-sonnet-4-20250514"
+  github-token:
+    description: "GitHub token for posting comments"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Mayros
+      shell: bash
+      run: |
+        npm install -g mayros@${{ inputs.mayros-version }} 2>/dev/null || {
+          echo "::warning::Could not install mayros globally, trying npx"
+        }
+
+    - name: Get PR diff
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        if [ -z "$PR_NUMBER" ]; then
+          echo "::error::Not a pull request event"
+          exit 1
+        fi
+        gh pr diff "$PR_NUMBER" > /tmp/pr-diff.txt
+        echo "PR #$PR_NUMBER diff saved ($(wc -l < /tmp/pr-diff.txt) lines)"
+
+    - name: Run Mayros review
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        DIFF=$(cat /tmp/pr-diff.txt)
+
+        # Build review prompt
+        REVIEW_PROMPT=$(cat <<'PROMPT_EOF'
+        ${{ inputs.prompt }}
+
+        Here is the PR diff to review:
+
+        ```diff
+        PROMPT_EOF
+        )
+        REVIEW_PROMPT="${REVIEW_PROMPT}
+        ${DIFF}
+        \`\`\`"
+
+        # Run mayros in headless mode
+        REVIEW=$(npx mayros -p "$REVIEW_PROMPT" --model "${{ inputs.model }}" 2>/dev/null || echo "Review generation failed")
+
+        if [ -z "$REVIEW" ] || [ "$REVIEW" = "Review generation failed" ]; then
+          echo "::warning::Could not generate review"
+          exit 0
+        fi
+
+        # Post as PR comment
+        COMMENT_BODY=$(cat <<EOF
+        ## Mayros Code Review
+
+        $REVIEW
+
+        ---
+        *Automated review by [Mayros](https://mayros.apilium.com)*
+        EOF
+        )
+
+        gh pr comment "$PR_NUMBER" --body "$COMMENT_BODY"
+        echo "Review posted to PR #$PR_NUMBER"
