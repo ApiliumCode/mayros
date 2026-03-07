@@ -550,7 +550,8 @@ export async function runTui(opts: TuiOptions) {
     }
     tui.requestRender();
   });
-  mouseHandler.enable();
+  // Mouse reporting off by default — enables native text selection.
+  // Users can toggle with /mouse if they want scroll-with-mouse.
 
   const root = new Container();
   root.addChild(header);
