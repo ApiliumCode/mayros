@@ -997,10 +997,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "kg": {
         if (!args) {
           await sendMessage(
-            "Use the semantic_memory_query tool to list a summary of what is stored in the knowledge graph. Show categories, triple counts, and recent entries.",
+            "List a summary of what is stored in the knowledge graph. Use whichever memory or graph tools are available (semantic_memory_query, memory_search, memory_stats, etc.). Show categories, triple counts, and recent entries.",
           );
         } else {
-          await sendMessage(`Use the semantic_memory_query tool to search for: ${args}`);
+          await sendMessage(
+            `Search the knowledge graph for: ${args}. Use whichever memory or graph tools are available (semantic_memory_query, memory_search, etc.).`,
+          );
         }
         break;
       }
