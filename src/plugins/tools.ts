@@ -62,6 +62,10 @@ export function resolvePluginTools(params: {
   });
 
   const tools: AnyAgentTool[] = [];
+  const errorPlugins = registry.plugins.filter((p) => p.status === "error");
+  if (errorPlugins.length > 0) {
+    log.warn(`plugin errors: ${errorPlugins.map((p) => `${p.id}(${p.error})`).join(", ")}`);
+  }
   const existing = params.existingToolNames ?? new Set<string>();
   const existingNormalized = new Set(Array.from(existing, (tool) => normalizeToolName(tool)));
   const allowlist = normalizeAllowlist(params.toolAllowlist);

@@ -4,6 +4,7 @@ import { formatRelativeTimestamp, formatDurationHuman } from "../format.ts";
 import type { GatewayHelloOk } from "../gateway.ts";
 import { formatNextRun } from "../presenter.ts";
 import type { UiSettings } from "../storage.ts";
+import type { CortexStatusResponse } from "../controllers/cortex.ts";
 
 export type OverviewProps = {
   connected: boolean;
@@ -16,11 +17,14 @@ export type OverviewProps = {
   cronEnabled: boolean | null;
   cronNext: number | null;
   lastChannelsRefresh: number | null;
+  cortexStatus: CortexStatusResponse | null;
+  cortexLoading: boolean;
   onSettingsChange: (next: UiSettings) => void;
   onPasswordChange: (next: string) => void;
   onSessionKeyChange: (next: string) => void;
   onConnect: () => void;
   onRefresh: () => void;
+  onCortexReconnect: () => void;
 };
 
 export function renderOverview(props: OverviewProps) {
@@ -253,7 +257,7 @@ export function renderOverview(props: OverviewProps) {
       </div>
     </section>
 
-    <section class="grid grid-cols-3" style="margin-top: 18px;">
+    <section class="grid grid-cols-4" style="margin-top: 18px;">
       <div class="card stat-card">
         <div class="stat-label">${t("overview.stats.instances")}</div>
         <div class="stat-value">${props.presenceCount}</div>
@@ -270,6 +274,35 @@ export function renderOverview(props: OverviewProps) {
           ${props.cronEnabled == null ? t("common.na") : props.cronEnabled ? t("common.enabled") : t("common.disabled")}
         </div>
         <div class="muted">${t("overview.stats.cronNext", { time: formatNextRun(props.cronNext) })}</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Cortex</div>
+        <div class="stat-value ${props.cortexStatus?.status === "online" ? "ok" : "warn"}">
+          ${
+            props.cortexLoading
+              ? "..."
+              : props.cortexStatus
+                ? props.cortexStatus.status === "online"
+                  ? "Online"
+                  : "Offline"
+                : t("common.na")
+          }
+        </div>
+        <div class="muted">
+          ${props.cortexStatus?.version ? `v${props.cortexStatus.version}` : ""}
+          ${props.cortexStatus?.triples != null ? ` \u00b7 ${props.cortexStatus.triples} triples` : ""}
+          ${props.cortexStatus?.pendingWrites ? ` \u00b7 ${props.cortexStatus.pendingWrites} queued` : ""}
+        </div>
+        ${
+          props.cortexStatus && props.cortexStatus.status !== "online"
+            ? html`<button
+              class="btn btn--sm"
+              style="margin-top: 8px"
+              ?disabled=${props.cortexLoading}
+              @click=${() => props.onCortexReconnect()}
+            >Reconnect</button>`
+            : ""
+        }
       </div>
     </section>
 

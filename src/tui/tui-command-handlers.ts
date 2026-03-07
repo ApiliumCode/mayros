@@ -994,6 +994,13 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       }
+      case "tools": {
+        await sendMessage(
+          "List every tool name you have access to. Output ONLY a numbered list of tool names, nothing else. " +
+            "Do NOT describe them. Just the names, one per line.",
+        );
+        break;
+      }
       case "kg": {
         // Check if semantic memory tools are likely available by asking the gateway
         const kgHint =

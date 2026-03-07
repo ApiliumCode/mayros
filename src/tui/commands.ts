@@ -193,6 +193,7 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     { name: "plan", description: "Start or show semantic plan" },
     { name: "kg", description: "Search or browse the knowledge graph" },
     { name: "mouse", description: "Toggle mouse reporting (off enables text selection)" },
+    { name: "tools", description: "List tools available to the model" },
     { name: "trace", description: "Show agent trace events" },
     { name: "team", description: "Show team dashboard" },
     { name: "tasks", description: "Show background tasks" },

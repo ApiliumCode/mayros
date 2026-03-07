@@ -53,6 +53,11 @@ import {
 import type { AppViewState } from "./app-view-state.ts";
 import { normalizeAssistantIdentity } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
+import type {
+  CortexStatusResponse,
+  CortexBrowseFilter,
+  TripleEntry,
+} from "./controllers/cortex.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
@@ -208,6 +213,16 @@ export class MayrosApp extends LitElement {
   @state() presenceEntries: PresenceEntry[] = [];
   @state() presenceError: string | null = null;
   @state() presenceStatus: string | null = null;
+
+  @state() cortexLoading = false;
+  @state() cortexStatus: CortexStatusResponse | null = null;
+  @state() cortexError: string | null = null;
+  @state() cortexTriples: { triples: TripleEntry[]; total: number } | null = null;
+  @state() cortexSubjects: { subjects: string[]; total: number } | null = null;
+  @state() cortexPredicates: { predicates: string[]; total: number } | null = null;
+  @state() cortexBrowseLoading = false;
+  @state() cortexBrowseError: string | null = null;
+  @state() cortexBrowseFilter: CortexBrowseFilter = { limit: 50, offset: 0 };
 
   @state() agentsLoading = false;
   @state() agentsList: AgentsListResult | null = null;

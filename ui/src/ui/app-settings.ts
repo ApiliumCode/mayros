@@ -11,6 +11,12 @@ import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-iden
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
+import {
+  loadCortexStatus,
+  loadCortexTriples,
+  loadCortexSubjects,
+  loadCortexPredicates,
+} from "./controllers/cortex.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronStatus } from "./controllers/cron.ts";
 import { loadDebug } from "./controllers/debug.ts";
@@ -240,6 +246,12 @@ export async function refreshActiveTab(host: SettingsHost) {
     await loadDebug(host as unknown as MayrosApp);
     host.eventLog = host.eventLogBuffer;
   }
+  if (host.tab === "cortex") {
+    await loadCortexStatus(host as unknown as MayrosApp);
+    void loadCortexTriples(host as unknown as MayrosApp);
+    void loadCortexSubjects(host as unknown as MayrosApp);
+    void loadCortexPredicates(host as unknown as MayrosApp);
+  }
   if (host.tab === "logs") {
     host.logsAtBottom = true;
     await loadLogs(host as unknown as MayrosApp, { reset: true });
@@ -409,6 +421,7 @@ export async function loadOverview(host: SettingsHost) {
     loadSessions(host as unknown as MayrosApp),
     loadCronStatus(host as unknown as MayrosApp),
     loadDebug(host as unknown as MayrosApp),
+    loadCortexStatus(host as unknown as MayrosApp),
   ]);
 }
 

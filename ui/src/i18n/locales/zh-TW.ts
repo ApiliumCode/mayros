@@ -35,6 +35,7 @@ export const zh_TW: TranslationMap = {
     config: "配置",
     debug: "調試",
     logs: "日誌",
+    cortex: "Cortex",
   },
   subtitles: {
     agents: "管理代理工作區、工具和身份。",
@@ -50,6 +51,7 @@ export const zh_TW: TranslationMap = {
     config: "安全地編輯 ~/.mayros/mayros.json。",
     debug: "網關快照、事件和手動 RPC 調用。",
     logs: "網關文件日志的實時追蹤。",
+    cortex: "瀏覽知識圖譜：三元組、主體和謂詞。",
   },
   overview: {
     access: {
