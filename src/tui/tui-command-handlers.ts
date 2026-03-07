@@ -995,14 +995,18 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       }
       case "kg": {
+        // Check if semantic memory tools are likely available by asking the gateway
+        const kgHint =
+          "You MUST use one of these tools (in order of preference): " +
+          "memory_stats, semantic_memory_query, semantic_memory_recall. " +
+          "If none of these tools are available to you, respond EXACTLY with: " +
+          '"[kg] Plugin memory-semantic is not loaded. Run `mayros plugins list` to check."';
         if (!args) {
           await sendMessage(
-            "List a summary of what is stored in the knowledge graph. Use whichever memory or graph tools are available (semantic_memory_query, memory_search, memory_stats, etc.). Show categories, triple counts, and recent entries.",
+            `Show a knowledge graph summary. ${kgHint} Show categories, triple counts, and recent entries.`,
           );
         } else {
-          await sendMessage(
-            `Search the knowledge graph for: ${args}. Use whichever memory or graph tools are available (semantic_memory_query, memory_search, etc.).`,
-          );
+          await sendMessage(`Search the knowledge graph for: ${args}. ${kgHint}`);
         }
         break;
       }
