@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as ssrf from "../infra/net/ssrf.js";
 import { InvalidBrowserNavigationUrlError } from "./navigation-guard.js";
 import {
   getPwToolsCoreSessionMocks,
@@ -29,6 +30,11 @@ describe("pw-tools-core.snapshot navigate guard", () => {
   });
 
   it("navigates valid network URLs with clamped timeout", async () => {
+    const spy = vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
+      hostname: "example.com",
+      ip: "93.184.216.34",
+    });
+
     const goto = vi.fn(async () => {});
     setPwToolsCoreCurrentPage({
       goto,
@@ -43,5 +49,6 @@ describe("pw-tools-core.snapshot navigate guard", () => {
 
     expect(goto).toHaveBeenCalledWith("https://example.com", { timeout: 1000 });
     expect(result.url).toBe("https://example.com");
+    spy.mockRestore();
   });
 });

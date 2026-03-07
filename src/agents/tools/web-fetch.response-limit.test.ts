@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as ssrf from "../../infra/net/ssrf.js";
 import { withFetchPreconnect } from "../../test-utils/fetch-mock.js";
 import {
   createBaseWebFetchToolConfig,
@@ -9,6 +10,18 @@ import { createWebFetchTool } from "./web-tools.js";
 
 const baseToolConfig = createBaseWebFetchToolConfig({ maxResponseBytes: 1024 });
 installWebFetchSsrfHarness();
+
+beforeEach(() => {
+  vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation(async (hostname) => {
+    const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
+    const addresses = ["93.184.216.34"];
+    return {
+      hostname: normalized,
+      addresses,
+      lookup: ssrf.createPinnedLookup({ hostname: normalized, addresses }),
+    };
+  });
+});
 
 describe("web_fetch response size limits", () => {
   it("caps response bytes and does not hang on endless streams", async () => {
