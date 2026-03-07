@@ -21,7 +21,7 @@ describe("semanticSkillsConfigSchema", () => {
   it("parses minimal config", () => {
     const cfg = semanticSkillsConfigSchema.parse({});
     expect(cfg.cortex.host).toBe("127.0.0.1");
-    expect(cfg.cortex.port).toBe(8080);
+    expect(cfg.cortex.port).toBe(19090);
     expect(cfg.agentNamespace).toBe("mayros");
     expect(cfg.skillSandbox.maxGraphQueries).toBe(50);
     expect(cfg.skillSandbox.maxAssertions).toBe(20);

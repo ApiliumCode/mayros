@@ -20,7 +20,7 @@ describe("mcpServerConfigSchema", () => {
   it("parses full config", () => {
     const cfg = mcpServerConfigSchema.parse({
       transport: "http",
-      port: 8080,
+      port: 19090,
       host: "0.0.0.0",
       serverName: "my-mayros",
       serverVersion: "2.0.0",
@@ -28,7 +28,7 @@ describe("mcpServerConfigSchema", () => {
       capabilities: { tools: true, resources: false, prompts: true },
     });
     expect(cfg.transport).toBe("http");
-    expect(cfg.port).toBe(8080);
+    expect(cfg.port).toBe(19090);
     expect(cfg.host).toBe("0.0.0.0");
     expect(cfg.serverName).toBe("my-mayros");
     expect(cfg.auth.token).toBe("secret");

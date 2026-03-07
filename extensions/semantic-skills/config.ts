@@ -36,7 +36,7 @@ export type SemanticSkillsConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 
 function clampInt(raw: unknown, min: number, max: number, defaultVal: number): number {
   if (typeof raw !== "number") return defaultVal;

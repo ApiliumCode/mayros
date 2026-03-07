@@ -34,7 +34,7 @@ export type ObservabilityConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
 const DEFAULT_MAX_CHECKPOINTS = 50;
 const DEFAULT_MAX_FORKS = 10;
