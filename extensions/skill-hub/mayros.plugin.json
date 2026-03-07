@@ -9,7 +9,7 @@
         "type": "object",
         "properties": {
           "host": { "type": "string", "default": "127.0.0.1" },
-          "port": { "type": "integer", "default": 8080 },
+          "port": { "type": "integer", "default": 19090 },
           "authToken": { "type": "string" }
         }
       },

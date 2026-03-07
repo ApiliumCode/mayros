@@ -843,6 +843,12 @@ export const chatHandlers: GatewayRequestHandlers = {
       // See: https://github.com/ApiliumCode/mayros/issues/3658
       const stampedMessage = injectTimestamp(parsedMessage, timestampOptsFromConfig(cfg));
 
+      // Local/TUI sessions are always treated as the device owner.
+      const isLocalOwner =
+        !client?.connect?.scopes ||
+        client.connect.scopes.includes("local") ||
+        client.connect.scopes.includes("admin");
+
       const ctx: MsgContext = {
         Body: parsedMessage,
         BodyForAgent: stampedMessage,
@@ -860,6 +866,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         SenderName: clientInfo?.displayName,
         SenderUsername: clientInfo?.displayName,
         GatewayClientScopes: client?.connect?.scopes,
+        ...(isLocalOwner ? { OwnerAllowFrom: ["*"] } : {}),
       };
 
       const agentId = resolveSessionAgentId({

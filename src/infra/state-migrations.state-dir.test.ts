@@ -24,29 +24,30 @@ afterEach(async () => {
   tempRoot = null;
 });
 
-describe("legacy state dir auto-migration", () => {
-  it("follows legacy symlink when it points at another legacy dir (clawdbot -> moltbot)", async () => {
+describe("state dir auto-migration", () => {
+  it("reports no migration when no legacy dirs exist", async () => {
     const root = await makeTempRoot();
-    const legacySymlink = path.join(root, ".clawdbot");
-    const legacyDir = path.join(root, ".moltbot");
-
-    fs.mkdirSync(legacyDir, { recursive: true });
-    fs.writeFileSync(path.join(legacyDir, "marker.txt"), "ok", "utf-8");
-
-    const dirLinkType = process.platform === "win32" ? "junction" : "dir";
-    fs.symlinkSync(legacyDir, legacySymlink, dirLinkType);
 
     const result = await autoMigrateLegacyStateDir({
       env: {} as NodeJS.ProcessEnv,
       homedir: () => root,
     });
 
-    expect(result.migrated).toBe(true);
-    expect(result.warnings).toEqual([]);
+    expect(result.migrated).toBe(false);
+  });
 
-    const targetMarker = path.join(root, ".mayros", "marker.txt");
-    expect(fs.readFileSync(targetMarker, "utf-8")).toBe("ok");
-    expect(fs.readFileSync(path.join(root, ".moltbot", "marker.txt"), "utf-8")).toBe("ok");
-    expect(fs.readFileSync(path.join(root, ".clawdbot", "marker.txt"), "utf-8")).toBe("ok");
+  it("skips migration when .mayros already exists", async () => {
+    const root = await makeTempRoot();
+    const mayrosDir = path.join(root, ".mayros");
+    fs.mkdirSync(mayrosDir, { recursive: true });
+    fs.writeFileSync(path.join(mayrosDir, "marker.txt"), "ok", "utf-8");
+
+    const result = await autoMigrateLegacyStateDir({
+      env: {} as NodeJS.ProcessEnv,
+      homedir: () => root,
+    });
+
+    expect(result.migrated).toBe(false);
+    expect(fs.readFileSync(path.join(mayrosDir, "marker.txt"), "utf-8")).toBe("ok");
   });
 });

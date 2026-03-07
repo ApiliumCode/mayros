@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { getSlashCommands, helpText } from "./commands.js";
 
+vi.mock("../commands/onboard.js", () => ({
+  onboardCommand: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../runtime.js", () => ({
+  defaultRuntime: {},
+}));
+
+// Prevent process.exit from killing the test runner
+const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
+
 describe("tui command handlers", () => {
   it("forwards unknown slash commands to the gateway", async () => {
     const sendChat = vi.fn().mockResolvedValue({ runId: "r1" });
@@ -316,9 +326,9 @@ describe("tui command handlers", () => {
       const setActivityStatus = vi.fn();
 
       const { handleCommand } = createCommandHandlers({
-        client: { sendChat } as never,
+        client: { sendChat, stop: vi.fn() } as never,
         chatLog: { addUser, addSystem } as never,
-        tui: { requestRender } as never,
+        tui: { requestRender, stop: vi.fn() } as never,
         opts: {},
         state: {
           currentSessionKey: "agent:main:main",
@@ -348,42 +358,52 @@ describe("tui command handlers", () => {
       expect(addUser).toHaveBeenCalledWith("/plan start");
     });
 
-    it("/kg shows usage when no query provided", async () => {
-      const { handleCommand, addSystem } = setupEcosystem();
+    it("/kg shows summary when no query provided", async () => {
+      const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/kg");
-      expect(addSystem).toHaveBeenCalledWith("usage: /kg <query>");
+      expect(addUser).toHaveBeenCalledWith(
+        expect.stringContaining("Show a knowledge graph summary."),
+      );
     });
 
     it("/kg sends search message when query provided", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/kg auth flow");
-      expect(addUser).toHaveBeenCalledWith("Search the knowledge graph for: auth flow");
+      expect(addUser).toHaveBeenCalledWith(
+        expect.stringContaining("Search the knowledge graph for: auth flow"),
+      );
     });
 
     it("/trace sends trace message", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/trace stats");
-      expect(addUser).toHaveBeenCalledWith("Show trace stats summary for the current session");
+      expect(addUser).toHaveBeenCalledWith(
+        "Use the trace_stats tool with no arguments to show aggregated observability statistics for the current agent.",
+      );
     });
 
     it("/team sends dashboard message", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/team");
       expect(addUser).toHaveBeenCalledWith(
-        "Show the team dashboard with current agent status and activity",
+        "Use the mesh_team_dashboard tool with no arguments to show the team dashboard with current agent status and activity.",
       );
     });
 
     it("/tasks sends tasks message", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/tasks");
-      expect(addUser).toHaveBeenCalledWith("Show background tasks status and summary");
+      expect(addUser).toHaveBeenCalledWith(
+        "Use the agent_list_background_tasks tool with no arguments to list all background agent tasks and their current status.",
+      );
     });
 
     it("/workflow without args lists workflows", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/workflow");
-      expect(addUser).toHaveBeenCalledWith("List available workflows and their status");
+      expect(addUser).toHaveBeenCalledWith(
+        'Use the mesh_run_workflow tool with action "list" to list available workflows and their status.',
+      );
     });
 
     it("/workflow with args forwards them", async () => {
@@ -395,21 +415,23 @@ describe("tui command handlers", () => {
     it("/rules sends rules message", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/rules");
-      expect(addUser).toHaveBeenCalledWith("Show active rules");
+      expect(addUser).toHaveBeenCalledWith(
+        'Use the semantic_memory_recall tool with subject pattern "rule:*" to list all active rules.',
+      );
     });
 
     it("/mailbox without args checks inbox", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/mailbox");
-      expect(addUser).toHaveBeenCalledWith("Check my inbox for new messages and show unread count");
+      expect(addUser).toHaveBeenCalledWith(
+        "Use the agent_check_inbox tool with no arguments to check the inbox for new messages and show unread count.",
+      );
     });
 
-    it("/onboard shows terminal hint", async () => {
+    it("/onboard launches wizard", async () => {
       const { handleCommand, addSystem } = setupEcosystem();
       await handleCommand("/onboard");
-      expect(addSystem).toHaveBeenCalledWith(
-        "Run 'mayros onboard' from the terminal to start the setup wizard",
-      );
+      expect(addSystem).toHaveBeenCalledWith("Launching onboarding wizard — stopping TUI...");
     });
   });
 

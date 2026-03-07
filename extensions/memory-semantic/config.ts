@@ -45,12 +45,15 @@ export type SemanticMemoryConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 
 export const semanticMemoryConfigSchema = {
   parse(value: unknown): SemanticMemoryConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("semantic memory config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("semantic memory config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(

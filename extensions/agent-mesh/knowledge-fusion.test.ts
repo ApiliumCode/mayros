@@ -121,7 +121,7 @@ describe("KnowledgeFusion", () => {
   });
 
   function createFusion(ns = "mayros") {
-    return new KnowledgeFusion(new CortexClient({ host: "localhost", port: 8080 }), ns);
+    return new KnowledgeFusion(new CortexClient({ host: "localhost", port: 19090 }), ns);
   }
 
   // ----- additive strategy -----

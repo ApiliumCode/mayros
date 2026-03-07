@@ -29,7 +29,7 @@ describe("skillHubConfigSchema", () => {
     const cfg = skillHubConfigSchema.parse({});
     expect(cfg.hubUrl).toBe("https://hub.apilium.com");
     expect(cfg.cortex.host).toBe("127.0.0.1");
-    expect(cfg.cortex.port).toBe(8080);
+    expect(cfg.cortex.port).toBe(19090);
     expect(cfg.agentNamespace).toBe("mayros");
     expect(cfg.verification.requireSignature).toBe(true);
     expect(cfg.verification.polValidation).toBe(true);

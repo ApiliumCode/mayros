@@ -75,7 +75,7 @@ describe("applyExclusiveSlotSelection", () => {
 
     expect(result.changed).toBe(true);
     expect(result.warnings).toContain(
-      'Exclusive slot "memory" switched from "memory-core" to "memory".',
+      'Exclusive slot "memory" switched from "memory-semantic" to "memory".',
     );
   });
 

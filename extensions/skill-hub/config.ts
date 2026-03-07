@@ -42,7 +42,7 @@ export type SkillHubConfig = {
 
 const DEFAULT_HUB_URL = "https://hub.apilium.com";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_KEYS_DIR = "~/.mayros/keys";
 

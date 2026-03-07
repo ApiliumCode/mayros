@@ -65,9 +65,10 @@ export function registerCodeCli(program: Command) {
             );
             return;
           }
-          defaultRuntime.log(
-            theme.accent("Setup complete!") + " " + theme.muted("Starting session..."),
-          );
+          // Onboarding may have already launched the TUI (hatch flow).
+          // If the user passed --clean or no explicit flags, just clear and proceed.
+          // Clear screen after onboarding so the TUI starts clean.
+          process.stdout.write("\x1b[2J\x1b[H");
         }
 
         const stateDir = resolveStateDir();
@@ -113,6 +114,27 @@ export function registerCodeCli(program: Command) {
           }
           // If no message, system prompt overrides will be applied when TUI sends first message.
           // We store them so TUI can access them if needed.
+        }
+
+        // Ensure gateway and Cortex are running before launching the TUI
+        const { ensureServicesRunning } = await import("../infra/ensure-services.js");
+        const freshSnapshot = await readConfigFileSnapshot();
+        const ensureConfig = freshSnapshot.valid ? freshSnapshot.config : {};
+        const services = await ensureServicesRunning({
+          config: ensureConfig,
+          log: (msg) => defaultRuntime.log(theme.muted(msg)),
+        });
+
+        if (!services.gateway.ok) {
+          defaultRuntime.error(
+            theme.warn("Gateway could not be started.") +
+              (services.gateway.detail ? " " + theme.muted(services.gateway.detail) : ""),
+          );
+          return;
+        }
+
+        if (!services.cortex.ok && services.cortex.detail) {
+          defaultRuntime.log(theme.muted("Cortex: " + services.cortex.detail));
         }
 
         const historyLimit = Number.parseInt(String(opts.historyLimit ?? "200"), 10);

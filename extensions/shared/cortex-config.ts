@@ -26,7 +26,7 @@ export type CortexConfig = {
 // ============================================================================
 
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 
 export function assertAllowedKeys(
   value: Record<string, unknown>,
@@ -52,7 +52,7 @@ export function resolveEnvVars(value: string): string {
  * Parse a raw config object into a validated `CortexConfig`.
  *
  * Accepted keys: host, port, binaryPath, autoStart, authToken, resilience.
- * Unknown keys throw. Defaults: 127.0.0.1:8080, no auth.
+ * Unknown keys throw. Defaults: 127.0.0.1:19090, no auth.
  */
 export function parseCortexConfig(raw: unknown): CortexConfig {
   const cortex = (raw ?? {}) as Record<string, unknown>;
@@ -80,7 +80,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
   }
 
   const binaryPath = typeof cortex.binaryPath === "string" ? cortex.binaryPath : undefined;
-  const autoStart = cortex.autoStart === true;
+  const autoStart = cortex.autoStart !== false;
   const authToken =
     typeof cortex.authToken === "string" ? resolveEnvVars(cortex.authToken) : undefined;
   const resilience = parseResilienceConfig(cortex.resilience);

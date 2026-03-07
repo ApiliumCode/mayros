@@ -35,6 +35,7 @@ export const en: TranslationMap = {
     config: "Config",
     debug: "Debug",
     logs: "Logs",
+    cortex: "Cortex",
   },
   subtitles: {
     agents: "Manage agent workspaces, tools, and identities.",
@@ -50,6 +51,7 @@ export const en: TranslationMap = {
     config: "Edit ~/.mayros/mayros.json safely.",
     debug: "Gateway snapshots, events, and manual RPC calls.",
     logs: "Live tail of the gateway file logs.",
+    cortex: "Browse the knowledge graph: triples, subjects, and predicates.",
   },
   overview: {
     access: {

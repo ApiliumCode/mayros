@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { runTui } = vi.hoisted(() => ({ runTui: vi.fn() }));
 const readConfigFileSnapshot = vi.hoisted(() => vi.fn());
 const onboardCommand = vi.hoisted(() => vi.fn());
+const ensureServicesRunning = vi.hoisted(() => vi.fn());
 const runtime = vi.hoisted(() => ({
   log: vi.fn(),
   error: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 vi.mock("../config/config.js", () => ({ readConfigFileSnapshot }));
 vi.mock("../commands/onboard.js", () => ({ onboardCommand }));
+vi.mock("../infra/ensure-services.js", () => ({ ensureServicesRunning }));
 vi.mock("../runtime.js", () => ({ defaultRuntime: runtime }));
 vi.mock("./parse-timeout.js", () => ({ parseTimeoutMs: () => undefined }));
 vi.mock("../models/model-aliases.js", () => ({
@@ -72,6 +74,10 @@ describe("code cli", () => {
     vi.clearAllMocks();
     runTui.mockResolvedValue(undefined);
     onboardCommand.mockResolvedValue(undefined);
+    ensureServicesRunning.mockResolvedValue({
+      gateway: { ok: true },
+      cortex: { ok: true },
+    });
     // Default: already onboarded so existing tests pass unchanged
     readConfigFileSnapshot.mockResolvedValue(onboardedSnapshot());
   });
@@ -132,6 +138,10 @@ describe("code-cli zero-config setup redirect", () => {
     vi.clearAllMocks();
     runTui.mockResolvedValue(undefined);
     onboardCommand.mockResolvedValue(undefined);
+    ensureServicesRunning.mockResolvedValue({
+      gateway: { ok: true },
+      cortex: { ok: true },
+    });
   });
 
   it("skips onboard when already onboarded (wizard.lastRunAt present)", async () => {
@@ -157,7 +167,6 @@ describe("code-cli zero-config setup redirect", () => {
 
     expect(onboardCommand).toHaveBeenCalledTimes(1);
     expect(runtime.log).toHaveBeenCalledWith(expect.stringContaining("Welcome to Mayros!"));
-    expect(runtime.log).toHaveBeenCalledWith(expect.stringContaining("Setup complete!"));
     expect(runTui).toHaveBeenCalledTimes(1);
   });
 
@@ -201,6 +210,10 @@ describe("code-cli new flags", () => {
     vi.clearAllMocks();
     runTui.mockResolvedValue(undefined);
     onboardCommand.mockResolvedValue(undefined);
+    ensureServicesRunning.mockResolvedValue({
+      gateway: { ok: true },
+      cortex: { ok: true },
+    });
     readConfigFileSnapshot.mockResolvedValue(onboardedSnapshot());
   });
 

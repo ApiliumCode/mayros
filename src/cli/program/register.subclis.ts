@@ -209,15 +209,6 @@ const entries: SubCliEntry[] = [
     },
   },
   {
-    name: "clawbot",
-    description: "Legacy clawbot command aliases",
-    hasSubcommands: true,
-    register: async (program) => {
-      const mod = await import("../clawbot-cli.js");
-      mod.registerClawbotCli(program);
-    },
-  },
-  {
     name: "pairing",
     description: "Secure DM pairing (approve inbound requests)",
     hasSubcommands: true,
@@ -375,6 +366,15 @@ const entries: SubCliEntry[] = [
     register: async (program) => {
       const mod = await import("../tasks-cli.js");
       mod.registerTasksCli(program);
+    },
+  },
+  {
+    name: "cortex",
+    description: "Cortex sidecar — status, reconnect, and diagnostics",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../cortex-cli.js");
+      mod.registerCortexCli(program);
     },
   },
   {

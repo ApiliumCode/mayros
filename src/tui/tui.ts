@@ -9,6 +9,7 @@ import {
   TUI,
 } from "@mariozechner/pi-tui";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { VERSION } from "../version.js";
 import { loadConfig } from "../config/config.js";
 import { isLoopbackHost } from "../gateway/net.js";
 import {
@@ -549,7 +550,8 @@ export async function runTui(opts: TuiOptions) {
     }
     tui.requestRender();
   });
-  mouseHandler.enable();
+  // Mouse reporting off by default — enables native text selection.
+  // Users can toggle with /mouse if they want scroll-with-mouse.
 
   const root = new Container();
   root.addChild(header);
@@ -816,7 +818,7 @@ export async function runTui(opts: TuiOptions) {
     return parsed ? normalizeAgentId(parsed.agentId) : null;
   })();
 
-  const createWelcomeScreen = () => new WelcomeScreen({ version: "0.1.4", getState: () => state });
+  const createWelcomeScreen = () => new WelcomeScreen({ version: VERSION, getState: () => state });
 
   const sessionActions = createSessionActions({
     client,
@@ -876,6 +878,7 @@ export async function runTui(opts: TuiOptions) {
       formatSessionKey,
       noteLocalRunId,
       forgetLocalRunId,
+      mouseHandler,
     });
 
   const { runLocalShellLine } = createLocalShellRunner({

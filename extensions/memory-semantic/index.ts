@@ -138,6 +138,16 @@ const semanticMemoryPlugin = {
       onUnhealthy: () => {
         cortexAvailable = false;
         api.logger.warn("memory-semantic: Cortex unreachable — now unhealthy");
+        // Auto-restart sidecar if it crashed
+        if (cfg.cortex.autoStart && (sidecar.status === "failed" || sidecar.status === "stopped")) {
+          api.logger.info("memory-semantic: attempting Cortex sidecar restart...");
+          void sidecar.start().then((ok) => {
+            if (ok) {
+              cortexAvailable = true;
+              api.logger.info("memory-semantic: Cortex sidecar restarted successfully");
+            }
+          });
+        }
       },
     });
 
@@ -151,6 +161,28 @@ const semanticMemoryPlugin = {
       if (cortexAvailable) return true;
       cortexAvailable = await client.isHealthy();
       return cortexAvailable;
+    }
+
+    /** Mark Cortex as unavailable on network failures so the health monitor can trigger recovery. */
+    function markCortexUnavailable(): void {
+      if (cortexAvailable) {
+        cortexAvailable = false;
+        api.logger.warn("memory-semantic: Cortex call failed — marking unavailable");
+      }
+    }
+
+    /** Wrap a Cortex operation: returns the result on success, null on connection error (after marking unavailable). */
+    async function withCortex<T>(fn: () => Promise<T>): Promise<T | null> {
+      try {
+        return await fn();
+      } catch (err) {
+        markCortexUnavailable();
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i.test(msg)) {
+          return null;
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -246,8 +278,26 @@ const semanticMemoryPlugin = {
             source: "user",
           });
 
-          for (const t of triples) {
-            await client.createTriple(t);
+          const writeResult = await withCortex(async () => {
+            for (const t of triples) {
+              await client.createTriple(t);
+            }
+            return true;
+          });
+          if (writeResult === null) {
+            // Queue writes for replay when Cortex recovers
+            for (const t of triples) {
+              writeQueue.push({ type: "createTriple", payload: t });
+            }
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Memory queued (Cortex temporarily unavailable). Will be saved when Cortex recovers.`,
+                },
+              ],
+              details: { action: "queued", id: memId, tripleCount: triples.length },
+            };
           }
 
           return {
@@ -322,21 +372,57 @@ const semanticMemoryPlugin = {
 
           // Pattern query: find all memory nodes owned by this agent
           const agentNode = agentSubject(ns, agentId);
-          const result = await client.patternQuery({
-            predicate: predicate(ns, "ownedBy"),
-            object: { node: agentNode },
-            limit: limit * 10, // over-fetch to filter locally
-          });
+          const queryResult = await withCortex(() =>
+            client.patternQuery({
+              predicate: predicate(ns, "ownedBy"),
+              object: { node: agentNode },
+              limit: limit * 10, // over-fetch to filter locally
+            }),
+          );
+
+          if (queryResult === null) {
+            // Cortex crashed mid-call — try markdown fallback
+            if (cfg.fallbackToMarkdown) {
+              const entries = await readMarkdownMemories();
+              const lower = query.toLowerCase();
+              const matched = entries
+                .filter((e) => {
+                  if (category && e.category !== category) return false;
+                  return e.text.toLowerCase().includes(lower);
+                })
+                .slice(0, limit);
+              const text = matched.map((e, i) => `${i + 1}. [${e.category}] ${e.text}`).join("\n");
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      matched.length > 0
+                        ? `Found ${matched.length} memories (markdown fallback):\n\n${text}`
+                        : "No relevant memories found (markdown fallback).",
+                  },
+                ],
+                details: { count: matched.length, source: "markdown" },
+              };
+            }
+            return {
+              content: [{ type: "text", text: "Cortex temporarily unavailable." }],
+              details: { count: 0, reason: "cortex_connection_lost" },
+            };
+          }
 
           // Collect memory subjects
-          const memSubjects = result.matches.map((t) => t.subject);
+          const memSubjects = queryResult.matches.map((t) => t.subject);
 
           // For each memory, fetch its triples and reconstruct
           const memories: SemanticMemoryEntry[] = [];
           const lower = query.toLowerCase();
 
           for (const subj of memSubjects) {
-            const tripleResult = await client.listTriples({ subject: subj, limit: 20 });
+            const tripleResult = await withCortex(() =>
+              client.listTriples({ subject: subj, limit: 20 }),
+            );
+            if (tripleResult === null) break; // connection lost mid-iteration
             const entry = triplesToMemory(tripleResult.triples);
             if (!entry) continue;
             if (category && entry.category !== category) continue;
@@ -1681,10 +1767,48 @@ const semanticMemoryPlugin = {
       }
     });
 
-    // Session start: contextual awareness notifications
-    api.on("session_start", async () => {
+    // Session start: register session node in Cortex + contextual awareness
+    api.on("session_start", async (event, ctx) => {
+      // 1. Create session node in Cortex
+      if (await ensureCortex()) {
+        const sessionSubject = `${ns}:session:${event.sessionId}`;
+        const now = new Date().toISOString();
+        const sessionTriples = [
+          { subject: sessionSubject, predicate: predicate(ns, "type"), object: "session" },
+          {
+            subject: sessionSubject,
+            predicate: predicate(ns, "sessionId"),
+            object: event.sessionId,
+          },
+          { subject: sessionSubject, predicate: predicate(ns, "startedAt"), object: now },
+          {
+            subject: sessionSubject,
+            predicate: predicate(ns, "ownedBy"),
+            object: { node: agentSubject(ns, ctx.agentId ?? agentId) },
+          },
+          ...(event.resumedFrom
+            ? [
+                {
+                  subject: sessionSubject,
+                  predicate: predicate(ns, "resumedFrom"),
+                  object: `${ns}:session:${event.resumedFrom}`,
+                },
+              ]
+            : []),
+        ];
+        for (const t of sessionTriples) {
+          try {
+            await client.createTriple(t as Parameters<typeof client.createTriple>[0]);
+          } catch {
+            writeQueue.push({ type: "createTriple", payload: t });
+          }
+        }
+        api.logger.info(`memory-semantic: session node created (${event.sessionId})`);
+      }
+
+      // 2. Contextual awareness notifications
       if (!cfg.contextualAwareness.enabled || !cfg.contextualAwareness.showOnSessionStart) return;
-      if (!(await ensureCortex())) return;
+      if (!cortexAvailable) return;
 
       try {
         const notifications = await contextualAwareness.gatherNotifications(agentId);
@@ -1698,14 +1822,136 @@ const semanticMemoryPlugin = {
       }
     });
 
-    // Session end: create a memory checkpoint for resumability
-    api.on("session_end", async () => {
+    // Session end: mark session closed in Cortex + memory checkpoint
+    api.on("session_end", async (event, ctx) => {
+      // 1. Mark session node as ended in Cortex
+      if (await ensureCortex()) {
+        const sessionSubject = `${ns}:session:${event.sessionId}`;
+        const endTriple = {
+          subject: sessionSubject,
+          predicate: predicate(ns, "endedAt"),
+          object: new Date().toISOString(),
+        };
+        try {
+          await client.createTriple(endTriple);
+        } catch {
+          writeQueue.push({ type: "createTriple", payload: endTriple });
+        }
+      }
+
+      // 2. Create memory checkpoint for resumability
       if (!(await ensureTitans())) return;
       try {
         const result = await titansClient.createCheckpoint(`session-${Date.now()}`);
         api.logger.info?.(`memory-semantic: session checkpoint created: ${result.checkpointId}`);
       } catch (err) {
         api.logger.warn(`memory-semantic: session checkpoint failed: ${String(err)}`);
+      }
+    });
+
+    // ========================================================================
+    // Gateway Methods
+    // ========================================================================
+
+    api.registerGatewayMethod("cortex.status", async ({ respond }) => {
+      const healthy = await client.isHealthy();
+      let version: string | null = null;
+      let uptime: number | null = null;
+      let triples: number | null = null;
+      let subjects: number | null = null;
+      if (healthy) {
+        try {
+          const s = await client.stats();
+          version = s.server?.version ?? null;
+          uptime = s.server?.uptime_seconds ?? null;
+          triples = s.graph?.triple_count ?? null;
+          subjects = s.graph?.subject_count ?? null;
+        } catch {
+          /* stats endpoint may not be available */
+        }
+      }
+      respond(true, {
+        status: healthy ? "online" : "offline",
+        sidecar: sidecar.status,
+        endpoint: `${cfg.cortex.host}:${cfg.cortex.port}`,
+        autoStart: cfg.cortex.autoStart,
+        version,
+        uptime,
+        triples,
+        subjects,
+        pendingWrites: writeQueue.getStats().queued,
+      });
+    });
+
+    api.registerGatewayMethod("cortex.reconnect", async ({ respond }) => {
+      if (sidecar.status === "running" || sidecar.status === "starting") {
+        await sidecar.stop();
+      }
+      const started = await sidecar.start();
+      cortexAvailable = started;
+      if (started) {
+        healthMonitor.start();
+        void writeQueue.drain().then((n) => {
+          if (n > 0)
+            api.logger.info(`memory-semantic: replayed ${n} pending writes after reconnect`);
+        });
+      }
+      respond(true, {
+        success: started,
+        status: started ? "online" : "failed",
+        sidecar: sidecar.status,
+      });
+    });
+
+    api.registerGatewayMethod("cortex.triples", async ({ params, respond }) => {
+      if (!cortexAvailable) {
+        respond(false, { error: "Cortex is offline" });
+        return;
+      }
+      try {
+        const p = (params ?? {}) as Record<string, unknown>;
+        const result = await client.listTriples({
+          subject: typeof p.subject === "string" ? p.subject : undefined,
+          predicate: typeof p.predicate === "string" ? p.predicate : undefined,
+          object: typeof p.object === "string" ? p.object : undefined,
+          limit: typeof p.limit === "number" ? p.limit : 50,
+          offset: typeof p.offset === "number" ? p.offset : 0,
+        });
+        respond(true, { triples: result.triples, total: result.total });
+      } catch (err) {
+        respond(false, { error: String(err) });
+      }
+    });
+
+    api.registerGatewayMethod("cortex.subjects", async ({ params, respond }) => {
+      if (!cortexAvailable) {
+        respond(false, { error: "Cortex is offline" });
+        return;
+      }
+      try {
+        const p = (params ?? {}) as Record<string, unknown>;
+        const result = await client.listSubjects({
+          limit: typeof p.limit === "number" ? p.limit : 200,
+        });
+        respond(true, { subjects: result.subjects, total: result.total });
+      } catch (err) {
+        respond(false, { error: String(err) });
+      }
+    });
+
+    api.registerGatewayMethod("cortex.predicates", async ({ params, respond }) => {
+      if (!cortexAvailable) {
+        respond(false, { error: "Cortex is offline" });
+        return;
+      }
+      try {
+        const p = (params ?? {}) as Record<string, unknown>;
+        const result = await client.listPredicates({
+          limit: typeof p.limit === "number" ? p.limit : 200,
+        });
+        respond(true, { predicates: result.predicates, total: result.total });
+      } catch (err) {
+        respond(false, { error: String(err) });
       }
     });
 
