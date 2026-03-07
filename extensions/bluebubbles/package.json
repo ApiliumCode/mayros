@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-bluebubbles",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Mayros BlueBubbles channel plugin",
   "license": "MIT",
   "type": "module",

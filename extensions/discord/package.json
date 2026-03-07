@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-discord",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Mayros Discord channel plugin",
   "license": "MIT",
   "type": "module",
