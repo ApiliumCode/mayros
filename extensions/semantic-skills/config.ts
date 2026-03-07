@@ -105,8 +105,11 @@ function parseVerificationConfig(raw: unknown): VerificationConfig {
 
 export const semanticSkillsConfigSchema = {
   parse(value: unknown): SemanticSkillsConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("semantic skills config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("semantic skills config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(

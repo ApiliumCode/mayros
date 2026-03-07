@@ -108,8 +108,11 @@ function parseSessionConfig(raw: unknown): SessionConfig {
 
 export const observabilityConfigSchema = {
   parse(value: unknown): ObservabilityConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("observability config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("observability config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
