@@ -39,8 +39,11 @@ const DEFAULT_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
 
 export const codeIndexerConfigSchema = {
   parse(value: unknown): CodeIndexerConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("code-indexer config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("code-indexer config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(

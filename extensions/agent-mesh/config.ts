@@ -192,8 +192,11 @@ export function parseBackgroundConfig(raw: unknown): BackgroundConfig {
 
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("agent mesh config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("agent mesh config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
