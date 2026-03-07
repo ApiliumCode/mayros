@@ -80,7 +80,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
   }
 
   const binaryPath = typeof cortex.binaryPath === "string" ? cortex.binaryPath : undefined;
-  const autoStart = cortex.autoStart === true;
+  const autoStart = cortex.autoStart !== false;
   const authToken =
     typeof cortex.authToken === "string" ? resolveEnvVars(cortex.authToken) : undefined;
   const resilience = parseResilienceConfig(cortex.resilience);
