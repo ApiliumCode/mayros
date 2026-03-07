@@ -124,7 +124,7 @@ describe("web media loading", () => {
   });
 
   beforeAll(() => {
-    vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation(async (hostname) => {
+    const mockPinnedHostname = async (hostname: string) => {
       const normalized = hostname.trim().toLowerCase().replace(/\.$/, "");
       const addresses = ["93.184.216.34"];
       return {
@@ -132,7 +132,18 @@ describe("web media loading", () => {
         addresses,
         lookup: ssrf.createPinnedLookup({ hostname: normalized, addresses }),
       };
-    });
+    };
+    vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation(mockPinnedHostname);
+    const realResolvePinnedHostnameWithPolicy = ssrf.resolvePinnedHostnameWithPolicy;
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation(
+      async (hostname, params) => {
+        // Let SSRF-blocked hostnames go through real validation so guard tests still work.
+        if (ssrf.isBlockedHostnameOrIp(hostname) || /^(10|127|192\.168)\.\d/.test(hostname)) {
+          return realResolvePinnedHostnameWithPolicy(hostname, params);
+        }
+        return mockPinnedHostname(hostname);
+      },
+    );
   });
 
   it("strips MEDIA: prefix before reading local file (including whitespace variants)", async () => {
