@@ -46,7 +46,7 @@ export type AgentMeshConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_MAX_SHARED_NAMESPACES = 50;
 const DEFAULT_DELEGATION_TIMEOUT = 300;
 const DEFAULT_AUTO_MERGE = true;

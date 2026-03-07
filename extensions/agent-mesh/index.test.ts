@@ -25,7 +25,7 @@ describe("agent mesh config", () => {
     const config = agentMeshConfigSchema.parse({});
 
     expect(config.cortex.host).toBe("127.0.0.1");
-    expect(config.cortex.port).toBe(8080);
+    expect(config.cortex.port).toBe(19090);
     expect(config.cortex.authToken).toBe(undefined);
     expect(config.agentNamespace).toBe("mayros");
     expect(config.mesh.maxSharedNamespaces).toBe(50);
@@ -721,7 +721,7 @@ describe("delegation engine", () => {
       };
 
       const nsMgr = new NamespaceManager(mockClient, "mayros", 50);
-      const cortexClient = new CortexClient({ host: "127.0.0.1", port: 8080 });
+      const cortexClient = new CortexClient({ host: "127.0.0.1", port: 19090 });
       const engine = new DelegationEngine(cortexClient, "mayros", nsMgr);
 
       const ctx = await engine.prepareContext("Review the TypeScript backend code", "parent-agent");
@@ -761,7 +761,7 @@ describe("delegation engine", () => {
     };
 
     const nsMgr = new NamespaceManager(mockClient, "mayros", 50);
-    const cortexClient = new CortexClient({ host: "127.0.0.1", port: 8080 });
+    const cortexClient = new CortexClient({ host: "127.0.0.1", port: 19090 });
     const engine = new DelegationEngine(cortexClient, "mayros", nsMgr);
 
     const ctx = {
@@ -803,7 +803,7 @@ describe("delegation engine", () => {
     };
 
     const nsMgr = new NamespaceManager(mockClient, "mayros", 50);
-    const cortexClient = new CortexClient({ host: "127.0.0.1", port: 8080 });
+    const cortexClient = new CortexClient({ host: "127.0.0.1", port: 19090 });
     const engine = new DelegationEngine(cortexClient, "mayros", nsMgr);
 
     const result = engine.getInjectedContext("nonexistent");
@@ -898,7 +898,7 @@ describe("knowledge fusion", () => {
 
     try {
       const fusionEngine = new KnowledgeFusion(
-        new CortexClient({ host: "127.0.0.1", port: 8080 }),
+        new CortexClient({ host: "127.0.0.1", port: 19090 }),
         "mayros",
       );
 
@@ -924,7 +924,7 @@ describe("knowledge fusion", () => {
     const { KnowledgeFusion } = await import("./knowledge-fusion.js");
 
     const fusion = new KnowledgeFusion(
-      new CortexClient({ host: "127.0.0.1", port: 8080 }),
+      new CortexClient({ host: "127.0.0.1", port: 19090 }),
       "mayros",
     );
     expect(fusion).toBeTruthy();
@@ -934,7 +934,7 @@ describe("knowledge fusion", () => {
     const { KnowledgeFusion } = await import("./knowledge-fusion.js");
 
     const fusion = new KnowledgeFusion(
-      new CortexClient({ host: "127.0.0.1", port: 8080, authToken: "Bearer secret" }),
+      new CortexClient({ host: "127.0.0.1", port: 19090, authToken: "Bearer secret" }),
       "mayros",
     );
     expect(fusion).toBeTruthy();

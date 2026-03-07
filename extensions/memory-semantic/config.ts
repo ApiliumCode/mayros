@@ -45,7 +45,7 @@ export type SemanticMemoryConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 
 export const semanticMemoryConfigSchema = {
   parse(value: unknown): SemanticMemoryConfig {
