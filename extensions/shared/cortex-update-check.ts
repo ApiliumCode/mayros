@@ -56,7 +56,7 @@ function semverLessThan(a: string, b: string): boolean {
 // Platform helpers (same logic as scripts/install-cortex.ts)
 // ---------------------------------------------------------------------------
 
-const REPO_OWNER = "apilium";
+const REPO_OWNER = "ApiliumCode";
 const REPO_NAME = "aingle";
 
 function getPlatformKey(): string {
