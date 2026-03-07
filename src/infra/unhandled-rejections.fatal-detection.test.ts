@@ -4,8 +4,9 @@ import { installUnhandledRejectionHandler } from "./unhandled-rejections.js";
 
 describe("installUnhandledRejectionHandler - fatal detection", () => {
   let exitCalls: Array<string | number | null> = [];
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let stderrMessages: string[] = [];
   let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
+  let stderrWriteSpy: ReturnType<typeof vi.spyOn>;
   let originalExit: typeof process.exit;
 
   beforeAll(() => {
@@ -15,6 +16,7 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
 
   beforeEach(() => {
     exitCalls = [];
+    stderrMessages = [];
 
     vi.spyOn(process, "exit").mockImplementation((code?: string | number | null): never => {
       if (code !== undefined && code !== null) {
@@ -23,13 +25,31 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
       return undefined as never;
     });
 
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Mock stderr.write to capture messages and invoke the callback synchronously
+    // so that process.exit is called within the same tick as process.emit.
+    stderrWriteSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((...args: unknown[]): boolean => {
+        const data = args[0];
+        if (typeof data === "string") {
+          stderrMessages.push(data);
+        }
+        // Find the callback argument (2nd or 3rd arg) and invoke it synchronously
+        for (let i = 1; i < args.length; i++) {
+          if (typeof args[i] === "function") {
+            (args[i] as () => void)();
+            break;
+          }
+        }
+        return true;
+      });
+
     consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-    consoleErrorSpy.mockRestore();
+    stderrWriteSpy.mockRestore();
     consoleWarnSpy.mockRestore();
   });
 
@@ -52,10 +72,11 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
         expect(exitCalls).toEqual([1]);
       }
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[mayros] FATAL unhandled rejection:",
-        expect.stringContaining("Out of memory"),
+      const hasFatalMsg = stderrMessages.some(
+        (msg) =>
+          msg.includes("[mayros] FATAL unhandled rejection:") && msg.includes("Out of memory"),
       );
+      expect(hasFatalMsg).toBe(true);
     });
   });
 
@@ -73,10 +94,12 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
         expect(exitCalls).toEqual([1]);
       }
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[mayros] CONFIGURATION ERROR - requires fix:",
-        expect.stringContaining("Invalid config"),
+      const hasConfigMsg = stderrMessages.some(
+        (msg) =>
+          msg.includes("[mayros] CONFIGURATION ERROR - requires fix:") &&
+          msg.includes("Invalid config"),
       );
+      expect(hasConfigMsg).toBe(true);
     });
   });
 
@@ -109,10 +132,12 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
       process.emit("unhandledRejection", genericErr, Promise.resolve());
 
       expect(exitCalls).toEqual([1]);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[mayros] Unhandled promise rejection:",
-        expect.stringContaining("Something went wrong"),
+      const hasGenericMsg = stderrMessages.some(
+        (msg) =>
+          msg.includes("[mayros] Unhandled promise rejection:") &&
+          msg.includes("Something went wrong"),
       );
+      expect(hasGenericMsg).toBe(true);
     });
   });
 });

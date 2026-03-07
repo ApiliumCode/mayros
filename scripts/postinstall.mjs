@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-const REPO = "apilium/aingle";
+const REPO = "ApiliumCode/aingle";
 const INSTALL_DIR = join(homedir(), ".mayros", "bin");
 const IS_WIN = platform() === "win32";
 const BINARY_NAME = IS_WIN ? "aingle-cortex.exe" : "aingle-cortex";

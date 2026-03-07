@@ -34,7 +34,7 @@ export type ObservabilityConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
 const DEFAULT_MAX_CHECKPOINTS = 50;
 const DEFAULT_MAX_FORKS = 10;
@@ -108,8 +108,11 @@ function parseSessionConfig(raw: unknown): SessionConfig {
 
 export const observabilityConfigSchema = {
   parse(value: unknown): ObservabilityConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("observability config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("observability config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(

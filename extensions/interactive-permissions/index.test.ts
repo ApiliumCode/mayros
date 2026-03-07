@@ -26,7 +26,7 @@ describe("interactive-permissions config", () => {
     const config = interactivePermissionsConfigSchema.parse({});
 
     expect(config.cortex.host).toBe("127.0.0.1");
-    expect(config.cortex.port).toBe(8080);
+    expect(config.cortex.port).toBe(19090);
     expect(config.agentNamespace).toBe("mayros");
     expect(config.autoApproveSafe).toBe(true);
     expect(config.defaultDeny).toBe(false);

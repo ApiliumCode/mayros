@@ -59,7 +59,7 @@ describe("parseCortexConfig", () => {
   it("returns defaults for undefined input", () => {
     const cfg = parseCortexConfig(undefined);
     expect(cfg.host).toBe("127.0.0.1");
-    expect(cfg.port).toBe(8080);
+    expect(cfg.port).toBe(19090);
     expect(cfg.authToken).toBeUndefined();
     expect(cfg.resilience).toBeUndefined();
     expect(cfg.strictVersionCheck).toBe(false);
@@ -143,7 +143,7 @@ describe("CortexClient", () => {
   let client: CortexClient;
 
   beforeEach(() => {
-    client = new CortexClient({ host: "127.0.0.1", port: 8080 });
+    client = new CortexClient({ host: "127.0.0.1", port: 19090 });
     // Mock global fetch
     vi.stubGlobal("fetch", vi.fn());
   });
@@ -162,7 +162,7 @@ describe("CortexClient", () => {
   }
 
   it("builds correct base URL", () => {
-    expect(client.baseUrl).toBe("http://127.0.0.1:8080");
+    expect(client.baseUrl).toBe("http://127.0.0.1:19090");
   });
 
   it("createTriple sends POST to /api/v1/triples", async () => {
@@ -173,7 +173,7 @@ describe("CortexClient", () => {
     expect(result).toEqual(triple);
 
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://127.0.0.1:8080/api/v1/triples");
+    expect(call[0]).toBe("http://127.0.0.1:19090/api/v1/triples");
     expect(JSON.parse(call[1].body)).toEqual({ subject: "s", predicate: "p", object: "o" });
   });
 
@@ -193,7 +193,7 @@ describe("CortexClient", () => {
     await client.patternQuery({ predicate: "p", limit: 5 });
 
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://127.0.0.1:8080/api/v1/query");
+    expect(call[0]).toBe("http://127.0.0.1:19090/api/v1/query");
   });
 
   it("deleteTriple sends DELETE", async () => {
@@ -299,7 +299,7 @@ describe("CortexClient", () => {
     ]);
 
     const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("http://127.0.0.1:8080/api/v1/events");
+    expect(call[0]).toBe("http://127.0.0.1:19090/api/v1/events");
   });
 
   it("getEvents sends GET with query params", async () => {
@@ -368,13 +368,13 @@ describe("CortexClient", () => {
 
 describe("type compatibility", () => {
   it("CortexClient satisfies CortexClientLike", () => {
-    const client = new CortexClient({ host: "localhost", port: 8080 });
+    const client = new CortexClient({ host: "localhost", port: 19090 });
     const _like: CortexClientLike = client;
     expect(_like).toBeDefined();
   });
 
   it("CortexClient satisfies CortexLike", () => {
-    const client = new CortexClient({ host: "localhost", port: 8080 });
+    const client = new CortexClient({ host: "localhost", port: 19090 });
     const _like: CortexLike = client;
     expect(_like).toBeDefined();
   });

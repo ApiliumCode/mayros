@@ -25,8 +25,8 @@ describe("semantic memory config", () => {
 
     expect(config).toBeDefined();
     expect(config?.cortex?.host).toBe("127.0.0.1");
-    expect(config?.cortex?.port).toBe(8080);
-    expect(config?.cortex?.autoStart).toBe(false);
+    expect(config?.cortex?.port).toBe(19090);
+    expect(config?.cortex?.autoStart).toBe(true);
     expect(config?.agentNamespace).toBe("mayros");
     expect(config?.fallbackToMarkdown).toBe(true);
     expect(config?.autoConsolidate).toBe(true);
@@ -407,7 +407,7 @@ describe("cortex client", () => {
     // but we can verify construction doesn't throw
     const client = new CortexClient({
       host: "localhost",
-      port: 8080,
+      port: 19090,
       autoStart: false,
     });
 
@@ -496,7 +496,7 @@ describe("titans client", () => {
 
     const client = new TitansClient({
       host: "localhost",
-      port: 8080,
+      port: 19090,
       autoStart: false,
     });
 

@@ -8,8 +8,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { createWriteStream, existsSync } from "node:fs";
-import { mkdir, chmod, unlink } from "node:fs/promises";
+import { createWriteStream, existsSync, readdirSync } from "node:fs";
+import { mkdir, chmod, unlink, rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -56,7 +56,7 @@ function semverLessThan(a: string, b: string): boolean {
 // Platform helpers (same logic as scripts/install-cortex.ts)
 // ---------------------------------------------------------------------------
 
-const REPO_OWNER = "apilium";
+const REPO_OWNER = "ApiliumCode";
 const REPO_NAME = "aingle";
 
 function getPlatformKey(): string {
@@ -170,7 +170,18 @@ export async function installOrUpdateCortex(
 
   const binaryPath = join(installDir, binaryName);
   if (!existsSync(binaryPath)) {
-    throw new Error(`Binary not found after extraction: ${binaryPath}`);
+    // The archive may contain a platform-suffixed binary (e.g. aingle-cortex-macos-aarch64).
+    // Find it and rename to the expected name.
+    const baseName = binaryName.replace(/\.exe$/, "");
+    const candidates = readdirSync(installDir).filter(
+      (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
+    );
+    if (candidates.length === 1) {
+      await rename(join(installDir, candidates[0]), binaryPath);
+      log(`Renamed ${candidates[0]} → ${binaryName}`);
+    } else {
+      throw new Error(`Binary not found after extraction: ${binaryPath}`);
+    }
   }
 
   if (process.platform !== "win32") {

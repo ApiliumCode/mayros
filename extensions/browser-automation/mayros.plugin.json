@@ -1,0 +1,25 @@
+{
+  "id": "browser-automation",
+  "kind": "tool",
+  "uiHints": {
+    "cdpPort": {
+      "label": "CDP Port",
+      "placeholder": "9222",
+      "help": "Chrome DevTools Protocol remote debugging port"
+    },
+    "cdpHost": {
+      "label": "CDP Host",
+      "placeholder": "127.0.0.1",
+      "advanced": true,
+      "help": "Hostname where Chrome is listening for CDP connections"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cdpPort": { "type": "number", "minimum": 1, "maximum": 65535 },
+      "cdpHost": { "type": "string" }
+    }
+  }
+}

@@ -46,7 +46,7 @@ export type AgentMeshConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_MAX_SHARED_NAMESPACES = 50;
 const DEFAULT_DELEGATION_TIMEOUT = 300;
 const DEFAULT_AUTO_MERGE = true;
@@ -192,8 +192,11 @@ export function parseBackgroundConfig(raw: unknown): BackgroundConfig {
 
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("agent mesh config required");
+    if (value === null || value === undefined) {
+      value = {};
+    }
+    if (typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("agent mesh config must be an object");
     }
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(

@@ -260,30 +260,6 @@
       "destination": "/nodes/camera"
     },
     {
-      "source": "/clawd",
-      "destination": "/start/mayros"
-    },
-    {
-      "source": "/start/clawd",
-      "destination": "/start/mayros"
-    },
-    {
-      "source": "/start/clawd/",
-      "destination": "/start/mayros"
-    },
-    {
-      "source": "/clawhub",
-      "destination": "/tools/skills-hub"
-    },
-    {
-      "source": "/clawdhub",
-      "destination": "/tools/skills-hub"
-    },
-    {
-      "source": "/tools/clawdhub",
-      "destination": "/tools/skills-hub"
-    },
-    {
       "source": "/configuration",
       "destination": "/gateway/configuration"
     },

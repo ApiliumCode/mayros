@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type WebSocket, WebSocketServer } from "ws";
+import * as ssrf from "../infra/net/ssrf.js";
 import { SsrFBlockedError } from "../infra/net/ssrf.js";
 import { rawDataToString } from "../infra/ws.js";
 import { createTargetViaCdp, evaluateJavaScript, normalizeCdpWsUrl, snapshotAria } from "./cdp.js";
@@ -71,6 +72,12 @@ describe("cdp", () => {
   });
 
   it("creates a target via the browser websocket", async () => {
+    const pinnedSpy = vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
+      hostname: "example.com",
+      addresses: ["93.184.216.34"],
+      lookup: ssrf.createPinnedLookup({ hostname: "example.com", addresses: ["93.184.216.34"] }),
+    });
+
     const wsPort = await startWsServerWithMessages((msg, socket) => {
       if (msg.method !== "Target.createTarget") {
         return;
@@ -93,6 +100,7 @@ describe("cdp", () => {
     });
 
     expect(created.targetId).toBe("TARGET_123");
+    pinnedSpy.mockRestore();
   });
 
   it("blocks private navigation targets by default", async () => {
@@ -179,6 +187,12 @@ describe("cdp", () => {
   });
 
   it("fails when /json/version omits webSocketDebuggerUrl", async () => {
+    const pinnedSpy = vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
+      hostname: "example.com",
+      addresses: ["93.184.216.34"],
+      lookup: ssrf.createPinnedLookup({ hostname: "example.com", addresses: ["93.184.216.34"] }),
+    });
+
     const httpPort = await startVersionHttpServer({});
     await expect(
       createTargetViaCdp({
@@ -186,6 +200,8 @@ describe("cdp", () => {
         url: "https://example.com",
       }),
     ).rejects.toThrow("CDP /json/version missing webSocketDebuggerUrl");
+
+    pinnedSpy.mockRestore();
   });
 
   it("captures an aria snapshot via CDP", async () => {

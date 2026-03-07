@@ -14,9 +14,22 @@ export type NormalizedPluginsConfig = {
 };
 
 export const BUNDLED_ENABLED_BY_DEFAULT = new Set<string>([
+  // Core infrastructure
   "device-pair",
   "phone-control",
   "talk-voice",
+  "code-tools",
+  "interactive-permissions",
+  "bash-sandbox",
+  // Semantic / Cortex ecosystem
+  "memory-semantic",
+  "semantic-observability",
+  "semantic-skills",
+  "code-indexer",
+  "agent-mesh",
+  "token-economy",
+  // Analytics
+  "analytics",
 ]);
 
 const normalizeList = (value: unknown): string[] => {
@@ -82,7 +95,11 @@ const hasExplicitMemorySlot = (plugins?: MayrosConfig["plugins"]) =>
   Boolean(plugins?.slots && Object.prototype.hasOwnProperty.call(plugins.slots, "memory"));
 
 const hasExplicitMemoryEntry = (plugins?: MayrosConfig["plugins"]) =>
-  Boolean(plugins?.entries && Object.prototype.hasOwnProperty.call(plugins.entries, "memory-core"));
+  Boolean(
+    plugins?.entries &&
+    (Object.prototype.hasOwnProperty.call(plugins.entries, "memory-semantic") ||
+      Object.prototype.hasOwnProperty.call(plugins.entries, "memory-core")),
+  );
 
 const hasExplicitPluginConfig = (plugins?: MayrosConfig["plugins"]) => {
   if (!plugins) {

@@ -11,6 +11,9 @@ export function installWebFetchSsrfHarness() {
     vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation((hostname) =>
       resolvePinnedHostname(hostname, lookupMock),
     );
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation((hostname) =>
+      resolvePinnedHostname(hostname, lookupMock),
+    );
   });
 
   afterEach(() => {

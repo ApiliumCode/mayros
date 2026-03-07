@@ -64,6 +64,7 @@ type CommandHandlerContext = {
   applySessionInfoFromPatch: (result: SessionsPatchResult) => void;
   noteLocalRunId: (runId: string) => void;
   forgetLocalRunId?: (runId: string) => void;
+  mouseHandler?: { enable(): void; disable(): void; isEnabled(): boolean };
 };
 
 export function createCommandHandlers(context: CommandHandlerContext) {
@@ -979,12 +980,41 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         await sendMessage(`/plan ${action}`);
         break;
       }
-      case "kg": {
-        if (!args) {
-          chatLog.addSystem("usage: /kg <query>");
-          break;
+      case "mouse": {
+        if (context.mouseHandler) {
+          if (context.mouseHandler.isEnabled()) {
+            context.mouseHandler.disable();
+            chatLog.addSystem("Mouse reporting disabled — text selection enabled.");
+          } else {
+            context.mouseHandler.enable();
+            chatLog.addSystem("Mouse reporting enabled.");
+          }
+        } else {
+          chatLog.addSystem("Mouse handler not available.");
         }
-        await sendMessage(`Use the semantic_memory_query tool to search for: ${args}`);
+        break;
+      }
+      case "tools": {
+        await sendMessage(
+          "List every tool name you have access to. Output ONLY a numbered list of tool names, nothing else. " +
+            "Do NOT describe them. Just the names, one per line.",
+        );
+        break;
+      }
+      case "kg": {
+        // Check if semantic memory tools are likely available by asking the gateway
+        const kgHint =
+          "You MUST use one of these tools (in order of preference): " +
+          "memory_stats, semantic_memory_query, semantic_memory_recall. " +
+          "If none of these tools are available to you, respond EXACTLY with: " +
+          '"[kg] Plugin memory-semantic is not loaded. Run `mayros plugins list` to check."';
+        if (!args) {
+          await sendMessage(
+            `Show a knowledge graph summary. ${kgHint} Show categories, triple counts, and recent entries.`,
+          );
+        } else {
+          await sendMessage(`Search the knowledge graph for: ${args}. ${kgHint}`);
+        }
         break;
       }
       case "trace": {

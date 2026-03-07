@@ -29,7 +29,7 @@ export type IoTBridgeConfig = {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
-const DEFAULT_PORT = 8080;
+const DEFAULT_PORT = 19090;
 const DEFAULT_FLEET_PERSIST_PATH = "~/.mayros/iot-fleet.json";
 const DEFAULT_MAX_NODES = 50;
 

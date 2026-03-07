@@ -76,24 +76,7 @@ describe("state + config path candidates", () => {
     const home = "/home/test";
     const resolvedHome = path.resolve(home);
     const candidates = resolveDefaultConfigCandidates({} as NodeJS.ProcessEnv, () => home);
-    const expected = [
-      path.join(resolvedHome, ".mayros", "mayros.json"),
-      path.join(resolvedHome, ".mayros", "clawdbot.json"),
-      path.join(resolvedHome, ".mayros", "moldbot.json"),
-      path.join(resolvedHome, ".mayros", "moltbot.json"),
-      path.join(resolvedHome, ".clawdbot", "mayros.json"),
-      path.join(resolvedHome, ".clawdbot", "clawdbot.json"),
-      path.join(resolvedHome, ".clawdbot", "moldbot.json"),
-      path.join(resolvedHome, ".clawdbot", "moltbot.json"),
-      path.join(resolvedHome, ".moldbot", "mayros.json"),
-      path.join(resolvedHome, ".moldbot", "clawdbot.json"),
-      path.join(resolvedHome, ".moldbot", "moldbot.json"),
-      path.join(resolvedHome, ".moldbot", "moltbot.json"),
-      path.join(resolvedHome, ".moltbot", "mayros.json"),
-      path.join(resolvedHome, ".moltbot", "clawdbot.json"),
-      path.join(resolvedHome, ".moltbot", "moldbot.json"),
-      path.join(resolvedHome, ".moltbot", "moltbot.json"),
-    ];
+    const expected = [path.join(resolvedHome, ".mayros", "mayros.json")];
     expect(candidates).toEqual(expected);
   });
 

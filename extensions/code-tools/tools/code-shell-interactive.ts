@@ -68,10 +68,13 @@ export function registerCodeShellInteractive(api: MayrosPluginApi, cfg: CodeTool
         }
 
         const startTime = Date.now();
-        // Hard cap: cfg.shellTimeout is the max the user can request; use it
-        // as the outer guard so a hanging PTY never leaks beyond this limit.
+        // Hard cap: the hard timeout must exceed the soft timeout so the soft
+        // kill path has a chance to resolve with partial output.  Add a 5s
+        // buffer (capped to cfg.shellTimeout) so a hanging PTY never leaks.
         const hardTimeout =
-          typeof p.timeout === "number" ? timeout : Math.min(60000, cfg.shellTimeout);
+          typeof p.timeout === "number"
+            ? Math.min(timeout + 5000, cfg.shellTimeout)
+            : Math.min(60000, cfg.shellTimeout);
 
         return new Promise((resolve, reject) => {
           let output = "";

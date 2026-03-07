@@ -174,7 +174,7 @@ describe("removePluginFromConfig", () => {
 
     const { config: result, actions } = removePluginFromConfig(config, "memory-plugin");
 
-    expect(result.plugins?.slots?.memory).toBe("memory-core");
+    expect(result.plugins?.slots?.memory).toBe("memory-semantic");
     expect(actions.memorySlot).toBe(true);
   });
 

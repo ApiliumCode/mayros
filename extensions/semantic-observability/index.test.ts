@@ -25,7 +25,7 @@ describe("observability config", () => {
 
     expect(config).toBeDefined();
     expect(config?.cortex?.host).toBe("127.0.0.1");
-    expect(config?.cortex?.port).toBe(8080);
+    expect(config?.cortex?.port).toBe(19090);
     expect(config?.agentNamespace).toBe("mayros");
     expect(config?.tracing?.enabled).toBe(true);
     expect(config?.tracing?.captureToolCalls).toBe(true);
