@@ -369,6 +369,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "cortex",
+    description: "Cortex sidecar — status, reconnect, and diagnostics",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../cortex-cli.js");
+      mod.registerCortexCli(program);
+    },
+  },
+  {
     name: "diagnose",
     description: "Diagnostic checks — runtime, Cortex, plugins, security, config",
     hasSubcommands: true,

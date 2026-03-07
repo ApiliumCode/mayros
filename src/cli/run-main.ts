@@ -143,8 +143,8 @@ export async function runCli(argv: string[] = process.argv) {
 
     const { buildProgram } = await import("./program.js");
     const program = buildProgram(normalizedArgv);
-    const { registerCodeCli } = await import("./code-cli.js");
-    registerCodeCli(program);
+    const { registerSubCliByName } = await import("./program/register.subclis.js");
+    await registerSubCliByName(program, "code");
     await program.parseAsync([
       ...normalizedArgv.slice(0, 2),
       "code",
@@ -193,8 +193,8 @@ export async function runCli(argv: string[] = process.argv) {
       return;
     }
 
-    const { registerCodeCli } = await import("./code-cli.js");
-    registerCodeCli(program);
+    const { registerSubCliByName } = await import("./program/register.subclis.js");
+    await registerSubCliByName(program, "code");
     await program.parseAsync([...parseArgv.slice(0, 2), "code", ...parseArgv.slice(2)]);
     return;
   }

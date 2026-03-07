@@ -41,6 +41,7 @@ function createContext() {
 function setRegistry(entries: MockRegistryToolEntry[]) {
   const registry = {
     tools: entries,
+    plugins: entries.map((e) => ({ id: e.pluginId, status: "loaded" as const, source: e.source })),
     diagnostics: [] as Array<{
       level: string;
       pluginId: string;

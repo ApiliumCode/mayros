@@ -43,6 +43,13 @@ import {
 } from "./controllers/exec-approvals.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
+import {
+  loadCortexStatus,
+  loadCortexTriples,
+  loadCortexSubjects,
+  loadCortexPredicates,
+  reconnectCortex,
+} from "./controllers/cortex.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { deleteSessionAndRefresh, loadSessions, patchSession } from "./controllers/sessions.ts";
 import {
@@ -65,6 +72,7 @@ import { renderGatewayUrlConfirmation } from "./views/gateway-url-confirmation.t
 import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
+import { renderCortex } from "./views/cortex.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -225,6 +233,8 @@ export function renderApp(state: AppViewState) {
                 cronEnabled: state.cronStatus?.enabled ?? null,
                 cronNext,
                 lastChannelsRefresh: state.channelsLastSuccess,
+                cortexStatus: state.cortexStatus,
+                cortexLoading: state.cortexLoading,
                 onSettingsChange: (next) => state.applySettings(next),
                 onPasswordChange: (next) => (state.password = next),
                 onSessionKeyChange: (next) => {
@@ -240,6 +250,7 @@ export function renderApp(state: AppViewState) {
                 },
                 onConnect: () => state.connect(),
                 onRefresh: () => state.loadOverview(),
+                onCortexReconnect: () => void reconnectCortex(state),
               })
             : nothing
         }
@@ -956,6 +967,38 @@ export function renderApp(state: AppViewState) {
                 onRefresh: () => loadLogs(state, { reset: true }),
                 onExport: (lines, label) => state.exportLogs(lines, label),
                 onScroll: (event) => state.handleLogsScroll(event),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "cortex"
+            ? renderCortex({
+                loading: state.cortexLoading,
+                error: state.cortexError,
+                status: state.cortexStatus,
+                triples: state.cortexTriples,
+                subjects: state.cortexSubjects,
+                predicates: state.cortexPredicates,
+                filter: state.cortexBrowseFilter,
+                browseLoading: state.cortexBrowseLoading,
+                browseError: state.cortexBrowseError,
+                onRefresh: () => {
+                  void loadCortexStatus(state);
+                  void loadCortexTriples(state);
+                  void loadCortexSubjects(state);
+                  void loadCortexPredicates(state);
+                },
+                onFilterChange: (filter) => void loadCortexTriples(state, { ...filter }),
+                onSubjectClick: (subject) => {
+                  const current = state.cortexBrowseFilter.subject;
+                  void loadCortexTriples(state, {
+                    subject: current === subject ? undefined : subject,
+                    offset: 0,
+                  });
+                },
+                onPageChange: (offset) => void loadCortexTriples(state, { offset }),
+                onReconnect: () => void reconnectCortex(state),
               })
             : nothing
         }

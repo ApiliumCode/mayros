@@ -10,6 +10,11 @@ import type { UiSettings } from "./storage.ts";
 import type { ThemeTransitionContext } from "./theme-transition.ts";
 import type { ThemeMode } from "./theme.ts";
 import type {
+  CortexStatusResponse,
+  CortexBrowseFilter,
+  TripleEntry,
+} from "./controllers/cortex.ts";
+import type {
   AgentsListResult,
   AgentsFilesListResult,
   AgentIdentityResult,
@@ -124,6 +129,15 @@ export type AppViewState = {
   presenceEntries: PresenceEntry[];
   presenceError: string | null;
   presenceStatus: string | null;
+  cortexLoading: boolean;
+  cortexStatus: CortexStatusResponse | null;
+  cortexError: string | null;
+  cortexTriples: { triples: TripleEntry[]; total: number } | null;
+  cortexSubjects: { subjects: string[]; total: number } | null;
+  cortexPredicates: { predicates: string[]; total: number } | null;
+  cortexBrowseLoading: boolean;
+  cortexBrowseError: string | null;
+  cortexBrowseFilter: CortexBrowseFilter;
   agentsLoading: boolean;
   agentsList: AgentsListResult | null;
   agentsError: string | null;
