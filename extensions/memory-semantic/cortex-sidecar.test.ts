@@ -17,7 +17,10 @@ const mockState = vi.hoisted(() => ({
   spawnFn: vi.fn(),
   existsSyncFn: vi.fn(() => true),
   locateCortexBinaryFn: vi.fn(async () => "/usr/bin/fake-cortex"),
-  getCortexBinaryVersionFn: vi.fn(() => "0.2.6"),
+  getCortexBinaryVersionFn: vi.fn(() => "0.3.7"),
+  readFileSyncFn: vi.fn(() => '{"jwtSecret":"test-jwt","adminPassword":"test-admin-pass"}'),
+  writeFileSyncFn: vi.fn(),
+  mkdirSyncFn: vi.fn(),
 }));
 
 // ---------- Mocks ----------
@@ -28,7 +31,23 @@ vi.mock("node:child_process", () => ({
 
 vi.mock("node:fs", () => ({
   existsSync: mockState.existsSyncFn,
+  readFileSync: mockState.readFileSyncFn,
+  writeFileSync: mockState.writeFileSyncFn,
+  mkdirSync: mockState.mkdirSyncFn,
 }));
+
+vi.mock("node:crypto", () => ({
+  randomBytes: vi.fn((n: number) => Buffer.alloc(n, 0x41)),
+}));
+
+vi.mock("node:os", () => ({
+  homedir: vi.fn(() => "/tmp/test-home"),
+}));
+
+vi.mock("node:path", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:path")>();
+  return { ...actual, join: actual.join };
+});
 
 vi.mock("../shared/cortex-binary-locator.js", () => ({
   locateCortexBinary: mockState.locateCortexBinaryFn,
@@ -36,7 +55,7 @@ vi.mock("../shared/cortex-binary-locator.js", () => ({
 }));
 
 vi.mock("../shared/cortex-version.js", () => ({
-  REQUIRED_CORTEX_VERSION: "0.2.6",
+  REQUIRED_CORTEX_VERSION: "0.3.7",
 }));
 
 // Mock the CortexClient used internally by the sidecar
@@ -81,7 +100,7 @@ mockState.spawnFn.mockImplementation(() => {
   return proc;
 });
 
-import { CortexSidecar } from "./cortex-sidecar.js";
+import { CortexSidecar, ensureCortexSecrets } from "./cortex-sidecar.js";
 
 describe("CortexSidecar", () => {
   beforeEach(() => {
@@ -97,7 +116,7 @@ describe("CortexSidecar", () => {
     });
     mockState.existsSyncFn.mockReturnValue(true);
     mockState.locateCortexBinaryFn.mockResolvedValue("/usr/bin/fake-cortex");
-    mockState.getCortexBinaryVersionFn.mockReturnValue("0.2.6");
+    mockState.getCortexBinaryVersionFn.mockReturnValue("0.3.7");
   });
 
   afterEach(() => {
@@ -246,5 +265,75 @@ describe("CortexSidecar", () => {
 
     await sidecar.stop(); // second call
     expect(sidecar.status).toBe("stopped");
+  });
+
+  it("passes AINGLE_JWT_SECRET and AINGLE_ADMIN_PASSWORD to spawned process", async () => {
+    mockState.healthReturnValues = [false, true];
+
+    const sidecar = new CortexSidecar({
+      host: "127.0.0.1",
+      port: 9999,
+      autoStart: true,
+      binaryPath: "/usr/bin/fake-cortex",
+    });
+
+    await sidecar.start();
+
+    const spawnCall = mockState.spawnFn.mock.calls[0];
+    const spawnOpts = spawnCall?.[2] as { env?: Record<string, string> };
+    expect(spawnOpts.env).toBeDefined();
+    expect(spawnOpts.env!.AINGLE_JWT_SECRET).toBeTruthy();
+    expect(spawnOpts.env!.AINGLE_ADMIN_PASSWORD).toBeTruthy();
+    expect(spawnOpts.env!.AINGLE_ADMIN_PASSWORD!.length).toBeGreaterThanOrEqual(12);
+
+    await sidecar.stop();
+  });
+});
+
+describe("ensureCortexSecrets", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.AINGLE_JWT_SECRET;
+    delete process.env.AINGLE_ADMIN_PASSWORD;
+    mockState.existsSyncFn.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    delete process.env.AINGLE_JWT_SECRET;
+    delete process.env.AINGLE_ADMIN_PASSWORD;
+  });
+
+  it("uses env vars when both are set", () => {
+    process.env.AINGLE_JWT_SECRET = "env-jwt-secret";
+    process.env.AINGLE_ADMIN_PASSWORD = "env-admin-password";
+
+    const secrets = ensureCortexSecrets();
+
+    expect(secrets.jwtSecret).toBe("env-jwt-secret");
+    expect(secrets.adminPassword).toBe("env-admin-password");
+  });
+
+  it("reads persisted file when env vars are not set", () => {
+    mockState.readFileSyncFn.mockReturnValue(
+      '{"jwtSecret":"persisted-jwt","adminPassword":"persisted-admin"}',
+    );
+
+    const secrets = ensureCortexSecrets();
+
+    expect(secrets.jwtSecret).toBe("persisted-jwt");
+    expect(secrets.adminPassword).toBe("persisted-admin");
+  });
+
+  it("generates and persists secrets when nothing exists", () => {
+    mockState.existsSyncFn.mockReturnValue(false);
+
+    const secrets = ensureCortexSecrets();
+
+    expect(secrets.jwtSecret).toBeTruthy();
+    expect(secrets.adminPassword).toBeTruthy();
+    expect(secrets.adminPassword.length).toBeGreaterThanOrEqual(12);
+    expect(mockState.writeFileSyncFn).toHaveBeenCalled();
+    const writeCall = mockState.writeFileSyncFn.mock.calls[0];
+    expect(writeCall?.[2]).toEqual(expect.objectContaining({ mode: 0o600 }));
   });
 });
