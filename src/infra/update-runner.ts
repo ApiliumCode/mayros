@@ -83,7 +83,7 @@ const MAX_LOG_CHARS = 8000;
 const PREFLIGHT_MAX_COMMITS = 10;
 const START_DIRS = ["cwd", "argv1", "process"];
 const DEFAULT_PACKAGE_NAME = "mayros";
-const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME]);
+const CORE_PACKAGE_NAMES = new Set([DEFAULT_PACKAGE_NAME, "@apilium/mayros"]);
 
 function normalizeDir(value?: string | null) {
   if (!value) {
