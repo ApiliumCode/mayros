@@ -36,6 +36,7 @@ export type SyncConfig = {
   conflictStrategy: ConflictStrategy;
   maxTriplesPerSync: number;
   syncTimeoutMs: number;
+  nativeP2pPreferred: boolean;
 };
 
 export type DiscoveryConfig = {
@@ -80,7 +81,14 @@ function parseSyncConfig(raw: unknown): SyncConfig {
   if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
     assertAllowedKeys(
       sync,
-      ["intervalSeconds", "autoSync", "conflictStrategy", "maxTriplesPerSync", "syncTimeoutMs"],
+      [
+        "intervalSeconds",
+        "autoSync",
+        "conflictStrategy",
+        "maxTriplesPerSync",
+        "syncTimeoutMs",
+        "nativeP2pPreferred",
+      ],
       "sync config",
     );
   }
@@ -110,7 +118,17 @@ function parseSyncConfig(raw: unknown): SyncConfig {
       ? Math.max(5000, Math.min(120000, Math.floor(sync.syncTimeoutMs)))
       : DEFAULT_SYNC_TIMEOUT_MS;
 
-  return { intervalSeconds, autoSync, conflictStrategy, maxTriplesPerSync, syncTimeoutMs };
+  const nativeP2pPreferred =
+    typeof sync.nativeP2pPreferred === "boolean" ? sync.nativeP2pPreferred : true;
+
+  return {
+    intervalSeconds,
+    autoSync,
+    conflictStrategy,
+    maxTriplesPerSync,
+    syncTimeoutMs,
+    nativeP2pPreferred,
+  };
 }
 
 function parsePeerConfig(raw: unknown): SyncPeerConfig {
@@ -194,6 +212,11 @@ export const cortexSyncConfigUiHints = {
     type: "boolean",
     default: DEFAULT_BONJOUR_ENABLED,
     description: "Enable local network peer discovery",
+  },
+  "sync.nativeP2pPreferred": {
+    type: "boolean",
+    default: true,
+    description: "Prefer native P2P gossip over REST polling when available",
   },
   "discovery.manualPeers": { type: "array", description: "Manually configured peers" },
 } as const;

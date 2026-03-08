@@ -16,7 +16,7 @@
 
 import { Type } from "@sinclair/typebox";
 import type { MayrosPluginApi } from "mayros/plugin-sdk";
-import { CortexClient } from "../shared/cortex-client.js";
+import { CortexClient, type P2pStatusResponse } from "../shared/cortex-client.js";
 import { parseCortexSyncConfig, type CortexSyncConfig } from "./config.js";
 import { PeerManager } from "./peer-manager.js";
 import { syncWithPeer, type SyncPeer, type SyncDelta, type SyncResult } from "./sync-protocol.js";
@@ -74,6 +74,8 @@ const cortexSyncPlugin = {
     const peerManager = new PeerManager(client, ns);
 
     let cortexAvailable = false;
+    let syncMode: "native" | "polled" = "polled";
+    let cachedP2pStatus: P2pStatusResponse | null = null;
 
     api.logger.info(`cortex-sync: plugin registered (ns: ${ns})`);
 
@@ -86,7 +88,24 @@ const cortexSyncPlugin = {
       return cortexAvailable;
     }
 
-    // Initialize peers from config
+    /** B3: Probe native P2P availability. */
+    async function probeP2p(): Promise<void> {
+      if (!cfg.sync.nativeP2pPreferred) return;
+      try {
+        const status = await client.p2pProbe();
+        if (status?.enabled) {
+          syncMode = "native";
+          cachedP2pStatus = status;
+          api.logger.info(
+            `cortex-sync: native P2P detected (node: ${status.node_id.slice(0, 16)}...)`,
+          );
+        }
+      } catch {
+        // P2P not available — stay in polled mode
+      }
+    }
+
+    // Initialize peers from config + probe P2P
     void (async () => {
       try {
         const healthy = await checkCortex();
@@ -95,6 +114,7 @@ const cortexSyncPlugin = {
           if (added > 0) {
             api.logger.info(`cortex-sync: initialized ${added} peer(s) from config`);
           }
+          await probeP2p();
         }
       } catch {
         api.logger.warn("cortex-sync: Cortex unavailable at startup");
@@ -107,6 +127,12 @@ const cortexSyncPlugin = {
 
     async function executePeerSync(nodeId: string): Promise<SyncResult | null> {
       if (!cortexAvailable && !(await checkCortex())) return null;
+
+      // B3: Native P2P handles sync internally — skip REST polling
+      if (syncMode === "native") {
+        api.logger.info(`cortex-sync: sync handled by native P2P gossip (peer ${nodeId})`);
+        return null;
+      }
 
       const peer = await peerManager.getPeer(nodeId);
       if (!peer || peer.status === "removed") return null;
@@ -170,6 +196,7 @@ const cortexSyncPlugin = {
 
           const lines = [
             `Cortex Sync Status:`,
+            `  Mode: ${syncMode}`,
             `  Total peers: ${status.totalPeers}`,
             `  Active: ${status.activePeers}`,
             `  Unreachable: ${status.unreachablePeers}`,
@@ -191,9 +218,36 @@ const cortexSyncPlugin = {
             }
           }
 
+          // B3: Include P2P native info when available
+          if (syncMode === "native") {
+            try {
+              const p2p = await client.p2pStatus();
+              cachedP2pStatus = p2p;
+              lines.push(
+                "Native P2P:",
+                `  Node ID: ${p2p.node_id.slice(0, 16)}...`,
+                `  Port: ${p2p.port}`,
+                `  Mode: native (QUIC gossip)`,
+                `  Connected peers: ${p2p.peer_count}`,
+              );
+              if (p2p.connected_peers.length > 0) {
+                lines.push("  P2P Peers:");
+                for (const pp of p2p.connected_peers) {
+                  lines.push(`    ${pp.addr} [${pp.connected ? "connected" : "disconnected"}]`);
+                }
+              }
+              lines.push(
+                `  Gossip: round ${p2p.gossip_stats.round}, known ${p2p.gossip_stats.known_ids}`,
+                `  Sync: ${p2p.sync_stats.local_ids} local, ${p2p.sync_stats.total_successful_syncs} successful syncs`,
+              );
+            } catch {
+              lines.push("Native P2P: status unavailable");
+            }
+          }
+
           return {
             content: [{ type: "text" as const, text: lines.join("\n") }],
-            details: { totalPeers: status.totalPeers },
+            details: { totalPeers: status.totalPeers, syncMode },
           };
         },
       },
@@ -346,21 +400,35 @@ const cortexSyncPlugin = {
             enabled: true,
           });
 
+          // B3: Also add via P2P API when native mode is active
+          let p2pResult: string | undefined;
+          if (syncMode === "native") {
+            try {
+              // Extract host:port from endpoint URL for P2P connection
+              const url = new URL(endpoint);
+              const p2pAddr = `${url.hostname}:${cachedP2pStatus?.port ?? 19091}`;
+              const res = await client.p2pAddPeer(p2pAddr);
+              p2pResult = `P2P: ${res.status} (${res.addr})`;
+            } catch {
+              p2pResult = "P2P: connection failed (will retry via gossip)";
+            }
+          }
+
+          const resultLines = [
+            `Paired with peer ${peer.nodeId}:`,
+            `  Endpoint: ${peer.endpoint}`,
+            `  Namespaces: ${peer.namespaces.join(", ")}`,
+            `  Status: ${peer.status}`,
+          ];
+          if (p2pResult) resultLines.push(`  ${p2pResult}`);
+          resultLines.push(
+            "",
+            `Run 'mayros sync now' or use cortex_sync_now to trigger first sync.`,
+          );
+
           return {
-            content: [
-              {
-                type: "text" as const,
-                text: [
-                  `Paired with peer ${peer.nodeId}:`,
-                  `  Endpoint: ${peer.endpoint}`,
-                  `  Namespaces: ${peer.namespaces.join(", ")}`,
-                  `  Status: ${peer.status}`,
-                  "",
-                  `Run 'mayros sync now' or use cortex_sync_now to trigger first sync.`,
-                ].join("\n"),
-              },
-            ],
-            details: { action: "paired", nodeId: peer.nodeId },
+            content: [{ type: "text" as const, text: resultLines.join("\n") }],
+            details: { action: "paired", nodeId: peer.nodeId, syncMode },
           };
         },
       },
@@ -374,6 +442,8 @@ const cortexSyncPlugin = {
     if (cfg.sync.autoSync) {
       api.on("agent_end", async () => {
         if (!cortexAvailable) return;
+        // B3: Skip polled sync in native mode — gossip handles it
+        if (syncMode === "native") return;
         try {
           const results = await syncAllPeers();
           if (results.length > 0) {
@@ -387,6 +457,8 @@ const cortexSyncPlugin = {
 
       api.on("config_change", async () => {
         if (!cortexAvailable) return;
+        // B3: Skip polled sync in native mode — gossip handles it
+        if (syncMode === "native") return;
         try {
           await syncAllPeers();
         } catch {
