@@ -144,6 +144,18 @@ export class CortexSidecar {
     this._status = "starting";
 
     const args = ["--host", this.config.host, "--port", String(this.config.port)];
+
+    // P2P flag forwarding (B1): map CortexConfig.p2p to CLI flags
+    if (this.config.p2p?.enabled) {
+      args.push("--p2p");
+      args.push("--p2p-port", String(this.config.p2p.port ?? 19091));
+      if (this.config.p2p.seed) args.push("--p2p-seed", this.config.p2p.seed);
+      if (this.config.p2p.mdns) args.push("--p2p-mdns");
+      for (const peer of this.config.p2p.manualPeers ?? []) {
+        args.push("--p2p-peer", peer);
+      }
+    }
+
     const secrets = ensureCortexSecrets();
 
     try {

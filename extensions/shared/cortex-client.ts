@@ -10,8 +10,13 @@ import type { CortexConfig } from "./cortex-config.js";
 import { CircuitBreaker, resilientFetch, type ResilienceConfig } from "./cortex-resilience.js";
 
 // Re-export config for convenience
-export type { CortexConfig } from "./cortex-config.js";
-export { parseCortexConfig, assertAllowedKeys, resolveEnvVars } from "./cortex-config.js";
+export type { CortexConfig, P2pConfig } from "./cortex-config.js";
+export {
+  parseCortexConfig,
+  parseP2pConfig,
+  assertAllowedKeys,
+  resolveEnvVars,
+} from "./cortex-config.js";
 
 // ============================================================================
 // DTOs — mirror Rust types from aingle_cortex/src/rest/*.rs
@@ -223,6 +228,49 @@ export type TraceEventDto = {
   parentEvent?: string;
   durationMs?: number;
   fields: Record<string, string>;
+};
+
+// ============================================================================
+// P2P DTOs — mirror Rust types from aingle_cortex/src/p2p/manager.rs
+// ============================================================================
+
+export type P2pStatusResponse = {
+  node_id: string;
+  enabled: boolean;
+  port: number;
+  peer_count: number;
+  connected_peers: P2pPeerDto[];
+  gossip_stats: P2pGossipStats;
+  sync_stats: P2pSyncStats;
+};
+
+export type P2pPeerDto = {
+  addr: string;
+  connected: boolean;
+};
+
+export type P2pGossipStats = {
+  round: number;
+  pending_announcements: number;
+  known_ids: number;
+  bloom_filter_items: number;
+  bloom_filter_fpr: number;
+};
+
+export type P2pSyncStats = {
+  peer_count: number;
+  local_ids: number;
+  total_successful_syncs: number;
+  total_failed_syncs: number;
+};
+
+export type P2pAddPeerResponse = {
+  status: string;
+  addr: string;
+};
+
+export type P2pDisconnectResponse = {
+  status: string;
 };
 
 // ============================================================================
@@ -619,6 +667,37 @@ export class CortexClient implements CortexClientLike, CortexLike {
       return h.status === "healthy" || h.status === "ok";
     } catch {
       return false;
+    }
+  }
+
+  // ---------- P2P (native QUIC gossip) ----------
+
+  async p2pStatus(): Promise<P2pStatusResponse> {
+    return this.request<P2pStatusResponse>("GET", "/api/v1/p2p/status");
+  }
+
+  async p2pListPeers(): Promise<P2pPeerDto[]> {
+    const status = await this.p2pStatus();
+    return status.connected_peers;
+  }
+
+  async p2pAddPeer(addr: string): Promise<P2pAddPeerResponse> {
+    return this.request<P2pAddPeerResponse>("POST", "/api/v1/p2p/peers", { addr });
+  }
+
+  async p2pRemovePeer(addr: string): Promise<P2pDisconnectResponse> {
+    return this.request<P2pDisconnectResponse>(
+      "DELETE",
+      `/api/v1/p2p/peers/${encodeURIComponent(addr)}`,
+    );
+  }
+
+  /** Probe P2P availability. Returns status if enabled, null otherwise. */
+  async p2pProbe(): Promise<P2pStatusResponse | null> {
+    try {
+      return await this.p2pStatus();
+    } catch {
+      return null;
     }
   }
 }
