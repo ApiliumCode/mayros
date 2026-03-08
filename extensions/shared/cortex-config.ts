@@ -10,6 +10,14 @@ import type { ResilienceConfig } from "./cortex-resilience.js";
 // Types
 // ============================================================================
 
+export type P2pConfig = {
+  enabled: boolean;
+  port: number;
+  seed?: string;
+  manualPeers: string[];
+  mdns: boolean;
+};
+
 export type CortexConfig = {
   host: string;
   port: number;
@@ -19,6 +27,7 @@ export type CortexConfig = {
   resilience?: ResilienceConfig;
   requireAuth?: boolean;
   strictVersionCheck?: boolean;
+  p2p?: P2pConfig;
 };
 
 // ============================================================================
@@ -68,6 +77,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
         "resilience",
         "requireAuth",
         "strictVersionCheck",
+        "p2p",
       ],
       "cortex config",
     );
@@ -86,6 +96,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
   const resilience = parseResilienceConfig(cortex.resilience);
   const requireAuth = cortex.requireAuth === true;
   const strictVersionCheck = cortex.strictVersionCheck === true;
+  const p2p = parseP2pConfig(cortex.p2p);
 
   return {
     host,
@@ -96,7 +107,37 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
     resilience,
     requireAuth,
     strictVersionCheck,
+    p2p,
   };
+}
+
+export function parseP2pConfig(raw: unknown): P2pConfig | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const p = raw as Record<string, unknown>;
+  assertAllowedKeys(p, ["enabled", "port", "seed", "manualPeers", "mdns"], "p2p config");
+
+  const enabled = p.enabled === true;
+  const port = typeof p.port === "number" ? Math.floor(p.port) : 19091;
+  if (port < 1024 || port > 65535) {
+    throw new Error("p2p.port must be between 1024 and 65535");
+  }
+
+  const seed = typeof p.seed === "string" ? p.seed : undefined;
+  if (seed !== undefined) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(seed)) {
+      throw new Error("p2p.seed must be alphanumeric (plus _ and -)");
+    }
+  }
+
+  const manualPeers = Array.isArray(p.manualPeers)
+    ? p.manualPeers
+        .filter((v): v is string => typeof v === "string")
+        .filter((v) => /^[^:]+:\d+$/.test(v))
+    : [];
+
+  const mdns = p.mdns === true;
+
+  return { enabled, port, seed, manualPeers, mdns };
 }
 
 function parseResilienceConfig(raw: unknown): ResilienceConfig | undefined {
