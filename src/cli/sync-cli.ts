@@ -12,7 +12,7 @@
 
 import type { Command } from "commander";
 import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
+import { CortexClient, type P2pStatusResponse } from "../../extensions/shared/cortex-client.js";
 import { PeerManager } from "../../extensions/cortex-sync/peer-manager.js";
 import { loadConfig } from "../config/config.js";
 
@@ -60,6 +60,14 @@ function resolveNamespace(): string {
     return pluginCfg?.namespace ?? "mayros";
   } catch {
     return "mayros";
+  }
+}
+
+async function probeP2pStatus(client: CortexClient): Promise<P2pStatusResponse | null> {
+  try {
+    return await client.p2pProbe();
+  } catch {
+    return null;
   }
 }
 
@@ -123,6 +131,28 @@ export function registerSyncCli(program: Command) {
           console.log(`    syncs: ${peer.totalSyncs}, triples: ${peer.totalTriplesSynced}`);
         }
       }
+
+      // B4: Show native P2P info if available
+      const p2p = await probeP2pStatus(client);
+      if (p2p?.enabled) {
+        console.log("\nNative P2P:");
+        console.log(`  Node ID: ${p2p.node_id.slice(0, 16)}...`);
+        console.log(`  Port: ${p2p.port}`);
+        console.log(`  Mode: native (QUIC gossip)`);
+        console.log(`  Connected peers: ${p2p.peer_count}`);
+        if (p2p.connected_peers.length > 0) {
+          console.log("  P2P Peers:");
+          for (const pp of p2p.connected_peers) {
+            console.log(`    ${pp.addr} [${pp.connected ? "connected" : "disconnected"}]`);
+          }
+        }
+        console.log(
+          `  Gossip: round ${p2p.gossip_stats.round}, known ${p2p.gossip_stats.known_ids}`,
+        );
+        console.log(
+          `  Sync: ${p2p.sync_stats.local_ids} local, ${p2p.sync_stats.total_successful_syncs} successful syncs`,
+        );
+      }
     });
 
   // ---- pair ----
@@ -166,6 +196,19 @@ export function registerSyncCli(program: Command) {
       console.log(`  Endpoint: ${peer.endpoint}`);
       console.log(`  Namespaces: ${peer.namespaces.join(", ")}`);
       console.log(`  Status: ${peer.status}`);
+
+      // B4: Also connect via P2P API when native is active
+      const p2p = await probeP2pStatus(client);
+      if (p2p?.enabled) {
+        try {
+          const url = new URL(endpoint);
+          const p2pAddr = `${url.hostname}:${p2p.port}`;
+          const res = await client.p2pAddPeer(p2pAddr);
+          console.log(`  P2P: ${res.status} (${res.addr})`);
+        } catch {
+          console.log("  P2P: connection failed (will retry via gossip)");
+        }
+      }
     });
 
   // ---- remove ----
@@ -222,6 +265,21 @@ export function registerSyncCli(program: Command) {
       }
 
       const pm = new PeerManager(client, ns);
+
+      // B4: Check for native P2P mode
+      const p2p = await probeP2pStatus(client);
+
+      if (p2p?.enabled) {
+        console.log("Sync handled by native P2P gossip.");
+        console.log(
+          `  Gossip: round ${p2p.gossip_stats.round}, known ${p2p.gossip_stats.known_ids}`,
+        );
+        console.log(
+          `  Sync: ${p2p.sync_stats.local_ids} local, ${p2p.sync_stats.total_successful_syncs} successful syncs`,
+        );
+        console.log(`  Connected P2P peers: ${p2p.peer_count}`);
+        return;
+      }
 
       if (opts.peer) {
         const peer = await pm.getPeer(opts.peer);

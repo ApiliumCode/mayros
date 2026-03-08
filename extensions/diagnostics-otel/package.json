@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-diagnostics-otel",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Mayros diagnostics OpenTelemetry exporter",
   "license": "MIT",
   "type": "module",
