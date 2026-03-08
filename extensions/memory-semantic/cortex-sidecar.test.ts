@@ -337,3 +337,129 @@ describe("ensureCortexSecrets", () => {
     expect(writeCall?.[2]).toEqual(expect.objectContaining({ mode: 0o600 }));
   });
 });
+
+// ============================================================================
+// P2P flag forwarding (B1)
+// ============================================================================
+
+describe("CortexSidecar P2P flags", () => {
+  beforeEach(() => {
+    mockState.healthCallCount = 0;
+    mockState.healthReturnValues = [];
+    mockState.fakeProc = null;
+    vi.clearAllMocks();
+    mockState.spawnFn.mockImplementation(() => {
+      const proc = new FakeChildProcess();
+      mockState.fakeProc = proc;
+      return proc;
+    });
+    mockState.existsSyncFn.mockReturnValue(true);
+    mockState.locateCortexBinaryFn.mockResolvedValue("/usr/bin/fake-cortex");
+    mockState.getCortexBinaryVersionFn.mockReturnValue("0.3.7");
+  });
+
+  it("adds P2P flags when p2p is enabled", async () => {
+    mockState.healthReturnValues = [false, true];
+
+    const sidecar = new CortexSidecar({
+      host: "127.0.0.1",
+      port: 9999,
+      autoStart: true,
+      binaryPath: "/usr/bin/fake-cortex",
+      p2p: {
+        enabled: true,
+        port: 19091,
+        seed: "test-seed",
+        manualPeers: ["192.168.1.5:19091"],
+        mdns: true,
+      },
+    });
+
+    await sidecar.start();
+
+    const spawnCall = mockState.spawnFn.mock.calls[0];
+    const args = spawnCall?.[1] as string[];
+    expect(args).toContain("--p2p");
+    expect(args).toContain("--p2p-port");
+    expect(args).toContain("19091");
+    expect(args).toContain("--p2p-seed");
+    expect(args).toContain("test-seed");
+    expect(args).toContain("--p2p-mdns");
+    expect(args).toContain("--p2p-peer");
+    expect(args).toContain("192.168.1.5:19091");
+
+    await sidecar.stop();
+  });
+
+  it("does not add P2P flags when p2p is not enabled", async () => {
+    mockState.healthReturnValues = [false, true];
+
+    const sidecar = new CortexSidecar({
+      host: "127.0.0.1",
+      port: 9999,
+      autoStart: true,
+      binaryPath: "/usr/bin/fake-cortex",
+    });
+
+    await sidecar.start();
+
+    const spawnCall = mockState.spawnFn.mock.calls[0];
+    const args = spawnCall?.[1] as string[];
+    expect(args).not.toContain("--p2p");
+    expect(args).not.toContain("--p2p-port");
+
+    await sidecar.stop();
+  });
+
+  it("does not add P2P flags when p2p.enabled is false", async () => {
+    mockState.healthReturnValues = [false, true];
+
+    const sidecar = new CortexSidecar({
+      host: "127.0.0.1",
+      port: 9999,
+      autoStart: true,
+      binaryPath: "/usr/bin/fake-cortex",
+      p2p: {
+        enabled: false,
+        port: 19091,
+        manualPeers: [],
+        mdns: false,
+      },
+    });
+
+    await sidecar.start();
+
+    const spawnCall = mockState.spawnFn.mock.calls[0];
+    const args = spawnCall?.[1] as string[];
+    expect(args).not.toContain("--p2p");
+
+    await sidecar.stop();
+  });
+
+  it("adds multiple --p2p-peer flags", async () => {
+    mockState.healthReturnValues = [false, true];
+
+    const sidecar = new CortexSidecar({
+      host: "127.0.0.1",
+      port: 9999,
+      autoStart: true,
+      binaryPath: "/usr/bin/fake-cortex",
+      p2p: {
+        enabled: true,
+        port: 19091,
+        manualPeers: ["10.0.0.1:19091", "10.0.0.2:19093"],
+        mdns: false,
+      },
+    });
+
+    await sidecar.start();
+
+    const spawnCall = mockState.spawnFn.mock.calls[0];
+    const args = spawnCall?.[1] as string[];
+    const peerFlags = args.filter((_a: string, i: number) => args[i - 1] === "--p2p-peer");
+    expect(peerFlags).toContain("10.0.0.1:19091");
+    expect(peerFlags).toContain("10.0.0.2:19093");
+
+    await sidecar.stop();
+  });
+});

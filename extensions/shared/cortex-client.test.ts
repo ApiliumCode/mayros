@@ -384,3 +384,240 @@ describe("type compatibility", () => {
     expect(match.subject).toBe("s");
   });
 });
+
+// ============================================================================
+// P2P Config (B1)
+// ============================================================================
+
+import { parseP2pConfig } from "./cortex-config.js";
+
+describe("parseP2pConfig", () => {
+  it("returns undefined for null/undefined", () => {
+    expect(parseP2pConfig(null)).toBeUndefined();
+    expect(parseP2pConfig(undefined)).toBeUndefined();
+  });
+
+  it("parses valid P2P config", () => {
+    const result = parseP2pConfig({
+      enabled: true,
+      port: 19091,
+      seed: "test-seed",
+      manualPeers: ["127.0.0.1:19091", "192.168.1.5:19093"],
+      mdns: true,
+    });
+    expect(result).toBeDefined();
+    expect(result!.enabled).toBe(true);
+    expect(result!.port).toBe(19091);
+    expect(result!.seed).toBe("test-seed");
+    expect(result!.manualPeers).toHaveLength(2);
+    expect(result!.mdns).toBe(true);
+  });
+
+  it("uses default port when not specified", () => {
+    const result = parseP2pConfig({ enabled: true });
+    expect(result!.port).toBe(19091);
+  });
+
+  it("rejects invalid port", () => {
+    expect(() => parseP2pConfig({ port: 80 })).toThrow("between 1024 and 65535");
+    expect(() => parseP2pConfig({ port: 70000 })).toThrow("between 1024 and 65535");
+  });
+
+  it("rejects invalid seed characters", () => {
+    expect(() => parseP2pConfig({ seed: "has spaces" })).toThrow("alphanumeric");
+    expect(() => parseP2pConfig({ seed: "has@special" })).toThrow("alphanumeric");
+  });
+
+  it("allows valid seed characters", () => {
+    const result = parseP2pConfig({ seed: "abc-123_DEF" });
+    expect(result!.seed).toBe("abc-123_DEF");
+  });
+
+  it("filters invalid manualPeers format", () => {
+    const result = parseP2pConfig({
+      manualPeers: ["127.0.0.1:19091", "badformat", "host:port", 42],
+    });
+    expect(result!.manualPeers).toEqual(["127.0.0.1:19091"]);
+  });
+
+  it("returns empty manualPeers when not provided", () => {
+    const result = parseP2pConfig({});
+    expect(result!.manualPeers).toEqual([]);
+  });
+
+  it("defaults mdns to false", () => {
+    const result = parseP2pConfig({});
+    expect(result!.mdns).toBe(false);
+  });
+});
+
+describe("parseCortexConfig with P2P", () => {
+  it("includes P2P config when provided", () => {
+    const cfg = parseCortexConfig({
+      p2p: { enabled: true, port: 19091, mdns: true },
+    });
+    expect(cfg.p2p).toBeDefined();
+    expect(cfg.p2p!.enabled).toBe(true);
+    expect(cfg.p2p!.mdns).toBe(true);
+  });
+
+  it("P2P is undefined when not provided (backward compat)", () => {
+    const cfg = parseCortexConfig({});
+    expect(cfg.p2p).toBeUndefined();
+  });
+
+  it("rejects unknown P2P keys", () => {
+    expect(() => parseCortexConfig({ p2p: { enabled: true, bogus: true } })).toThrow(
+      "unknown keys",
+    );
+  });
+});
+
+// ============================================================================
+// CortexClient P2P methods (B2)
+// ============================================================================
+
+describe("CortexClient P2P", () => {
+  let client: CortexClient;
+
+  beforeEach(() => {
+    client = new CortexClient({ host: "127.0.0.1", port: 19090 });
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mockFetch(status: number, body: unknown = {}) {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(body),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    } as unknown as Response);
+  }
+
+  it("p2pStatus sends GET to /api/v1/p2p/status", async () => {
+    const status = {
+      node_id: "abc123",
+      enabled: true,
+      port: 19091,
+      peer_count: 2,
+      connected_peers: [{ addr: "127.0.0.1:19091", connected: true }],
+      gossip_stats: {
+        round: 5,
+        pending_announcements: 0,
+        known_ids: 100,
+        bloom_filter_items: 100,
+        bloom_filter_fpr: 0.01,
+      },
+      sync_stats: {
+        peer_count: 1,
+        local_ids: 100,
+        total_successful_syncs: 10,
+        total_failed_syncs: 0,
+      },
+    };
+    mockFetch(200, status);
+
+    const result = await client.p2pStatus();
+    expect(result.node_id).toBe("abc123");
+    expect(result.peer_count).toBe(2);
+
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toBe("http://127.0.0.1:19090/api/v1/p2p/status");
+    expect(call[1].method).toBe("GET");
+  });
+
+  it("p2pListPeers returns connected_peers from status", async () => {
+    const peers = [
+      { addr: "127.0.0.1:19091", connected: true },
+      { addr: "192.168.1.5:19091", connected: true },
+    ];
+    mockFetch(200, {
+      node_id: "abc",
+      enabled: true,
+      port: 19091,
+      peer_count: 2,
+      connected_peers: peers,
+      gossip_stats: {
+        round: 0,
+        pending_announcements: 0,
+        known_ids: 0,
+        bloom_filter_items: 0,
+        bloom_filter_fpr: 0,
+      },
+      sync_stats: { peer_count: 0, local_ids: 0, total_successful_syncs: 0, total_failed_syncs: 0 },
+    });
+
+    const result = await client.p2pListPeers();
+    expect(result).toHaveLength(2);
+    expect(result[0].addr).toBe("127.0.0.1:19091");
+  });
+
+  it("p2pAddPeer sends POST with addr", async () => {
+    mockFetch(200, { status: "connected", addr: "192.168.1.5:19091" });
+
+    const result = await client.p2pAddPeer("192.168.1.5:19091");
+    expect(result.status).toBe("connected");
+    expect(result.addr).toBe("192.168.1.5:19091");
+
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toBe("http://127.0.0.1:19090/api/v1/p2p/peers");
+    expect(call[1].method).toBe("POST");
+  });
+
+  it("p2pRemovePeer sends DELETE", async () => {
+    mockFetch(200, { status: "disconnected" });
+
+    const result = await client.p2pRemovePeer("192.168.1.5:19091");
+    expect(result.status).toBe("disconnected");
+
+    const call = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toContain("/api/v1/p2p/peers/");
+    expect(call[1].method).toBe("DELETE");
+  });
+
+  it("p2pProbe returns status when available", async () => {
+    const status = {
+      node_id: "abc",
+      enabled: true,
+      port: 19091,
+      peer_count: 0,
+      connected_peers: [],
+      gossip_stats: {
+        round: 0,
+        pending_announcements: 0,
+        known_ids: 0,
+        bloom_filter_items: 0,
+        bloom_filter_fpr: 0,
+      },
+      sync_stats: { peer_count: 0, local_ids: 0, total_successful_syncs: 0, total_failed_syncs: 0 },
+    };
+    mockFetch(200, status);
+
+    const result = await client.p2pProbe();
+    expect(result).not.toBeNull();
+    expect(result!.enabled).toBe(true);
+  });
+
+  it("p2pProbe returns null on 404", async () => {
+    mockFetch(404, { error: "not found" });
+
+    const result = await client.p2pProbe();
+    expect(result).toBeNull();
+  });
+
+  it("p2pProbe returns null on connection error", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const result = await client.p2pProbe();
+    expect(result).toBeNull();
+  });
+
+  it("p2p methods throw on destroyed client", async () => {
+    client.destroy();
+    await expect(client.p2pStatus()).rejects.toThrow("Client has been destroyed");
+  });
+});

@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-google-gemini-cli-auth",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "Mayros Gemini CLI OAuth provider plugin",
   "type": "module",
