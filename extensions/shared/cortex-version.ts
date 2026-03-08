@@ -5,4 +5,4 @@
  * features or API changes.  `mayros update` and the sidecar startup
  * check will compare the installed binary against this value.
  */
-export const REQUIRED_CORTEX_VERSION = "0.3.7";
+export const REQUIRED_CORTEX_VERSION = "0.3.8";
