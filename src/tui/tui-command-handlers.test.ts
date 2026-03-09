@@ -358,52 +358,40 @@ describe("tui command handlers", () => {
       expect(addUser).toHaveBeenCalledWith("/plan start");
     });
 
-    it("/kg shows summary when no query provided", async () => {
+    it("/kg shows clean display text when no query provided", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/kg");
-      expect(addUser).toHaveBeenCalledWith(
-        expect.stringContaining("Show a knowledge graph summary."),
-      );
+      expect(addUser).toHaveBeenCalledWith("/kg");
     });
 
-    it("/kg sends search message when query provided", async () => {
+    it("/kg shows clean display text when query provided", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/kg auth flow");
-      expect(addUser).toHaveBeenCalledWith(
-        expect.stringContaining("Search the knowledge graph for: auth flow"),
-      );
+      expect(addUser).toHaveBeenCalledWith("/kg auth flow");
     });
 
-    it("/trace sends trace message", async () => {
+    it("/trace shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/trace stats");
-      expect(addUser).toHaveBeenCalledWith(
-        "Use the trace_stats tool with no arguments to show aggregated observability statistics for the current agent.",
-      );
+      expect(addUser).toHaveBeenCalledWith("/trace stats");
     });
 
-    it("/team sends dashboard message", async () => {
+    it("/team shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/team");
-      expect(addUser).toHaveBeenCalledWith(
-        "Use the mesh_team_dashboard tool with no arguments to show the team dashboard with current agent status and activity.",
-      );
+      expect(addUser).toHaveBeenCalledWith("/team");
     });
 
-    it("/tasks sends tasks message", async () => {
+    it("/tasks shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/tasks");
-      expect(addUser).toHaveBeenCalledWith(
-        "Use the agent_list_background_tasks tool with no arguments to list all background agent tasks and their current status.",
-      );
+      expect(addUser).toHaveBeenCalledWith("/tasks");
     });
 
-    it("/workflow without args lists workflows", async () => {
+    it("/workflow without args shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/workflow");
-      expect(addUser).toHaveBeenCalledWith(
-        'Use the mesh_run_workflow tool with action "list" to list available workflows and their status.',
-      );
+      expect(addUser).toHaveBeenCalledWith("/workflow");
     });
 
     it("/workflow with args forwards them", async () => {
@@ -412,20 +400,16 @@ describe("tui command handlers", () => {
       expect(addUser).toHaveBeenCalledWith("/workflow run code-review");
     });
 
-    it("/rules sends rules message", async () => {
+    it("/rules shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/rules");
-      expect(addUser).toHaveBeenCalledWith(
-        'Use the semantic_memory_recall tool with subject pattern "rule:*" to list all active rules.',
-      );
+      expect(addUser).toHaveBeenCalledWith("/rules");
     });
 
-    it("/mailbox without args checks inbox", async () => {
+    it("/mailbox without args shows clean display text", async () => {
       const { handleCommand, addUser } = setupEcosystem();
       await handleCommand("/mailbox");
-      expect(addUser).toHaveBeenCalledWith(
-        "Use the agent_check_inbox tool with no arguments to check the inbox for new messages and show unread count.",
-      );
+      expect(addUser).toHaveBeenCalledWith("/mailbox");
     });
 
     it("/onboard launches wizard", async () => {
