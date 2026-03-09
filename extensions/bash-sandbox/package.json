@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-bash-sandbox",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "Bash command sandbox with domain allowlist, command blocklist, and dangerous pattern detection",
   "type": "module",
