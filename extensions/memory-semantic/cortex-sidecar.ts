@@ -406,11 +406,16 @@ export class CortexSidecar {
       try {
         const existingPid = Number(readFileSync(lockFile, "utf-8").trim());
         if (existingPid && !isNaN(existingPid)) {
-          try {
-            process.kill(existingPid, 0); // probe — throws if process is dead
-            return false; // process is alive, lock is valid
-          } catch {
-            console.info(`[cortex] reclaiming stale lock from dead process ${existingPid}`);
+          // If the lock belongs to our own process (e.g. auto-restart after crash), reclaim it
+          if (existingPid === process.pid) {
+            console.info("[cortex] reclaiming own lock (sidecar restart)");
+          } else {
+            try {
+              process.kill(existingPid, 0); // probe — throws if process is dead
+              return false; // different process is alive, lock is valid
+            } catch {
+              console.info(`[cortex] reclaiming stale lock from dead process ${existingPid}`);
+            }
           }
         }
         unlinkSync(lockFile);
