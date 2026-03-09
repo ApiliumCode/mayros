@@ -15,6 +15,8 @@ import {
   type GatewayEvent,
 } from "../tui/gateway-chat.js";
 import { TuiStreamAssembler } from "../tui/tui-stream-assembler.js";
+import { readConfigFileSnapshot } from "../config/io.js";
+import { ensureServicesRunning } from "../infra/ensure-services.js";
 
 // ============================================================================
 // Types
@@ -197,14 +199,24 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
     }
   }
 
-  // 3. Resolve connection
+  // 3. Ensure gateway + cortex are running (unless explicit --url was provided)
+  if (!opts.url) {
+    const snapshot = readConfigFileSnapshot();
+    const config = snapshot.valid ? snapshot.config : {};
+    await ensureServicesRunning({
+      config,
+      log: (msg) => process.stderr.write(`${msg}\n`),
+    });
+  }
+
+  // 4. Resolve connection
   const connection = resolveGatewayConnection({
     url: opts.url,
     token: opts.token,
     password: opts.password,
   });
 
-  // 4. Create client
+  // 5. Create client
   const client = new GatewayChatClient({
     url: connection.url,
     token: connection.token,
@@ -325,7 +337,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
     };
   });
 
-  // 5. Connect + send
+  // 6. Connect + send
   client.start();
 
   try {
@@ -352,7 +364,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
     return;
   }
 
-  // 6. Wait for result or timeout
+  // 7. Wait for result or timeout
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutTimer = setTimeout(() => {
@@ -373,7 +385,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
     client.stop();
   }
 
-  // 7. Post-processing: JSON schema validation
+  // 8. Post-processing: JSON schema validation
   if (opts.jsonSchema && !budgetExceeded && !turnsExceeded && process.exitCode !== 1) {
     // Collect all "final" lines from stdout to validate
     // The final text was already written; we re-parse from assembler state
