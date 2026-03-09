@@ -998,6 +998,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         await sendMessage(
           "List every tool name you have access to. Output ONLY a numbered list of tool names, nothing else. " +
             "Do NOT describe them. Just the names, one per line.",
+          "/tools",
         );
         break;
       }
@@ -1011,9 +1012,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (!args) {
           await sendMessage(
             `Show a knowledge graph summary. ${kgHint} Show categories, triple counts, and recent entries.`,
+            "/kg",
           );
         } else {
-          await sendMessage(`Search the knowledge graph for: ${args}. ${kgHint}`);
+          await sendMessage(`Search the knowledge graph for: ${args}. ${kgHint}`, `/kg ${args}`);
         }
         break;
       }
@@ -1022,15 +1024,18 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (subCmd === "stats") {
           await sendMessage(
             "Use the trace_stats tool with no arguments to show aggregated observability statistics for the current agent.",
+            "/trace stats",
           );
         } else if (subCmd === "explain" && args.includes(" ")) {
           const eventId = args.slice("explain".length).trim();
           await sendMessage(
             `Use the trace_explain tool with eventId "${eventId}" to trace the causal chain for that event.`,
+            `/trace explain ${eventId}`,
           );
         } else {
           await sendMessage(
             "Use the trace_query tool with no arguments to list recent trace events for the current agent.",
+            "/trace events",
           );
         }
         break;
@@ -1038,12 +1043,14 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "team": {
         await sendMessage(
           "Use the mesh_team_dashboard tool with no arguments to show the team dashboard with current agent status and activity.",
+          "/team",
         );
         break;
       }
       case "tasks": {
         await sendMessage(
           "Use the agent_list_background_tasks tool with no arguments to list all background agent tasks and their current status.",
+          "/tasks",
         );
         break;
       }
@@ -1051,6 +1058,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (!args) {
           await sendMessage(
             'Use the mesh_run_workflow tool with action "list" to list available workflows and their status.',
+            "/workflow",
           );
         } else {
           await sendMessage(`/workflow ${args}`);
@@ -1061,10 +1069,12 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (args) {
           await sendMessage(
             `Use the semantic_memory_recall tool to search for rules matching: ${args}`,
+            `/rules ${args}`,
           );
         } else {
           await sendMessage(
             'Use the semantic_memory_recall tool with subject pattern "rule:*" to list all active rules.',
+            "/rules",
           );
         }
         break;
@@ -1073,6 +1083,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         if (!args) {
           await sendMessage(
             "Use the agent_check_inbox tool with no arguments to check the inbox for new messages and show unread count.",
+            "/mailbox",
           );
         } else {
           await sendMessage(`/mailbox ${args}`);
@@ -1286,6 +1297,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       case "sync": {
         await sendMessage(
           "Use the cortex_sync_status tool with no arguments to show Cortex peer sync status and statistics.",
+          "/sync",
         );
         break;
       }
@@ -1319,9 +1331,9 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     tui.requestRender();
   };
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, displayText?: string) => {
     try {
-      chatLog.addUser(text);
+      chatLog.addUser(displayText ?? text);
       tui.requestRender();
       const style = (state.outputStyle ?? "standard") as OutputStyle;
       const styledText = applyOutputStyle(text, style);
