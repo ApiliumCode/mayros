@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-semantic-skills",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "description": "Mayros semantic skills plugin — graph-aware skills with PoL assertions, ZK proofs, and permission gating",
   "type": "module",
