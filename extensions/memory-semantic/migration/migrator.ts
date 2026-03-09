@@ -20,7 +20,7 @@ import {
   emptyIdentity,
 } from "../identity/identity-graph.js";
 import { memoryToTriples, predicate, agentSubject } from "../rdf-mapper.js";
-import type { TitansClient } from "../titans-client.js";
+import type { IneruClient } from "../ineru-client.js";
 import {
   parseMemoryFile,
   parseMayrosMd,
@@ -63,7 +63,7 @@ export type MigrationReport = {
 export class Migrator {
   constructor(
     private readonly cortex: CortexClient,
-    private readonly titans: TitansClient | null,
+    private readonly ineru: IneruClient | null,
     private readonly ns: string,
   ) {}
 
@@ -197,10 +197,10 @@ export class Migrator {
               const text = typeof msg.content === "string" ? msg.content : "";
               if (text.length < 10 || text.length > 500) continue;
 
-              // Store important messages in Titans STM if available
-              if (this.titans && !opts.dryRun) {
+              // Store important messages in Ineru STM if available
+              if (this.ineru && !opts.dryRun) {
                 try {
-                  await this.titans.remember({
+                  await this.ineru.remember({
                     entry_type: "history",
                     data: text,
                     tags: ["migration", "history"],

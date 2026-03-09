@@ -12,7 +12,7 @@ Mayros is built by [Apilium Technologies](https://apilium.com). It is designed a
 ### Architecture
 
 - **Gateway** — WebSocket control plane with sessions, presence, config, cron, webhooks, and Canvas host.
-- **Semantic Memory** — three-tier architecture: MAYROS.md (lightweight persona), AIngle Cortex (RDF triples, namespace-isolated), Titans STM/LTM. Cortex runs as an HTTP sidecar; when unavailable, Mayros degrades gracefully to markdown.
+- **Semantic Memory** — three-tier architecture: MAYROS.md (lightweight persona), AIngle Cortex (RDF triples, namespace-isolated), Ineru STM/LTM. Cortex runs as an HTTP sidecar; when unavailable, Mayros degrades gracefully to markdown.
 - **Agent Mesh** — multi-agent coordination, delegation, and fusion across devices and channels.
 - **QuickJS WASM Sandbox** — skills run fully isolated with 18 security layers, no access to fs/net/process.
 - **38 Extensions** — semantic-skills, agent-mesh, skill-hub, token-economy, IoT bridge, semantic observability, and more.
@@ -68,7 +68,7 @@ Memory uses a three-tier architecture:
 
 - **MAYROS.md** — lightweight persona file, always available
 - **AIngle Cortex** — persistent semantic memory via RDF triples, namespace-isolated per agent
-- **Titans STM/LTM** — short-term and long-term memory layers
+- **Ineru STM/LTM** — short-term and long-term memory layers
 
 ### Skills
 

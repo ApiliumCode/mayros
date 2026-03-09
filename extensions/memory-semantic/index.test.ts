@@ -487,14 +487,14 @@ describe("cortex sidecar", () => {
 });
 
 // ============================================================================
-// TitansClient Tests
+// IneruClient Tests
 // ============================================================================
 
-describe("titans client", () => {
+describe("ineru client", () => {
   test("constructs correctly", async () => {
-    const { TitansClient } = await import("./titans-client.js");
+    const { IneruClient } = await import("./ineru-client.js");
 
-    const client = new TitansClient({
+    const client = new IneruClient({
       host: "localhost",
       port: 19090,
       autoStart: false,
@@ -504,9 +504,9 @@ describe("titans client", () => {
   });
 
   test("isAvailable returns false when unreachable", async () => {
-    const { TitansClient } = await import("./titans-client.js");
+    const { IneruClient } = await import("./ineru-client.js");
 
-    const client = new TitansClient({
+    const client = new IneruClient({
       host: "127.0.0.1",
       port: 19999,
       autoStart: false,
