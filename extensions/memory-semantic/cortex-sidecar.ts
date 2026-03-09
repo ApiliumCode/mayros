@@ -140,10 +140,20 @@ export class CortexSidecar {
 
   // ---------- internals ----------
 
+  /** Resolves the data directory, creating it if necessary. */
+  private resolveDataDir(): string {
+    const dir = this.config.dataDir ?? join(homedir(), ".mayros", "cortex-data");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
   private async spawn(binaryPath: string): Promise<boolean> {
     this._status = "starting";
 
-    const args = ["--host", this.config.host, "--port", String(this.config.port)];
+    const dataDir = this.resolveDataDir();
+    const dbPath = join(dataDir, "graph.sled");
+
+    const args = ["--host", this.config.host, "--port", String(this.config.port), "--db", dbPath];
 
     // P2P flag forwarding (B1): map CortexConfig.p2p to CLI flags
     if (this.config.p2p?.enabled) {

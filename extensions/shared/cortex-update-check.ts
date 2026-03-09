@@ -23,6 +23,45 @@ import {
 import { REQUIRED_CORTEX_VERSION } from "./cortex-version.js";
 
 // ---------------------------------------------------------------------------
+// Graceful flush before binary replacement
+// ---------------------------------------------------------------------------
+
+/**
+ * Flushes Cortex data to disk before replacing the binary.
+ *
+ * Sends POST /api/v1/flush to the running Cortex instance, waits for
+ * confirmation, then returns. If Cortex is unreachable or the flush
+ * times out, continues silently (best-effort).
+ */
+export async function flushCortexBeforeUpdate(
+  host = "127.0.0.1",
+  port = 19090,
+  log: (msg: string) => void = () => {},
+): Promise<void> {
+  const url = `http://${host}:${port}/api/v1/flush`;
+  log("Flushing Cortex data before update...");
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      log("Cortex data flushed successfully");
+    } else {
+      log(`Cortex flush returned ${res.status} — continuing`);
+    }
+  } catch {
+    log("Cortex not reachable for flush — continuing");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -134,7 +173,11 @@ export async function checkCortexVersion(binaryPath?: string): Promise<CortexUpd
  */
 export async function installOrUpdateCortex(
   log: (msg: string) => void = () => {},
+  opts?: { cortexHost?: string; cortexPort?: number },
 ): Promise<boolean> {
+  // Flush running Cortex data before replacing the binary
+  await flushCortexBeforeUpdate(opts?.cortexHost ?? "127.0.0.1", opts?.cortexPort ?? 19090, log);
+
   const installDir = getDefaultInstallDir();
   const binaryName = getBinaryName();
   const assetName = getAssetPattern();
