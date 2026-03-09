@@ -69,7 +69,6 @@ async function ensureGatewayRunning(params: {
       // Auto-install the daemon service instead of requiring manual onboard
       log("Gateway service not installed — auto-installing...");
       try {
-        const port = resolveGatewayPort(config);
         const plan = await buildGatewayInstallPlan({
           env: process.env as Record<string, string | undefined>,
           port,
