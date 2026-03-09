@@ -691,7 +691,7 @@ const semanticSkillsPlugin = {
       {
         name: "skill_memory_context",
         label: "Skill Memory Context",
-        description: "Recall from Titans memory within the active skill context.",
+        description: "Recall from Ineru memory within the active skill context.",
         parameters: Type.Object({
           query: Type.String({ description: "Search query for memory recall" }),
           limit: Type.Optional(Type.Number({ description: "Max results (default: 5)" })),

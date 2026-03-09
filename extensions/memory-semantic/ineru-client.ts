@@ -1,14 +1,14 @@
 /**
- * HTTP client for Titans Memory endpoints on the Cortex REST API.
+ * HTTP client for Ineru Memory endpoints on the Cortex REST API.
  *
- * Maps to the /api/v1/memory/* routes that expose the TitansMemory
+ * Maps to the /api/v1/memory/* routes that expose the IneruMemory
  * module (STM + LTM with consolidation).
  */
 
 import type { CortexConfig } from "./config.js";
 
 // ============================================================================
-// DTOs — mirror titans_memory types via Cortex REST
+// DTOs — mirror ineru types via Cortex REST
 // ============================================================================
 
 export type MemoryEntryDto = {
@@ -60,7 +60,7 @@ export type CheckpointDto = {
 // Client
 // ============================================================================
 
-export class TitansClient {
+export class IneruClient {
   private readonly baseUrl: string;
   private readonly headers: Record<string, string>;
 
@@ -88,11 +88,11 @@ export class TitansClient {
     try {
       res = await fetch(url, init);
     } catch (err) {
-      throw new Error(`Titans Memory unreachable at ${url}: ${String(err)}`);
+      throw new Error(`Ineru Memory unreachable at ${url}: ${String(err)}`);
     }
 
     if (!res.ok) {
-      let errorMsg = `Titans ${method} ${path} failed with ${res.status}`;
+      let errorMsg = `Ineru ${method} ${path} failed with ${res.status}`;
       try {
         const body = (await res.json()) as { error?: string };
         if (body.error) errorMsg = body.error;

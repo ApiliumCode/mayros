@@ -30,7 +30,7 @@ import {
   type SemanticMemoryEntry,
 } from "./rdf-mapper.js";
 import { INJECTION_PATTERNS } from "../semantic-skills/enrichment-sanitizer.js";
-import { TitansClient } from "./titans-client.js";
+import { IneruClient } from "./ineru-client.js";
 import {
   ProjectMemory,
   detectProjectKnowledge,
@@ -114,7 +114,7 @@ const semanticMemoryPlugin = {
   id: "memory-semantic",
   name: "Memory (Semantic)",
   description:
-    "AIngle Cortex-backed semantic memory with RDF triples, identity graph, and Titans STM/LTM",
+    "AIngle Cortex-backed semantic memory with RDF triples, identity graph, and Ineru STM/LTM",
   kind: "memory" as const,
   configSchema: semanticMemoryConfigSchema,
 
@@ -908,7 +908,7 @@ const semanticMemoryPlugin = {
     const mayrosMdPath = api.resolvePath("MAYROS.md");
     const identityLoader = new IdentityLoader(client, ns, mayrosMdPath);
     const identityProver = new IdentityProver(client, ns);
-    const titansClient = new TitansClient(cfg.cortex);
+    const ineruClient = new IneruClient(cfg.cortex);
     const projectMemory = new ProjectMemory(client, ns);
     const rulesEngine = new RulesEngine(client, ns);
     const agentMemory = new AgentMemory(client, ns);
@@ -919,16 +919,16 @@ const semanticMemoryPlugin = {
       projectMemory,
       agentMemory,
     );
-    let titansAvailable = false;
+    let ineruAvailable = false;
 
-    async function ensureTitans(): Promise<boolean> {
-      // Titans shares the Cortex server — if Cortex is unhealthy, skip probe.
+    async function ensureIneru(): Promise<boolean> {
+      // Ineru shares the Cortex server — if Cortex is unhealthy, skip probe.
       if (!cortexAvailable) {
-        titansAvailable = false;
+        ineruAvailable = false;
         return false;
       }
-      titansAvailable = await titansClient.isAvailable();
-      return titansAvailable;
+      ineruAvailable = await ineruClient.isAvailable();
+      return ineruAvailable;
     }
 
     api.registerTool(
@@ -986,7 +986,7 @@ const semanticMemoryPlugin = {
     );
 
     // ========================================================================
-    // Titans Memory Tools
+    // Ineru Memory Tools
     // ========================================================================
 
     api.registerTool(
@@ -1002,14 +1002,14 @@ const semanticMemoryPlugin = {
         async execute(_toolCallId, params) {
           const { label } = params as { label?: string };
 
-          if (!(await ensureTitans())) {
+          if (!(await ensureIneru())) {
             return {
-              content: [{ type: "text", text: "Titans Memory unavailable. Cannot checkpoint." }],
-              details: { action: "skipped", reason: "titans_unavailable" },
+              content: [{ type: "text", text: "Ineru Memory unavailable. Cannot checkpoint." }],
+              details: { action: "skipped", reason: "ineru_unavailable" },
             };
           }
 
-          const result = await titansClient.createCheckpoint(label);
+          const result = await ineruClient.createCheckpoint(label);
           return {
             content: [
               {
@@ -1047,18 +1047,18 @@ const semanticMemoryPlugin = {
             parts.push("Graph: offline");
           }
 
-          // Titans stats
-          if (await ensureTitans()) {
+          // Ineru stats
+          if (await ensureIneru()) {
             try {
-              const s = await titansClient.stats();
+              const s = await ineruClient.stats();
               parts.push(`STM: ${s.stm_count}/${s.stm_capacity} entries`);
               parts.push(`LTM: ${s.ltm_entity_count} entities, ${s.ltm_link_count} links`);
               parts.push(`Memory: ${(s.total_memory_bytes / 1024).toFixed(1)} KB`);
             } catch {
-              parts.push("Titans: unavailable");
+              parts.push("Ineru: unavailable");
             }
           } else {
-            parts.push("Titans: offline");
+            parts.push("Ineru: offline");
           }
 
           const text = parts.join("\n");
@@ -1368,7 +1368,7 @@ const semanticMemoryPlugin = {
       ({ program }) => {
         registerMigrateCli(program, {
           cortex: client,
-          titans: titansClient,
+          ineru: ineruClient,
           ns,
           agentId,
           workspaceDir: api.resolvePath("."),
@@ -1382,15 +1382,15 @@ const semanticMemoryPlugin = {
     // ========================================================================
 
     // Auto-recall: inject relevant memories before agent starts
-    // Tries Titans recall first (semantic), then Cortex pattern query, then markdown fallback
+    // Tries Ineru recall first (semantic), then Cortex pattern query, then markdown fallback
     api.on("before_agent_start", async (event) => {
       if (!event.prompt || event.prompt.length < 5) return;
 
       try {
-        // Try Titans recall first (best quality: semantic search with STM+LTM)
-        if (await ensureTitans()) {
+        // Try Ineru recall first (best quality: semantic search with STM+LTM)
+        if (await ensureIneru()) {
           try {
-            const results = await titansClient.recall({
+            const results = await ineruClient.recall({
               text: event.prompt,
               limit: 3,
               min_importance: 0.3,
@@ -1403,14 +1403,14 @@ const semanticMemoryPlugin = {
               }));
 
               api.logger.info?.(
-                `memory-semantic: injecting ${memories.length} memories (Titans recall)`,
+                `memory-semantic: injecting ${memories.length} memories (Ineru recall)`,
               );
               return {
                 prependContext: formatRelevantMemoriesContext(memories),
               };
             }
           } catch {
-            // Titans recall failed, fall through to Cortex pattern query
+            // Ineru recall failed, fall through to Cortex pattern query
           }
         }
 
@@ -1483,7 +1483,7 @@ const semanticMemoryPlugin = {
     });
 
     // Auto-capture: store important user messages after agent ends
-    // Stores both as RDF triples (Cortex) and in Titans STM
+    // Stores both as RDF triples (Cortex) and in Ineru STM
     api.on("agent_end", async (event) => {
       if (!event.success || !event.messages || event.messages.length === 0) return;
 
@@ -1575,17 +1575,17 @@ const semanticMemoryPlugin = {
             }
           }
 
-          // Also store in Titans STM for fast recall
-          if (await ensureTitans()) {
+          // Also store in Ineru STM for fast recall
+          if (await ensureIneru()) {
             try {
-              await titansClient.remember({
+              await ineruClient.remember({
                 entry_type: category,
                 data: text,
                 tags: [category, "auto-capture"],
                 importance: 0.7,
               });
             } catch {
-              // Titans store failed, already in Cortex
+              // Ineru store failed, already in Cortex
             }
           }
 
@@ -1633,7 +1633,7 @@ const semanticMemoryPlugin = {
       }
     });
 
-    // Before compaction: extract structured knowledge + consolidate Titans
+    // Before compaction: extract structured knowledge + consolidate Ineru
     api.on("before_compaction", async (event, _ctx) => {
       try {
         const messages = event.messages;
@@ -1713,10 +1713,10 @@ const semanticMemoryPlugin = {
           }
         }
 
-        // Consolidate Titans STM → LTM before context is lost
-        if (cfg.autoConsolidate && (await ensureTitans())) {
+        // Consolidate Ineru STM → LTM before context is lost
+        if (cfg.autoConsolidate && (await ensureIneru())) {
           try {
-            const result = await titansClient.consolidate();
+            const result = await ineruClient.consolidate();
             api.logger.info?.(
               `memory-semantic: consolidated ${result.consolidated} STM entries to LTM`,
             );
@@ -1840,9 +1840,9 @@ const semanticMemoryPlugin = {
       }
 
       // 2. Create memory checkpoint for resumability
-      if (!(await ensureTitans())) return;
+      if (!(await ensureIneru())) return;
       try {
-        const result = await titansClient.createCheckpoint(`session-${Date.now()}`);
+        const result = await ineruClient.createCheckpoint(`session-${Date.now()}`);
         api.logger.info?.(`memory-semantic: session checkpoint created: ${result.checkpointId}`);
       } catch (err) {
         api.logger.warn(`memory-semantic: session checkpoint failed: ${String(err)}`);
