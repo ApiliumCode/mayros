@@ -91,16 +91,29 @@ export class CortexSidecar {
       }
     }
 
-    // Warn (but don't block) if the installed binary is older than required
+    // Auto-update if the installed binary is older than required
     const installedVersion = getCortexBinaryVersion(binaryPath);
     if (installedVersion && REQUIRED_CORTEX_VERSION) {
       const [iMaj, iMin, iPat] = installedVersion.split(".").map(Number);
       const [rMaj, rMin, rPat] = REQUIRED_CORTEX_VERSION.split(".").map(Number);
-      if (
+      const isOutdated =
         iMaj < rMaj ||
         (iMaj === rMaj && iMin < rMin) ||
-        (iMaj === rMaj && iMin === rMin && iPat < rPat)
-      ) {
+        (iMaj === rMaj && iMin === rMin && iPat < rPat);
+      if (isOutdated && !this.config.binaryPath) {
+        console.info(
+          `[cortex] binary outdated (${installedVersion} < ${REQUIRED_CORTEX_VERSION}) — auto-updating...`,
+        );
+        try {
+          const { installOrUpdateCortex } = await import("../shared/cortex-update-check.js");
+          await installOrUpdateCortex((msg) => console.info(`[cortex] ${msg}`));
+          binaryPath = (await locateCortexBinary()) ?? binaryPath;
+        } catch (err) {
+          console.warn(
+            `[cortex] auto-update failed: ${err instanceof Error ? err.message : err}. Continuing with ${installedVersion}`,
+          );
+        }
+      } else if (isOutdated) {
         console.warn(
           `[cortex] binary outdated (${installedVersion} < ${REQUIRED_CORTEX_VERSION}). Run: mayros update`,
         );
