@@ -10,7 +10,6 @@
 import { execFileSync } from "node:child_process";
 import { createWriteStream, existsSync, readdirSync } from "node:fs";
 import { mkdir, chmod, unlink, rename } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
