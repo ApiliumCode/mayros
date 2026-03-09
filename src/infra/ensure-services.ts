@@ -11,6 +11,7 @@
 import type { MayrosConfig } from "../config/config.js";
 import { resolveGatewayPort } from "../config/config.js";
 import { probeGatewayReachable, waitForGatewayReachable } from "../commands/onboard-helpers.js";
+import { buildGatewayInstallPlan } from "../commands/daemon-install-helpers.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
 import { CortexClient } from "../../extensions/shared/cortex-client.js";
@@ -65,10 +66,30 @@ async function ensureGatewayRunning(params: {
     const loaded = await service.isLoaded({ env: process.env }).catch(() => false);
 
     if (!loaded) {
-      return {
-        ok: false,
-        detail: "Gateway service not installed. Run `mayros onboard` to set it up.",
-      };
+      // Auto-install the daemon service instead of requiring manual onboard
+      log("Gateway service not installed — auto-installing...");
+      try {
+        const port = resolveGatewayPort(config);
+        const plan = await buildGatewayInstallPlan({
+          env: process.env as Record<string, string | undefined>,
+          port,
+          runtime: "node",
+          config,
+        });
+        await service.install({
+          env: process.env as Record<string, string | undefined>,
+          stdout: process.stdout,
+          programArguments: plan.programArguments,
+          workingDirectory: plan.workingDirectory,
+          environment: plan.environment,
+        });
+        log("Gateway service installed.");
+      } catch (err) {
+        return {
+          ok: false,
+          detail: `Gateway auto-install failed: ${err instanceof Error ? err.message : String(err)}. Run \`mayros onboard\` manually.`,
+        };
+      }
     }
 
     await service.restart({ env: process.env, stdout: process.stdout });
