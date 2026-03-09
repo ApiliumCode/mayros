@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-mcp-client",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "private": true,
   "description": "MCP server client with multi-transport support and Cortex tool registry",
   "type": "module",
