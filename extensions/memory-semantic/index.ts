@@ -2003,7 +2003,10 @@ const semanticMemoryPlugin = {
           onBeforeReplace: async () => {
             healthMonitor.stop();
             try {
-              await writeQueue.drain();
+              await Promise.race([
+                writeQueue.drain(),
+                new Promise((resolve) => setTimeout(resolve, 10_000)),
+              ]);
             } catch {
               /* best-effort */
             }
@@ -2026,10 +2029,14 @@ const semanticMemoryPlugin = {
           /* best-effort */
         }
         healthMonitor.stop();
-        // Drain pending writes before stopping the queue and sidecar
+        // Drain pending writes before stopping (timeout prevents blocking shutdown)
         try {
-          const drained = await writeQueue.drain();
+          const drained = (await Promise.race([
+            writeQueue.drain(),
+            new Promise<number>((resolve) => setTimeout(() => resolve(-1), 10_000)),
+          ])) as number;
           if (drained > 0) api.logger.info(`memory-semantic: drained ${drained} pending writes`);
+          else if (drained === -1) api.logger.warn("memory-semantic: drain timed out after 10s");
         } catch {
           // best-effort — don't block shutdown
         }

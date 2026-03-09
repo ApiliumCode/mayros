@@ -234,8 +234,11 @@ export class CortexSidecar {
     // Check if the port is already in use by something other than Cortex
     if (!(await this.ensurePortAvailable())) {
       this.releaseLock();
-      this._status = "failed";
-      return false;
+      // If ensurePortAvailable detected an external Cortex, status is "running" — don't overwrite
+      if (this._status !== "running") {
+        this._status = "failed";
+      }
+      return this._status === "running";
     }
 
     const args = ["--host", this.config.host, "--port", String(this.config.port), "--db", dbPath];
@@ -381,24 +384,33 @@ export class CortexSidecar {
     return false;
   }
 
-  /** Acquire a lock file in the data directory. Returns true on success. */
+  /**
+   * Acquire a lock file in the data directory. Returns true on success.
+   * Reclaims stale locks from dead processes automatically.
+   */
   private acquireLock(dataDir: string): boolean {
     const lockFile = join(dataDir, ".cortex.lock");
     try {
-      // Exclusive create — fails if file exists
+      // Exclusive create — fails if file already exists
       writeFileSync(lockFile, String(process.pid), { flag: "wx" });
       this.lockPath = lockFile;
       return true;
-    } catch {
+    } catch (createErr: unknown) {
+      // Check if the failure is a permission issue (not a lock conflict)
+      const code = (createErr as { code?: string })?.code;
+      if (code && code !== "EEXIST") {
+        console.error(`[cortex] cannot create lock file in ${dataDir}: ${code}`);
+        return false;
+      }
       // File exists — check if the PID is still alive
       try {
         const existingPid = Number(readFileSync(lockFile, "utf-8").trim());
         if (existingPid && !isNaN(existingPid)) {
           try {
-            process.kill(existingPid, 0); // probe — throws if dead
+            process.kill(existingPid, 0); // probe — throws if process is dead
             return false; // process is alive, lock is valid
           } catch {
-            // Process is dead — stale lock, reclaim it
+            console.info(`[cortex] reclaiming stale lock from dead process ${existingPid}`);
           }
         }
         unlinkSync(lockFile);
