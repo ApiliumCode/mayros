@@ -101,6 +101,22 @@ export class CortexSidecar {
     return this.spawn(binaryPath);
   }
 
+  /**
+   * Flush Cortex data via REST before stopping the process.
+   * Best-effort — if Cortex is unreachable, continues silently.
+   */
+  private async flushBeforeStop(): Promise<void> {
+    try {
+      const url = `http://${this.config.host}:${this.config.port}/api/v1/flush`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      await fetch(url, { method: "POST", signal: controller.signal });
+      clearTimeout(timeout);
+    } catch {
+      // best-effort
+    }
+  }
+
   async stop(): Promise<void> {
     // Remove process signal handlers to prevent double-stop
     this.removeSignalHandlers();
@@ -110,17 +126,20 @@ export class CortexSidecar {
       return;
     }
 
+    // Flush data via REST before sending SIGTERM
+    await this.flushBeforeStop();
+
     const proc = this.process;
     this.process = null;
 
-    // Give it a chance to shut down gracefully
+    // Give it a chance to shut down gracefully (SIGTERM triggers its own flush + snapshot)
     proc.kill("SIGTERM");
 
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
         proc.kill("SIGKILL");
         resolve();
-      }, 5000);
+      }, 10_000);
 
       proc.once("exit", () => {
         clearTimeout(timeout);
@@ -129,6 +148,21 @@ export class CortexSidecar {
     });
 
     this._status = "stopped";
+  }
+
+  /**
+   * Gracefully restart the sidecar after a binary update.
+   *
+   * 1. Flush data via REST
+   * 2. Stop the process (SIGTERM → Cortex flushes + saves snapshot)
+   * 3. Wait for exit
+   * 4. Start again with the new binary
+   */
+  async restartForUpdate(): Promise<boolean> {
+    console.info("[cortex] restarting sidecar for binary update...");
+    this.restartCount = 0; // reset so auto-restart doesn't interfere
+    await this.stop();
+    return this.start();
   }
 
   private removeSignalHandlers(): void {
