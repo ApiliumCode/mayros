@@ -19,7 +19,7 @@ First public release of Mayros — personal AI assistant platform.
 ### Semantic Intelligence
 
 - AIngle Cortex sidecar: persistent semantic memory via RDF triples
-- Three-tier memory: MAYROS.md (persona) + Cortex (RDF) + Titans STM/LTM
+- Three-tier memory: MAYROS.md (persona) + Cortex (RDF) + Ineru STM/LTM
 - Agent Mesh: multi-agent delegation, knowledge fusion, semantic observability
 - Semantic skill SDK: 6 tools, 3 hooks, Forge CLI
 - Skills Hub marketplace with Ed25519 signing

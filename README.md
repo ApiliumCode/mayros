@@ -182,7 +182,7 @@ Mayros remembers. Not just conversation history — semantic knowledge stored as
 
 1. **MAYROS.md** — flat-file persona and instructions, always loaded into the system prompt
 2. **AIngle Cortex** — RDF triple store (`subject → predicate → object`) scoped by namespace. Optional: falls back to file-based memory when unavailable
-3. **Titans STM/LTM** — short-term and long-term memory with temporal recall
+3. **Ineru STM/LTM** — short-term and long-term memory with temporal recall
 
 **Built on top:**
 

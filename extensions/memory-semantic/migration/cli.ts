@@ -4,12 +4,12 @@
  */
 
 import type { CortexClient } from "../cortex-client.js";
-import type { TitansClient } from "../titans-client.js";
+import type { IneruClient } from "../ineru-client.js";
 import { Migrator, type MigrationReport } from "./migrator.js";
 
 export type MigrateCliOptions = {
   cortex: CortexClient;
-  titans: TitansClient | null;
+  ineru: IneruClient | null;
   ns: string;
   agentId: string;
   workspaceDir: string;
@@ -24,7 +24,7 @@ export function registerMigrateCli(
   program: any,
   opts: MigrateCliOptions,
 ): void {
-  const migrator = new Migrator(opts.cortex, opts.titans, opts.ns);
+  const migrator = new Migrator(opts.cortex, opts.ineru, opts.ns);
 
   const migrate = program
     .command("migrate")
