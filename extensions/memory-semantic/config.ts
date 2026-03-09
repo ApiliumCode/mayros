@@ -172,6 +172,12 @@ export const semanticMemoryConfigSchema = {
       label: "Auto-Start Cortex",
       help: "Automatically start the Cortex sidecar process",
     },
+    "cortex.dataDir": {
+      label: "Cortex Data Directory",
+      placeholder: "~/.mayros/cortex-data",
+      advanced: true,
+      help: "Directory for persistent Cortex data (graph database, Ineru snapshots)",
+    },
     "cortex.authToken": {
       label: "Cortex Auth Token",
       sensitive: true,

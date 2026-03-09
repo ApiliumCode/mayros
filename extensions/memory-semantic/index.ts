@@ -138,8 +138,12 @@ const semanticMemoryPlugin = {
       onUnhealthy: () => {
         cortexAvailable = false;
         api.logger.warn("memory-semantic: Cortex unreachable — now unhealthy");
-        // Auto-restart sidecar if it crashed
-        if (cfg.cortex.autoStart && (sidecar.status === "failed" || sidecar.status === "stopped")) {
+        // Auto-restart sidecar if it crashed — skip if still starting (avoids double-spawn race)
+        if (
+          cfg.cortex.autoStart &&
+          sidecar.status !== "starting" &&
+          (sidecar.status === "failed" || sidecar.status === "stopped")
+        ) {
           api.logger.info("memory-semantic: attempting Cortex sidecar restart...");
           void sidecar.start().then((ok) => {
             if (ok) {
@@ -1989,9 +1993,53 @@ const semanticMemoryPlugin = {
           }
         });
         healthMonitor.start();
+
+        // Register lifecycle callbacks so update-runner can coordinate sidecar restart
+        const { registerCortexLifecycleCallbacks } =
+          await import("../shared/cortex-lifecycle-registry.js");
+        registerCortexLifecycleCallbacks({
+          host: cfg.cortex.host,
+          port: cfg.cortex.port,
+          onBeforeReplace: async () => {
+            healthMonitor.stop();
+            try {
+              await Promise.race([
+                writeQueue.drain(),
+                new Promise((resolve) => setTimeout(resolve, 10_000)),
+              ]);
+            } catch {
+              /* best-effort */
+            }
+            await sidecar.stop();
+          },
+          onAfterReplace: async () => {
+            const ok = await sidecar.start();
+            cortexAvailable = ok;
+            if (ok) healthMonitor.start();
+          },
+        });
       },
       async stop() {
+        // Clear lifecycle callbacks so update-runner doesn't call stale references
+        try {
+          const { clearCortexLifecycleCallbacks } =
+            await import("../shared/cortex-lifecycle-registry.js");
+          clearCortexLifecycleCallbacks();
+        } catch {
+          /* best-effort */
+        }
         healthMonitor.stop();
+        // Drain pending writes before stopping (timeout prevents blocking shutdown)
+        try {
+          const drained = (await Promise.race([
+            writeQueue.drain(),
+            new Promise<number>((resolve) => setTimeout(() => resolve(-1), 10_000)),
+          ])) as number;
+          if (drained > 0) api.logger.info(`memory-semantic: drained ${drained} pending writes`);
+          else if (drained === -1) api.logger.warn("memory-semantic: drain timed out after 10s");
+        } catch {
+          // best-effort — don't block shutdown
+        }
         await writeQueue.stop();
         client.destroy();
         await sidecar.stop();

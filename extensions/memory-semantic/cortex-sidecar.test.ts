@@ -34,6 +34,19 @@ vi.mock("node:fs", () => ({
   readFileSync: mockState.readFileSyncFn,
   writeFileSync: mockState.writeFileSyncFn,
   mkdirSync: mockState.mkdirSyncFn,
+  unlinkSync: vi.fn(),
+}));
+
+// Mock node:net to prevent real TCP connections during port checks
+vi.mock("node:net", () => ({
+  createConnection: vi.fn(() => {
+    // Simulate ECONNREFUSED (port is free)
+    const emitter = new (require("node:events").EventEmitter)();
+    emitter.setTimeout = vi.fn();
+    emitter.destroy = vi.fn();
+    process.nextTick(() => emitter.emit("error", new Error("ECONNREFUSED")));
+    return emitter;
+  }),
 }));
 
 vi.mock("node:crypto", () => ({
@@ -176,7 +189,7 @@ describe("CortexSidecar", () => {
     removeListenerSpy.mockRestore();
   });
 
-  it("drains stdout and stderr on spawn", async () => {
+  it("drains stdout and captures stderr on spawn", async () => {
     mockState.healthReturnValues = [false, true];
 
     const sidecar = new CortexSidecar({
@@ -191,7 +204,8 @@ describe("CortexSidecar", () => {
     const fakeProc = mockState.fakeProc as FakeChildProcess;
     expect(fakeProc).not.toBeNull();
     expect(fakeProc.stdout.resume).toHaveBeenCalled();
-    expect(fakeProc.stderr.resume).toHaveBeenCalled();
+    // stderr is now captured via .on('data') ring buffer
+    expect(fakeProc.stderr.listenerCount("data")).toBeGreaterThan(0);
 
     await sidecar.stop();
   });

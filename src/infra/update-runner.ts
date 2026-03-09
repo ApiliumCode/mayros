@@ -947,11 +947,39 @@ async function maybeCortexUpdate(
     };
     progress?.onStepStart?.(stepInfo);
 
+    // Read lifecycle callbacks and host/port from the running plugin (if loaded)
+    let lifecycleCallbacks: {
+      onBeforeReplace?: () => Promise<void>;
+      onAfterReplace?: () => Promise<void>;
+      host?: string;
+      port?: number;
+    } = {};
+    try {
+      const { getCortexLifecycleCallbacks } =
+        await import("../../extensions/shared/cortex-lifecycle-registry.js");
+      const callbacks = getCortexLifecycleCallbacks();
+      if (callbacks) {
+        lifecycleCallbacks = callbacks;
+      }
+    } catch {
+      // Registry not available — continue without callbacks
+    }
+
     const started = Date.now();
     let exitCode: number | null = 0;
     let stderrTail: string | null = null;
     try {
-      await installOrUpdateCortex();
+      await installOrUpdateCortex(
+        (msg) => {
+          stderrTail = msg; // capture last log line for progress reporting
+        },
+        {
+          cortexHost: lifecycleCallbacks.host,
+          cortexPort: lifecycleCallbacks.port,
+          onBeforeReplace: lifecycleCallbacks.onBeforeReplace,
+          onAfterReplace: lifecycleCallbacks.onAfterReplace,
+        },
+      );
     } catch (err: unknown) {
       exitCode = 1;
       stderrTail = err instanceof Error ? err.message : String(err);

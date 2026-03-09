@@ -28,6 +28,8 @@ export type CortexConfig = {
   requireAuth?: boolean;
   strictVersionCheck?: boolean;
   p2p?: P2pConfig;
+  /** Directory for Cortex persistent data (graph.sled, ineru.snapshot). */
+  dataDir?: string;
 };
 
 // ============================================================================
@@ -78,6 +80,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
         "requireAuth",
         "strictVersionCheck",
         "p2p",
+        "dataDir",
       ],
       "cortex config",
     );
@@ -97,6 +100,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
   const requireAuth = cortex.requireAuth === true;
   const strictVersionCheck = cortex.strictVersionCheck === true;
   const p2p = parseP2pConfig(cortex.p2p);
+  const dataDir = typeof cortex.dataDir === "string" ? cortex.dataDir : undefined;
 
   return {
     host,
@@ -108,6 +112,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
     requireAuth,
     strictVersionCheck,
     p2p,
+    dataDir,
   };
 }
 
