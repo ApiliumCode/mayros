@@ -19,6 +19,26 @@ const REPO = "ApiliumCode/aingle";
 const INSTALL_DIR = join(homedir(), ".mayros", "bin");
 const IS_WIN = platform() === "win32";
 const BINARY_NAME = IS_WIN ? "aingle-cortex.exe" : "aingle-cortex";
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok || attempt === retries) return res;
+      // Retry on 5xx or rate limit
+      if (res.status >= 500 || res.status === 429) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt === retries) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+    }
+  }
+}
 
 function getPlatformAsset() {
   const osMap = { linux: "linux", darwin: "macos", win32: "windows" };
@@ -55,7 +75,7 @@ async function main() {
 
   // Fetch latest release metadata
   const releaseUrl = `https://api.github.com/repos/${REPO}/releases/latest`;
-  const releaseRes = await fetch(releaseUrl, {
+  const releaseRes = await fetchWithRetry(releaseUrl, {
     headers: { Accept: "application/vnd.github+json" },
   });
   if (!releaseRes.ok) {
@@ -78,7 +98,7 @@ async function main() {
 
   // Download
   console.log(`[mayros] Downloading ${asset.name}...`);
-  const dlRes = await fetch(asset.browser_download_url, { redirect: "follow" });
+  const dlRes = await fetchWithRetry(asset.browser_download_url, { redirect: "follow" });
   if (!dlRes.ok || !dlRes.body) {
     console.warn(`[mayros] Download failed (${dlRes.status}). Install later with: mayros update`);
     return;
