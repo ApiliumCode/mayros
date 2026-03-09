@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-msteams",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Mayros Microsoft Teams channel plugin",
   "license": "MIT",
   "type": "module",
