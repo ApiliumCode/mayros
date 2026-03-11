@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { IPlatformBridge, PlatformTask, TaskResult } from "./platform-bridge.js";
 
 export type WorkflowTask = {

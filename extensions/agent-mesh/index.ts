@@ -22,7 +22,6 @@ import { Type } from "@sinclair/typebox";
 import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { CortexClient } from "../shared/cortex-client.js";
 import { HealthMonitor } from "../shared/health-monitor.js";
-import { NamespaceACL } from "./acl.js";
 import { agentMeshConfigSchema } from "./config.js";
 import { DelegationEngine } from "./delegation-engine.js";
 import { KnowledgeFusion } from "./knowledge-fusion.js";
@@ -40,7 +39,6 @@ import { BackgroundTracker } from "./background-tracker.js";
 import { TeamDashboardService } from "./team-dashboard.js";
 import { TeamManager } from "./team-manager.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
-import { listWorkflows as listWorkflowDefs } from "./workflows/registry.js";
 import { TaskRouter } from "./task-router.js";
 import { PerformanceTracker } from "./performance-tracker.js";
 import { ConsensusEngine } from "./consensus-engine.js";
@@ -698,7 +696,7 @@ const agentMeshPlugin = {
               content: [
                 {
                   type: "text",
-                  text: `Invalid access level: ${level}. Use read, write, or admin.`,
+                  text: `Invalid access level: ${String(level)}. Use read, write, or admin.`,
                 },
               ],
               details: { action: "failed", error: "invalid_access_level" },

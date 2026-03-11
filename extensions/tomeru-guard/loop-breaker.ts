@@ -30,11 +30,11 @@ type CallRecord = {
 
 function stableStringify(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (typeof value !== "object") return String(value);
+  if (typeof value !== "object") return `${value as string | number | boolean | bigint}`;
   try {
     return JSON.stringify(value, Object.keys(value as object).sort());
   } catch {
-    return String(value);
+    return JSON.stringify(value);
   }
 }
 

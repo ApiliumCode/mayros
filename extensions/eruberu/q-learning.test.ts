@@ -1,12 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  QTable,
-  stateKey,
-  computeReward,
-  type QState,
-  type RewardSignal,
-  type QTableData,
-} from "./q-learning.js";
+import { QTable, stateKey, computeReward, type QState, type RewardSignal } from "./q-learning.js";
 
 describe("stateKey", () => {
   it("builds correct key from state", () => {

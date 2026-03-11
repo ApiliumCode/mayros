@@ -11,9 +11,8 @@ import type { CortexClient } from "../shared/cortex-client.js";
 import type { AgentMailbox } from "./agent-mailbox.js";
 import type { BackgroundTracker } from "./background-tracker.js";
 import type { KnowledgeFusion } from "./knowledge-fusion.js";
-import type { MergeStrategy } from "./mesh-protocol.js";
 import type { NamespaceManager } from "./namespace-manager.js";
-import { TeamManager, type TeamManagerConfig } from "./team-manager.js";
+import { TeamManager } from "./team-manager.js";
 import { getWorkflow, listWorkflows as listDefs } from "./workflows/registry.js";
 import type { TaskRouter } from "./task-router.js";
 import type { ConsensusEngine } from "./consensus-engine.js";
@@ -22,7 +21,6 @@ import type {
   PhaseResult,
   RoutingDecisionEntry,
   ConsensusResultEntry,
-  WorkflowDefinition,
   WorkflowEntry,
   WorkflowResult,
   WorkflowState,
@@ -299,8 +297,10 @@ export class WorkflowOrchestrator {
         limit: 1,
       });
 
-      const state = stateResult.triples[0] ? String(stateResult.triples[0].object) : "pending";
-      const updatedAt = updatedResult.triples[0] ? String(updatedResult.triples[0].object) : "";
+      const stateObj = stateResult.triples[0]?.object;
+      const state = stateObj != null ? `${stateObj}` : "pending";
+      const updatedObj = updatedResult.triples[0]?.object;
+      const updatedAt = updatedObj != null ? `${updatedObj}` : "";
 
       runs.push({ id: workflowId, name, state, updatedAt });
     }
@@ -373,7 +373,7 @@ export class WorkflowOrchestrator {
         // Exponential backoff capped at max interval
         pollIntervalMs = Math.min(pollIntervalMs * 2, POLL_MAX_INTERVAL_MS);
 
-        for (const agentId of [...pendingAgents]) {
+        for (const agentId of pendingAgents) {
           const taskId = taskIds.get(agentId);
           if (!taskId) {
             pendingAgents.delete(agentId);

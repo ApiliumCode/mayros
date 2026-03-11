@@ -85,7 +85,6 @@ describe("AuditTrail", () => {
     expect(trail.lastWriteError).toBeNull();
 
     // Mock appendFile to simulate ENOSPC
-    const originalAppendFile = fs.appendFile;
     const enospcError = Object.assign(new Error("No space left on device"), { code: "ENOSPC" });
     vi.spyOn(fs, "appendFile").mockRejectedValueOnce(enospcError);
 

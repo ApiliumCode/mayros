@@ -25,7 +25,6 @@ import {
   classifyTask,
   classifyBudgetLevel,
   classifyTimeSlot,
-  type TaskType,
   type BudgetLevel,
 } from "./task-classifier.js";
 

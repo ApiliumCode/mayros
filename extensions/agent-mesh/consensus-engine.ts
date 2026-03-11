@@ -305,7 +305,6 @@ export class ConsensusEngine {
   ): Promise<ConsensusResolution> {
     // Weight each agent's vote by their EMA score
     for (let i = 0; i < conflict.namespaces.length; i++) {
-      const ns = conflict.namespaces[i]!;
       const value = conflict.values[i % conflict.values.length] ?? conflict.values[0] ?? "";
 
       // Find agent for this namespace

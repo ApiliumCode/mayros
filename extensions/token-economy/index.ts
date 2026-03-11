@@ -7,10 +7,9 @@ import {
   formatUsd,
   formatTokenCount,
 } from "../../src/utils/usage-format.js";
-import type { ModelCostConfig } from "../../src/utils/usage-format.js";
 import { BudgetPersistence } from "./budget-persistence.js";
 import { BudgetTracker } from "./budget-tracker.js";
-import type { BudgetSummary, ModelUsageEntry } from "./budget-tracker.js";
+import type { BudgetSummary } from "./budget-tracker.js";
 import { parseTokenBudgetConfig } from "./config.js";
 import {
   resolveModelCostWithFallback,

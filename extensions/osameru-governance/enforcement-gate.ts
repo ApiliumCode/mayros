@@ -60,7 +60,7 @@ export class EnforcementGate {
           }
         }
         if (rule.commandPatterns && context.params?.command) {
-          const cmd = String(context.params.command);
+          const cmd = `${context.params.command as string}`;
           const matches = rule.commandPatterns.some((p) => matchesPattern(cmd, p));
           if (matches) {
             return {
