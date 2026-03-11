@@ -1,0 +1,25 @@
+{
+  "id": "osameru-governance",
+  "kind": "security",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["enforce", "warn", "audit-only", "off"],
+        "default": "warn"
+      },
+      "policyPaths": { "type": "array", "items": { "type": "string" }, "default": ["MAYROS.md"] },
+      "auditLogPath": { "type": "string", "default": "~/.mayros/governance-audit.jsonl" },
+      "hmacSecret": { "type": "string" },
+      "trustTiers": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "promotionThreshold": { "type": "number", "default": 0.8 },
+          "demotionThreshold": { "type": "number", "default": 0.3 }
+        }
+      }
+    }
+  }
+}

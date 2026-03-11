@@ -142,6 +142,31 @@ export class IneruClient {
     return this.request("POST", `/api/v1/memory/restore/${encodeURIComponent(id)}`);
   }
 
+  // ---------- Vector Search (Motomeru) ----------
+
+  async vectorSearch(req: {
+    embedding: number[];
+    k: number;
+    min_similarity?: number;
+    entry_type?: string;
+    tags?: string[];
+  }): Promise<MemoryResultDto[]> {
+    return this.request("POST", "/api/v1/memory/search", req);
+  }
+
+  async indexStats(): Promise<{
+    point_count: number;
+    deleted_count: number;
+    dimensions: number;
+    memory_bytes: number;
+  }> {
+    return this.request("GET", "/api/v1/memory/index/stats");
+  }
+
+  async rebuildIndex(): Promise<void> {
+    return this.request("POST", "/api/v1/memory/index/rebuild");
+  }
+
   // ---------- convenience ----------
 
   async isAvailable(): Promise<boolean> {

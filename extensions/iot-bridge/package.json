@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-iot-bridge",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
   "description": "IoT Bridge — connect MAYROS agents to aingle_minimal IoT nodes via REST",
   "type": "module",

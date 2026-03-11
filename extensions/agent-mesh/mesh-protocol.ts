@@ -13,7 +13,15 @@ export type MeshMessageType =
   | "task"
   | "finding"
   | "question"
-  | "status-update";
+  | "status-update"
+  | "routing-decision"
+  | "performance-update"
+  | "consensus-request"
+  | "consensus-result"
+  | "vote-prepare"
+  | "vote-commit"
+  | "leader-election"
+  | "leader-proposal";
 
 export type MeshMessage = {
   type: MeshMessageType;
@@ -113,6 +121,14 @@ export function isValidMessageType(type: string): type is MeshMessageType {
     "finding",
     "question",
     "status-update",
+    "routing-decision",
+    "performance-update",
+    "consensus-request",
+    "consensus-result",
+    "vote-prepare",
+    "vote-commit",
+    "leader-election",
+    "leader-proposal",
   ].includes(type);
 }
 

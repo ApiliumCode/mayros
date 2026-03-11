@@ -1,0 +1,33 @@
+{
+  "id": "tomeru-guard",
+  "kind": "security",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "mode": { "type": "string", "enum": ["enforce", "warn", "off"], "default": "enforce" },
+      "defaultLimit": {
+        "type": "object",
+        "properties": {
+          "maxCallsPerWindow": { "type": "integer", "default": 60 },
+          "windowMs": { "type": "integer", "default": 60000 }
+        }
+      },
+      "burstLimit": {
+        "type": "object",
+        "properties": {
+          "maxCallsPerSecond": { "type": "number", "default": 10 }
+        }
+      },
+      "perToolLimits": { "type": "object", "additionalProperties": true },
+      "loopBreaker": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "maxIdenticalCalls": { "type": "integer", "default": 15 },
+          "maxTotalCallsPerMinute": { "type": "integer", "default": 120 }
+        }
+      },
+      "exemptTools": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}
