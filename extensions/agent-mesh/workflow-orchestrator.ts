@@ -298,9 +298,19 @@ export class WorkflowOrchestrator {
       });
 
       const stateObj = stateResult.triples[0]?.object;
-      const state = stateObj != null ? `${stateObj}` : "pending";
+      const state =
+        stateObj != null
+          ? typeof stateObj === "string"
+            ? stateObj
+            : JSON.stringify(stateObj)
+          : "pending";
       const updatedObj = updatedResult.triples[0]?.object;
-      const updatedAt = updatedObj != null ? `${updatedObj}` : "";
+      const updatedAt =
+        updatedObj != null
+          ? typeof updatedObj === "string"
+            ? updatedObj
+            : JSON.stringify(updatedObj)
+          : "";
 
       runs.push({ id: workflowId, name, state, updatedAt });
     }
