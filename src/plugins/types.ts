@@ -341,6 +341,7 @@ export type PluginHookName =
   | "notification"
   | "teammate_idle"
   | "task_completed"
+  | "before_agent_run"
   | "config_change";
 
 // Agent context shared across agent hooks
@@ -740,6 +741,19 @@ export type PluginHookTaskCompletedEvent = {
   result?: Record<string, unknown>;
 };
 
+// before_agent_run hook — allows short-circuiting the LLM call
+export type PluginHookBeforeAgentRunEvent = {
+  prompt: string;
+  sessionKey?: string;
+  agentId?: string;
+};
+
+export type PluginHookBeforeAgentRunResult = {
+  shortCircuit?: boolean;
+  response?: string;
+  metadata?: Record<string, unknown>;
+};
+
 // config_change hook
 export type PluginHookConfigChangeEvent = {
   /** Dot-path keys that changed (e.g. ["ui.theme", "hooks.enabled"]) */
@@ -864,6 +878,10 @@ export type PluginHookHandlerMap = {
     event: PluginHookTaskCompletedEvent,
     ctx: PluginHookAgentContext,
   ) => Promise<void> | void;
+  before_agent_run: (
+    event: PluginHookBeforeAgentRunEvent,
+    ctx: PluginHookAgentContext,
+  ) => Promise<PluginHookBeforeAgentRunResult | void> | PluginHookBeforeAgentRunResult | void;
   config_change: (
     event: PluginHookConfigChangeEvent,
     ctx: PluginHookAgentContext,

@@ -26,6 +26,7 @@ export type BudgetSummary = {
   callCount: number;
   tokens: NormalizedUsage;
   modelUsage: ModelUsageEntry[];
+  cacheSavingsUsd: number;
   cacheHits?: number;
   cacheMisses?: number;
   estimatedSavingsUsd?: number;
@@ -35,6 +36,7 @@ export class BudgetTracker {
   private sessionCostUsd = 0;
   private callCount = 0;
   private toolCallsSinceExceeded = 0;
+  private cacheSavingsUsd = 0;
   private tokenTotals: NormalizedUsage = {
     input: 0,
     output: 0,
@@ -146,7 +148,15 @@ export class BudgetTracker {
       callCount: this.callCount,
       tokens: { ...this.tokenTotals },
       modelUsage: this.getModelUsage(),
+      cacheSavingsUsd: this.cacheSavingsUsd,
     };
+  }
+
+  /**
+   * Record an estimated cache saving (from response cache hit).
+   */
+  recordCacheSaving(savingUsd: number): void {
+    this.cacheSavingsUsd += savingUsd;
   }
 
   /**

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const probeGatewayReachable = vi.hoisted(() => vi.fn());
 const waitForGatewayReachable = vi.hoisted(() => vi.fn());
 const resolveGatewayService = vi.hoisted(() => vi.fn());
+const buildGatewayInstallPlan = vi.hoisted(() => vi.fn());
 const parseCortexConfig = vi.hoisted(() => vi.fn());
 
 let cortexHealthy = true;
@@ -24,6 +25,7 @@ vi.mock("../commands/onboard-helpers.js", () => ({
   waitForGatewayReachable,
 }));
 vi.mock("../daemon/service.js", () => ({ resolveGatewayService }));
+vi.mock("../commands/daemon-install-helpers.js", () => ({ buildGatewayInstallPlan }));
 vi.mock("../../extensions/shared/cortex-config.js", () => ({ parseCortexConfig }));
 vi.mock("../../extensions/shared/cortex-client.js", () => ({ CortexClient }));
 vi.mock("../../extensions/memory-semantic/cortex-sidecar.js", () => ({ CortexSidecar }));
@@ -74,15 +76,21 @@ describe("ensureServicesRunning", () => {
       expect(log).toHaveBeenCalledWith(expect.stringContaining("starting service"));
     });
 
-    it("fails when service is not installed", async () => {
+    it("fails when service is not installed and auto-install fails", async () => {
       probeGatewayReachable.mockResolvedValue({ ok: false });
       const isLoaded = vi.fn().mockResolvedValue(false);
-      resolveGatewayService.mockReturnValue({ isLoaded, restart: vi.fn() });
+      const install = vi.fn().mockRejectedValue(new Error("not installed"));
+      resolveGatewayService.mockReturnValue({ isLoaded, restart: vi.fn(), install });
+      buildGatewayInstallPlan.mockResolvedValue({
+        programArguments: [],
+        workingDirectory: "/tmp",
+        environment: {},
+      });
 
       const result = await ensureServicesRunning({ config: makeConfig(), log });
 
       expect(result.gateway.ok).toBe(false);
-      expect(result.gateway.detail).toContain("not installed");
+      expect(result.gateway.detail).toContain("auto-install failed");
     });
 
     it("fails when restart throws", async () => {

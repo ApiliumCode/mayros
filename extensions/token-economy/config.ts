@@ -13,12 +13,17 @@ export type TokenBudgetConfig = {
   cache: TokenBudgetCacheConfig;
   enforcement: "soft" | "hard";
   gracePeriodCalls: number;
+  responseCache: boolean;
+  responseCacheMaxEntries: number;
+  responseCacheTtlMs: number;
 };
 
 const DEFAULT_WARN_THRESHOLD = 0.8;
 const DEFAULT_PERSIST_PATH = "~/.mayros/token-budget.json";
 const DEFAULT_CACHE_MAX_ENTRIES = 256;
 const DEFAULT_CACHE_TTL_MS = 300_000;
+const DEFAULT_RESPONSE_CACHE_MAX_ENTRIES = 128;
+const DEFAULT_RESPONSE_CACHE_TTL_MS = 600_000;
 
 function assertAllowedKeys(value: Record<string, unknown>, allowed: string[], label: string) {
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
@@ -60,6 +65,9 @@ export function parseTokenBudgetConfig(value: unknown): TokenBudgetConfig {
       "cache",
       "enforcement",
       "gracePeriodCalls",
+      "responseCache",
+      "responseCacheMaxEntries",
+      "responseCacheTtlMs",
     ],
     "token-economy config",
   );
@@ -81,6 +89,18 @@ export function parseTokenBudgetConfig(value: unknown): TokenBudgetConfig {
       ? Math.floor(cfg.gracePeriodCalls)
       : 3;
 
+  const responseCache = cfg.responseCache !== false;
+
+  const responseCacheMaxEntries =
+    typeof cfg.responseCacheMaxEntries === "number" && cfg.responseCacheMaxEntries > 0
+      ? Math.floor(cfg.responseCacheMaxEntries)
+      : DEFAULT_RESPONSE_CACHE_MAX_ENTRIES;
+
+  const responseCacheTtlMs =
+    typeof cfg.responseCacheTtlMs === "number" && cfg.responseCacheTtlMs > 0
+      ? Math.floor(cfg.responseCacheTtlMs)
+      : DEFAULT_RESPONSE_CACHE_TTL_MS;
+
   return {
     sessionLimitUsd:
       typeof cfg.sessionLimitUsd === "number" && cfg.sessionLimitUsd > 0
@@ -99,5 +119,8 @@ export function parseTokenBudgetConfig(value: unknown): TokenBudgetConfig {
     cache: parseCacheConfig(cfg.cache),
     enforcement,
     gracePeriodCalls,
+    responseCache,
+    responseCacheMaxEntries,
+    responseCacheTtlMs,
   };
 }

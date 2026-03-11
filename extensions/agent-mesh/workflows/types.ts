@@ -14,6 +14,8 @@ export type AgentRole = {
   agentId: string;
   role: string;
   task: string;
+  routingId?: string;
+  routedAgentId?: string;
 };
 
 // ============================================================================
@@ -65,6 +67,24 @@ export type WorkflowEntry = {
 // Phase Result
 // ============================================================================
 
+export type RoutingDecisionEntry = {
+  routingId: string;
+  originalAgentId: string;
+  routedAgentId: string;
+  stateKey: string;
+  confidence: number;
+  reason: string;
+};
+
+export type ConsensusResultEntry = {
+  id: string;
+  resolved: boolean;
+  strategy: string;
+  confidence: number;
+  resolvedCount: number;
+  totalConflicts: number;
+};
+
 export type PhaseResult = {
   phase: string;
   status: "completed" | "failed";
@@ -72,6 +92,8 @@ export type PhaseResult = {
   conflicts: number;
   duration: number;
   completedAt: string;
+  routingDecisions?: RoutingDecisionEntry[];
+  consensusResults?: ConsensusResultEntry[];
 };
 
 // ============================================================================

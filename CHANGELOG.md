@@ -4,6 +4,189 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.1.14 (2026-03-11)
+
+Intelligent routing, multi-agent consensus, and execution safety.
+
+### Eruberu — Adaptive Model Routing
+
+- Q-Learning model selector: learns optimal provider/model per task type, budget level, and time slot
+- Budget-driven fallback: auto-switches to cheaper models when budget exceeds configurable thresholds
+- Task classifier: keyword-based prompt classification (code, chat, analysis, creative)
+- Cortex persistence: Q-table stored as RDF triples with JSON file fallback
+- Integrates via `before_model_resolve` hook — zero changes to core execution path
+- New tools: `routing_status`, `routing_set_strategy`
+- New CLI: `mayros routing status|strategy|reset`
+
+### Miteru — Intelligent Task-to-Agent Routing
+
+- Q-Learning agent selector: learns which agent handles each task type best
+- Task classification by type, complexity, and language domain
+- Performance tracker: EMA-based agent scoring with Cortex persistence
+- Integrated into workflow orchestrator as optional routing layer
+- New tool: `mesh_route_task`
+
+### Kimeru — Multi-Agent Consensus
+
+- Three consensus strategies: majority vote, weighted (by EMA score), LLM-arbitrated
+- Automatic conflict resolution when parallel agents produce conflicting results
+- Confidence scoring and detailed vote breakdown
+- New tools: `mesh_agent_performance`, `mesh_consensus`
+
+### Tomeru — Rate Limiting & Loop Breaking
+
+- Sliding window rate limiter: per-tool call limits with configurable windows
+- Global token bucket: burst protection across all tools
+- Loop breaker: SHA256-based identical-call sequence detection
+- Velocity circuit breaker: hard block on runaway execution
+- Configurable modes: enforce, warn, off
+- New tools: `rate_limit_status`, `rate_limit_adjust`
+- New CLI: `mayros ratelimit status|adjust|reset`
+
+### Token Economy Enhancements
+
+- Response cache (Oboeru): LRU cache with TTL for observational response deduplication
+- Budget bridge: Symbol-based cross-plugin bridge exposes BudgetTracker to routing subsystems
+- Cache savings tracking in budget summaries
+
+### Model Router
+
+- `buildFromPricingCatalog()`: construct router from token-economy pricing catalog
+- `routeWithBudget()`: budget-aware routing that filters by remaining spend
+
+### Infrastructure
+
+- 55 extensions synced at v0.1.14
+- 55 new tests across 7 test files (Q-Learning, task classification, routing, performance tracking, consensus, rate limiting, loop breaking)
+- Auto-release workflow: GitHub Releases created automatically on version tags
+
+## 0.1.13 (2026-03-08)
+
+Fix plugin loading, headless mode, and postinstall reliability.
+
+- Fix gateway health check in headless mode
+- Add postinstall retry logic for flaky network environments
+- Include `src/` in npm package for extension runtime imports
+
+## 0.1.12 (2026-03-07)
+
+Auto-install gateway daemon on first run.
+
+- Auto-install gateway daemon service on first run
+- Fix duplicate `resolveGatewayPort` call in ensure-services
+
+## 0.1.11 (2026-03-06)
+
+Auto-update outdated Cortex binary.
+
+- Auto-update outdated Cortex binary on sidecar start
+- Require Cortex >= 0.4.1
+
+## 0.1.10 (2026-03-05)
+
+Persistent Cortex storage and sidecar hardening.
+
+- Persistent Cortex storage via Sled backend (`~/.mayros/cortex-data/`)
+- Lifecycle callback registry for flush-before-update flow
+- Graceful sidecar restart with binary update
+- Lock file reclaim on sidecar auto-restart
+- Drain timeout and external Cortex detection fixes
+- Complete sidecar lifecycle hardening (10 gaps)
+- Hide internal instructions from slash command display
+
+## 0.1.9 (2026-03-04)
+
+Ineru rename and Cortex 0.4.0.
+
+- Rename Titans memory client to Ineru across all modules
+- Require Cortex >= 0.4.0
+
+## 0.1.8 (2026-03-03)
+
+P2P sync and enhanced Cortex networking.
+
+- Native P2P sync mode with pairing, gossip, and status CLI
+- Dual sync mode bridge: native P2P with polled fallback
+- P2P config, CortexClient P2P methods, and sidecar flag forwarding
+- Require Cortex >= 0.3.8
+
+## 0.1.7 (2026-03-02)
+
+Scoped package and update runner fix.
+
+- Fix update-runner for scoped package name (`@apilium/mayros`)
+
+## 0.1.6 (2026-03-01)
+
+Cortex auto-start, resilience, and TUI improvements.
+
+- Auto-start gateway and Cortex before TUI
+- Cortex CLI commands, gateway methods, and TUI view
+- Cortex auto-restart with resilience monitor
+- Change default Cortex port from 8080 to 19090
+- Enable semantic ecosystem plugins by default
+- Zero-config semantic plugin startup
+- `/kg` handler with tool fallback and diagnostic hints
+- `/mouse` toggle for native text selection
+- Dynamic VERSION in TUI welcome screen
+- Pixel avatar art banner
+- Adapt sidecar for Cortex 0.3.7
+
+## 0.1.5 (2026-02-28)
+
+Stability, resource cleanup, and IDE plugin hardening.
+
+- Clear feedNext timer chain on PTY exit
+- Replace eval with array-based command execution in mayroslog.sh
+- Nullable TeamManager parameters with runtime guards
+- Headless CLI timeout cleanup and prototype pollution guard
+- Cap trace events at 5000 entries
+- EventEmitter dispose in tree providers
+- WebView message listener lifecycle management
+- JetBrains plugin: daemon threads, error logging, panel disposal
+- Thread-safe stream buffering (StringBuilder → StringBuffer)
+- Synchronized disconnect to prevent race conditions
+- Migrate gateway token to IntelliJ PasswordSafe
+- Per-request cache key map for token-economy concurrency
+
+## 0.1.4 (2026-02-27)
+
+IDE extensions, CLI evolution, and security updates.
+
+- VSCode extension: context menu actions, gutter markers, protocol v3
+- JetBrains plugin: unified tabbed panel, Skills/Plan/KG views, protocol v3
+- Welcome screen, image paste, and onboarding UX
+- Heartbeat filtering, interactive selectors, and command cleanup
+- Bump hono, @hono/node-server, and dompurify for security fixes
+- Fix timer leak in sync timeout, stats filter, and panel disposal
+
+## 0.1.3 (2026-02-26)
+
+CI fixes and plugin loading.
+
+- Fix CI: skip Android playstore without keystore
+- Strip `mayros-` prefix from plugin entry hints to match manifest IDs
+
+## 0.1.2 (2026-02-26)
+
+Post-launch fixes and dependency updates.
+
+- Fix 15 test files for vitest 4.x mock hoisting compatibility
+- Fix 15 broken internal links in docs
+- Fix README links
+- Update plugin SDK exports and rename legacy plist references
+- Update extensions: zod v4, observability route API, esbuild import
+- Update CI workflow and build scripts
+- Platform app updates: macOS, iOS, Android
+
+## 0.1.1 (2026-02-25)
+
+Skills Hub launch.
+
+- Add 8 official Apilium skills with Ed25519 signatures
+- Platinum skill structure and documentation
+- Add markdownlint configuration
+
 ## 0.1.0 (2026-02-25)
 
 First public release of Mayros — personal AI assistant platform.

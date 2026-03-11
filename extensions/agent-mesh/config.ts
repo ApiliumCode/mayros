@@ -34,6 +34,19 @@ export type BackgroundConfig = {
   taskTimeoutSeconds: number;
 };
 
+export type MiteruConfig = {
+  enabled: boolean;
+  qLearning: { alpha: number; gamma: number; epsilon: number };
+};
+
+export type KimeruConfig = {
+  enabled: boolean;
+  defaultStrategy: "majority" | "weighted" | "arbitrate" | "pbft-local" | "leader-score";
+  autoResolve: boolean;
+  byzantine: { enabled: boolean; minAgents: number; commitTimeoutMs: number };
+  raft: { enabled: boolean; leaderTimeoutMs: number; maxReElections: number };
+};
+
 export type AgentMeshConfig = {
   cortex: CortexConfig;
   agentNamespace: string;
@@ -42,6 +55,8 @@ export type AgentMeshConfig = {
   worktree: WorktreeConfig;
   mailbox: MailboxConfig;
   background: BackgroundConfig;
+  miteru: MiteruConfig;
+  kimeru: KimeruConfig;
 };
 
 const DEFAULT_NAMESPACE = "mayros";
@@ -59,6 +74,9 @@ const DEFAULT_MAILBOX_MAX_MESSAGES = 1000;
 const DEFAULT_MAILBOX_RETENTION_DAYS = 30;
 const DEFAULT_BG_MAX_CONCURRENT = 5;
 const DEFAULT_BG_TASK_TIMEOUT = 3600;
+const DEFAULT_MITERU_ENABLED = true;
+const DEFAULT_KIMERU_ENABLED = true;
+const DEFAULT_KIMERU_STRATEGY = "weighted" as const;
 
 const VALID_STRATEGIES: MergeStrategy[] = [
   "additive",
@@ -190,6 +208,74 @@ export function parseBackgroundConfig(raw: unknown): BackgroundConfig {
   return { maxConcurrentTasks, taskTimeoutSeconds };
 }
 
+export function parseMiteruConfig(raw: unknown): MiteruConfig {
+  const m = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(m, ["enabled", "qLearning"], "miteru config");
+  }
+
+  const qRaw = (m.qLearning ?? {}) as Record<string, unknown>;
+  return {
+    enabled: m.enabled !== false ? DEFAULT_MITERU_ENABLED : false,
+    qLearning: {
+      alpha: typeof qRaw.alpha === "number" && qRaw.alpha > 0 && qRaw.alpha <= 1 ? qRaw.alpha : 0.1,
+      gamma:
+        typeof qRaw.gamma === "number" && qRaw.gamma >= 0 && qRaw.gamma <= 1 ? qRaw.gamma : 0.9,
+      epsilon:
+        typeof qRaw.epsilon === "number" && qRaw.epsilon >= 0 && qRaw.epsilon <= 1
+          ? qRaw.epsilon
+          : 0.15,
+    },
+  };
+}
+
+export function parseKimeruConfig(raw: unknown): KimeruConfig {
+  const k = (raw ?? {}) as Record<string, unknown>;
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    assertAllowedKeys(
+      k,
+      ["enabled", "defaultStrategy", "autoResolve", "byzantine", "raft"],
+      "kimeru config",
+    );
+  }
+
+  const validStrategies = ["majority", "weighted", "arbitrate", "pbft-local", "leader-score"];
+  const defaultStrategy =
+    typeof k.defaultStrategy === "string" && validStrategies.includes(k.defaultStrategy)
+      ? (k.defaultStrategy as KimeruConfig["defaultStrategy"])
+      : DEFAULT_KIMERU_STRATEGY;
+
+  let byzantine = { enabled: false, minAgents: 4, commitTimeoutMs: 10_000 };
+  if (k.byzantine && typeof k.byzantine === "object" && !Array.isArray(k.byzantine)) {
+    const b = k.byzantine as Record<string, unknown>;
+    byzantine = {
+      enabled: b.enabled === true,
+      minAgents: typeof b.minAgents === "number" && b.minAgents >= 4 ? Math.floor(b.minAgents) : 4,
+      commitTimeoutMs:
+        typeof b.commitTimeoutMs === "number" ? Math.floor(b.commitTimeoutMs) : 10_000,
+    };
+  }
+
+  let raft = { enabled: false, leaderTimeoutMs: 30_000, maxReElections: 3 };
+  if (k.raft && typeof k.raft === "object" && !Array.isArray(k.raft)) {
+    const r = k.raft as Record<string, unknown>;
+    raft = {
+      enabled: r.enabled === true,
+      leaderTimeoutMs:
+        typeof r.leaderTimeoutMs === "number" ? Math.floor(r.leaderTimeoutMs) : 30_000,
+      maxReElections: typeof r.maxReElections === "number" ? Math.floor(r.maxReElections) : 3,
+    };
+  }
+
+  return {
+    enabled: k.enabled !== false ? DEFAULT_KIMERU_ENABLED : false,
+    defaultStrategy,
+    autoResolve: k.autoResolve !== false,
+    byzantine,
+    raft,
+  };
+}
+
 export const agentMeshConfigSchema = {
   parse(value: unknown): AgentMeshConfig {
     if (value === null || value === undefined) {
@@ -201,7 +287,17 @@ export const agentMeshConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(
       cfg,
-      ["cortex", "agentNamespace", "mesh", "teams", "worktree", "mailbox", "background"],
+      [
+        "cortex",
+        "agentNamespace",
+        "mesh",
+        "teams",
+        "worktree",
+        "mailbox",
+        "background",
+        "miteru",
+        "kimeru",
+      ],
       "agent mesh config",
     );
 
@@ -211,6 +307,8 @@ export const agentMeshConfigSchema = {
     const worktree = parseWorktreeConfig(cfg.worktree);
     const mailbox = parseMailboxConfig(cfg.mailbox);
     const background = parseBackgroundConfig(cfg.background);
+    const miteru = parseMiteruConfig(cfg.miteru);
+    const kimeru = parseKimeruConfig(cfg.kimeru);
 
     const agentNamespace =
       typeof cfg.agentNamespace === "string" ? cfg.agentNamespace : DEFAULT_NAMESPACE;
@@ -220,7 +318,7 @@ export const agentMeshConfigSchema = {
       );
     }
 
-    return { cortex, agentNamespace, mesh, teams, worktree, mailbox, background };
+    return { cortex, agentNamespace, mesh, teams, worktree, mailbox, background, miteru, kimeru };
   },
   uiHints: {
     "cortex.host": {
@@ -314,6 +412,34 @@ export const agentMeshConfigSchema = {
       placeholder: String(DEFAULT_BG_TASK_TIMEOUT),
       advanced: true,
       help: "Timeout in seconds before a background task is considered stale",
+    },
+    "miteru.enabled": {
+      label: "Enable Miteru (Task Routing)",
+      help: "Enable Q-Learning based task-to-agent routing in workflows",
+    },
+    "miteru.qLearning.alpha": {
+      label: "Miteru Learning Rate (α)",
+      placeholder: "0.1",
+      advanced: true,
+    },
+    "miteru.qLearning.epsilon": {
+      label: "Miteru Exploration Rate (ε)",
+      placeholder: "0.15",
+      advanced: true,
+    },
+    "kimeru.enabled": {
+      label: "Enable Kimeru (Consensus)",
+      help: "Enable multi-agent consensus resolution for conflicting results",
+    },
+    "kimeru.defaultStrategy": {
+      label: "Kimeru Default Strategy",
+      placeholder: "weighted",
+      advanced: true,
+      help: "Default consensus strategy: majority, weighted, or arbitrate",
+    },
+    "kimeru.autoResolve": {
+      label: "Kimeru Auto-Resolve",
+      help: "Automatically resolve conflicts after each workflow phase",
     },
   },
 };

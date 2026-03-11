@@ -18,6 +18,14 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@apilium/mayros"><img src="https://img.shields.io/npm/dm/@apilium/mayros?style=for-the-badge&label=downloads&color=brightgreen" alt="npm downloads"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D22.12.0-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js >= 22.12.0">
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/extensions-55-8B5CF6?style=for-the-badge" alt="55 extensions">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-999?style=for-the-badge" alt="macOS | Linux">
+</p>
+
+<p align="center">
   <a href="https://apilium.com/en/products/mayros">Product</a> · <a href="https://mayros.apilium.com">Download</a> · <a href="https://apilium.com/en/doc/mayros">Docs</a> · <a href="https://apilium.com/en/doc/mayros/start/getting-started">Getting Started</a> · <a href="VISION.md">Vision</a> · <a href="https://discord.com/channels/1476351587105636404">Discord</a>
 </p>
 

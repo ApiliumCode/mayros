@@ -7,10 +7,9 @@ import {
   formatUsd,
   formatTokenCount,
 } from "../../src/utils/usage-format.js";
-import type { ModelCostConfig } from "../../src/utils/usage-format.js";
 import { BudgetPersistence } from "./budget-persistence.js";
 import { BudgetTracker } from "./budget-tracker.js";
-import type { BudgetSummary, ModelUsageEntry } from "./budget-tracker.js";
+import type { BudgetSummary } from "./budget-tracker.js";
 import { parseTokenBudgetConfig } from "./config.js";
 import {
   resolveModelCostWithFallback,
@@ -18,6 +17,8 @@ import {
   listCatalogModels,
 } from "./model-pricing.js";
 import { PromptCache } from "./prompt-cache.js";
+import { ResponseCache } from "./response-cache.js";
+import { setBudgetBridge, clearBudgetBridge } from "../shared/budget-bridge.js";
 
 const tokenEconomyPlugin = {
   id: "token-economy",
@@ -32,10 +33,15 @@ const tokenEconomyPlugin = {
 
     let tracker: BudgetTracker | undefined;
     let cache: PromptCache | undefined;
+    let responseCache: ResponseCache | undefined;
     let flushInterval: ReturnType<typeof setInterval> | undefined;
 
     if (cfg.cache.enabled) {
       cache = new PromptCache(cfg.cache.maxEntries, cfg.cache.ttlMs);
+    }
+
+    if (cfg.responseCache) {
+      responseCache = new ResponseCache(cfg.responseCacheMaxEntries, cfg.responseCacheTtlMs);
     }
 
     api.logger.info(
@@ -51,6 +57,10 @@ const tokenEconomyPlugin = {
       let persisted = await persistence.load();
       persisted = persistence.rolloverIfNeeded(persisted);
       tracker = new BudgetTracker(cfg, persisted);
+
+      // Expose tracker via budget bridge for cross-plugin access
+      setBudgetBridge(tracker);
+
       api.logger.info(
         `token-economy: session started (daily: $${persisted.dailyCostUsd.toFixed(4)}, monthly: $${persisted.monthlyCostUsd.toFixed(4)})`,
       );
@@ -107,27 +117,62 @@ const tokenEconomyPlugin = {
           });
         }
       }
+
+      // Response cache (observational)
+      if (responseCache) {
+        const rKey = pendingResponseKeys.get(event.runId);
+        if (rKey) {
+          pendingResponseKeys.delete(event.runId);
+          const cost = estimateUsageCost({ usage, cost: costConfig }) ?? 0;
+          responseCache.store(rKey, {
+            costUsd: cost,
+            storedAt: Date.now(),
+            hitCount: 0,
+          });
+        }
+      }
     });
 
-    // llm_input — check prompt cache for observational tracking
+    // llm_input — check prompt cache + response cache for observational tracking
     const pendingCacheKeys = new Map<string, string>();
+    const pendingResponseKeys = new Map<string, string>();
 
     api.on("llm_input", async (event) => {
-      if (!cache) return;
-      const key = PromptCache.computeKey(
-        event.provider ?? "",
-        event.model ?? "",
-        event.systemPrompt ?? "",
-        event.prompt ?? "",
-      );
-      const hit = cache.lookup(key);
-      if (hit) {
-        // Observational only: we can't skip the LLM call.
-        // The cache already updated estimatedSavingsUsd in lookup().
-        pendingCacheKeys.delete(event.runId);
-      } else {
-        // Miss: store the key so llm_output can populate it.
-        pendingCacheKeys.set(event.runId, key);
+      // Prompt cache
+      if (cache) {
+        const key = PromptCache.computeKey(
+          event.provider ?? "",
+          event.model ?? "",
+          event.systemPrompt ?? "",
+          event.prompt ?? "",
+        );
+        const hit = cache.lookup(key);
+        if (hit) {
+          pendingCacheKeys.delete(event.runId);
+        } else {
+          pendingCacheKeys.set(event.runId, key);
+        }
+      }
+
+      // Response cache (observational)
+      if (responseCache) {
+        const rKey = ResponseCache.computeExactKey(
+          event.provider ?? "",
+          event.model ?? "",
+          event.systemPrompt ?? "",
+          event.prompt ?? "",
+          "",
+        );
+        const rHit = responseCache.lookup(rKey);
+        if (rHit) {
+          // Observational: track estimated savings
+          if (tracker) {
+            tracker.recordCacheSaving(rHit.costUsd);
+          }
+          pendingResponseKeys.delete(event.runId);
+        } else {
+          pendingResponseKeys.set(event.runId, rKey);
+        }
       }
     });
 
@@ -192,6 +237,8 @@ const tokenEconomyPlugin = {
         }
       }
       cache?.clear();
+      responseCache?.clear();
+      clearBudgetBridge();
       api.logger.info("token-economy: session ended, budget flushed");
     });
 
@@ -217,11 +264,13 @@ const tokenEconomyPlugin = {
 
           const summary = tracker.getSummary();
           const cacheStats = cache?.getStats();
+          const rCacheStats = responseCache?.getStats();
           const full: BudgetSummary = {
             ...summary,
-            cacheHits: cacheStats?.hits,
-            cacheMisses: cacheStats?.misses,
-            estimatedSavingsUsd: cacheStats?.estimatedSavingsUsd,
+            cacheHits: (cacheStats?.hits ?? 0) + (rCacheStats?.hits ?? 0),
+            cacheMisses: (cacheStats?.misses ?? 0) + (rCacheStats?.misses ?? 0),
+            estimatedSavingsUsd:
+              (cacheStats?.estimatedSavingsUsd ?? 0) + (rCacheStats?.savingsUsd ?? 0),
           };
 
           const lines = [
@@ -557,6 +606,8 @@ const tokenEconomyPlugin = {
           }
         }
         cache?.clear();
+        responseCache?.clear();
+        clearBudgetBridge();
         tracker = undefined;
         api.logger.info("token-economy: service stopped");
       },

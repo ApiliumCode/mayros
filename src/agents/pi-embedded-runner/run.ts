@@ -280,6 +280,38 @@ export async function runEmbeddedPiAgent(
         log.info(`[hooks] model overridden to ${modelId}`);
       }
 
+      // before_agent_run hook: allows plugins to short-circuit the LLM call
+      if (hookRunner?.hasHooks("before_agent_run")) {
+        try {
+          const agentRunResult = await hookRunner.runBeforeAgentRun(
+            {
+              prompt: params.prompt,
+              sessionKey: params.sessionKey,
+              agentId: workspaceResolution.agentId,
+            },
+            hookCtx,
+          );
+          if (agentRunResult?.shortCircuit && agentRunResult.response) {
+            log.info("[hooks] before_agent_run short-circuited LLM call");
+            return {
+              payloads: [{ text: agentRunResult.response }],
+              meta: {
+                durationMs: Date.now() - started,
+                agentMeta: {
+                  sessionId: params.sessionId,
+                  provider,
+                  model: modelId,
+                },
+                shortCircuited: true,
+                ...agentRunResult.metadata,
+              },
+            };
+          }
+        } catch (hookErr) {
+          log.warn(`before_agent_run hook failed: ${String(hookErr)}`);
+        }
+      }
+
       const { model, error, authStorage, modelRegistry } = resolveModel(
         provider,
         modelId,
