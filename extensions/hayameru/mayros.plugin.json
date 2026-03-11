@@ -1,0 +1,28 @@
+{
+  "id": "hayameru",
+  "kind": "optimization",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "confidenceThreshold": { "type": "number", "default": 0.85 },
+      "maxFileSize": { "type": "integer", "default": 100000 },
+      "transforms": {
+        "type": "object",
+        "properties": {
+          "var-to-const": { "type": "boolean", "default": true },
+          "remove-console": { "type": "boolean", "default": true },
+          "sort-imports": { "type": "boolean", "default": true },
+          "add-semicolons": { "type": "boolean", "default": true },
+          "remove-comments": { "type": "boolean", "default": true }
+        }
+      },
+      "metrics": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

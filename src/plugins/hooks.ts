@@ -54,6 +54,8 @@ import type {
   PluginHookNotificationEvent,
   PluginHookTeammateIdleEvent,
   PluginHookTaskCompletedEvent,
+  PluginHookBeforeAgentRunEvent,
+  PluginHookBeforeAgentRunResult,
   PluginHookConfigChangeEvent,
 } from "./types.js";
 
@@ -103,6 +105,8 @@ export type {
   PluginHookPermissionRequestResult,
   PluginHookNotificationEvent,
   PluginHookTeammateIdleEvent,
+  PluginHookBeforeAgentRunEvent,
+  PluginHookBeforeAgentRunResult,
   PluginHookTaskCompletedEvent,
   PluginHookConfigChangeEvent,
 };
@@ -314,6 +318,45 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
         ...mergeBeforeModelResolve(acc, next),
       }),
     );
+  }
+
+  /**
+   * Run before_agent_run hook.
+   * Allows plugins to short-circuit the LLM call with a pre-computed response.
+   * First handler returning shortCircuit: true wins.
+   */
+  async function runBeforeAgentRun(
+    event: PluginHookBeforeAgentRunEvent,
+    ctx: PluginHookAgentContext,
+  ): Promise<PluginHookBeforeAgentRunResult | undefined> {
+    const hooks = getHooksForName(registry, "before_agent_run");
+    if (hooks.length === 0) return undefined;
+
+    logger?.debug?.(`[hooks] running before_agent_run (${hooks.length} handlers, sequential)`);
+
+    for (const hook of hooks) {
+      try {
+        const result = await (
+          hook.handler as (
+            event: PluginHookBeforeAgentRunEvent,
+            ctx: PluginHookAgentContext,
+          ) => Promise<PluginHookBeforeAgentRunResult | void>
+        )(event, ctx);
+
+        if (result?.shortCircuit && result.response) {
+          return result;
+        }
+      } catch (err) {
+        const msg = `[hooks] before_agent_run handler from ${hook.pluginId} failed: ${String(err)}`;
+        if (catchErrors) {
+          logger?.error(msg);
+        } else {
+          throw new Error(msg, { cause: err });
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -809,6 +852,7 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     runBeforeModelResolve,
     runBeforePromptBuild,
     runBeforeAgentStart,
+    runBeforeAgentRun,
     runLlmInput,
     runLlmOutput,
     runAgentEnd,

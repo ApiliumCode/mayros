@@ -53,6 +53,18 @@ vi.mock("node:crypto", () => ({
   randomUUID: () => "00000000-0000-0000-0000-000000000000",
 }));
 
+vi.mock("../config/io.js", () => ({
+  readConfigFileSnapshot: vi.fn().mockReturnValue({
+    exists: false,
+    config: {},
+    hash: "mock",
+  }),
+}));
+
+vi.mock("../infra/ensure-services.js", () => ({
+  ensureServicesRunning: vi.fn(),
+}));
+
 // ============================================================================
 // Stdout / stderr capture
 // ============================================================================

@@ -41,6 +41,11 @@ import { TeamDashboardService } from "./team-dashboard.js";
 import { TeamManager } from "./team-manager.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
 import { listWorkflows as listWorkflowDefs } from "./workflows/registry.js";
+import { TaskRouter } from "./task-router.js";
+import { PerformanceTracker } from "./performance-tracker.js";
+import { ConsensusEngine } from "./consensus-engine.js";
+import { ByzantineValidator } from "./byzantine-validator.js";
+import { RaftLeader } from "./raft-leader.js";
 
 // ============================================================================
 // Plugin Definition
@@ -69,6 +74,25 @@ const agentMeshPlugin = {
     });
     const mailbox = new AgentMailbox(client, ns);
     const bgTracker = new BackgroundTracker(client, ns);
+
+    // Miteru (task routing) + Kimeru (consensus)
+    const perfTracker = new PerformanceTracker(client, ns);
+    const taskRouter = cfg.miteru.enabled ? new TaskRouter(client, ns, perfTracker) : undefined;
+    // Byzantine validator + Raft leader (Kimeru extensions)
+    const byzantineValidator =
+      cfg.kimeru.enabled && cfg.kimeru.byzantine.enabled ? new ByzantineValidator() : undefined;
+    const raftLeader =
+      cfg.kimeru.enabled && cfg.kimeru.raft.enabled
+        ? new RaftLeader(
+            perfTracker,
+            cfg.kimeru.raft.leaderTimeoutMs,
+            cfg.kimeru.raft.maxReElections,
+          )
+        : undefined;
+    const consensusEngine = cfg.kimeru.enabled
+      ? new ConsensusEngine(client, ns, perfTracker, api.callLlm, byzantineValidator, raftLeader)
+      : undefined;
+
     const orchestrator = new WorkflowOrchestrator(
       client,
       ns,
@@ -77,6 +101,10 @@ const agentMeshPlugin = {
       nsMgr,
       mailbox,
       bgTracker,
+      undefined, // phaseTimeoutMs (use default)
+      taskRouter,
+      consensusEngine,
+      perfTracker,
     );
     const dashboard = new TeamDashboardService(teamMgr, mailbox, null, ns);
     let cortexAvailable = false;
@@ -949,6 +977,206 @@ const agentMeshPlugin = {
         },
       },
       { name: "mesh_run_workflow" },
+    );
+
+    // 12b. mesh_route_task (Miteru)
+    api.registerTool(
+      {
+        name: "mesh_route_task",
+        label: "Route Task to Agent",
+        description:
+          "Use Miteru Q-Learning to select the best agent for a task. Returns a routing decision with confidence score.",
+        parameters: Type.Object({
+          description: Type.String({ description: "Task description" }),
+          agents: Type.Array(Type.String(), { description: "Available agent IDs" }),
+          path: Type.Optional(Type.String({ description: "Target file/directory path" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { description, agents, path } = params as {
+            description: string;
+            agents: string[];
+            path?: string;
+          };
+
+          if (!taskRouter) {
+            return {
+              content: [{ type: "text", text: "Miteru task routing is disabled." }],
+              details: { error: "disabled" },
+            };
+          }
+
+          try {
+            const decision = await taskRouter.selectAgent(description, agents, path);
+            const classification = taskRouter.classifyTask(description, path);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    `Routed to: ${decision.agentId}`,
+                    `Task type: ${classification.taskType} (${classification.complexity}, ${classification.domain})`,
+                    `Confidence: ${(decision.confidence * 100).toFixed(1)}%`,
+                    `Reason: ${decision.reason}`,
+                  ].join("\n"),
+                },
+              ],
+              details: { decision, classification },
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Routing failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_route_task" },
+    );
+
+    // 12c. mesh_agent_performance
+    api.registerTool(
+      {
+        name: "mesh_agent_performance",
+        label: "Agent Performance",
+        description:
+          "Show performance metrics for agents in the mesh — EMA scores, task counts, cost data.",
+        parameters: Type.Object({
+          agentId: Type.Optional(Type.String({ description: "Specific agent ID (omit for all)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { agentId: targetId } = params as { agentId?: string };
+
+          if (targetId) {
+            const record = await perfTracker.getPerformance(targetId);
+            if (!record) {
+              return {
+                content: [{ type: "text", text: `No performance data for agent "${targetId}".` }],
+                details: { error: "not_found" },
+              };
+            }
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    `Agent: ${record.agentId}`,
+                    `Score (EMA): ${(record.scoreEma * 100).toFixed(1)}%`,
+                    `Tasks: ${record.completedTasks}/${record.totalTasks} completed`,
+                    `Avg duration: ${(record.avgDurationMs / 1000).toFixed(1)}s`,
+                    `Avg cost: $${record.avgCostUsd.toFixed(4)}`,
+                  ].join("\n"),
+                },
+              ],
+              details: record,
+            };
+          }
+
+          const all = perfTracker.getAllCached();
+          if (all.length === 0) {
+            return {
+              content: [{ type: "text", text: "No performance data recorded yet." }],
+              details: { agents: [] },
+            };
+          }
+
+          const lines = ["Agent Performance", "─────────────────"];
+          for (const r of all.sort((a, b) => b.scoreEma - a.scoreEma)) {
+            lines.push(
+              `${r.agentId}: score=${(r.scoreEma * 100).toFixed(1)}% tasks=${r.completedTasks}/${r.totalTasks}`,
+            );
+          }
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+            details: { agents: all },
+          };
+        },
+      },
+      { name: "mesh_agent_performance" },
+    );
+
+    // 12d. mesh_consensus
+    api.registerTool(
+      {
+        name: "mesh_consensus",
+        label: "Consensus Resolve",
+        description:
+          "Use Kimeru to resolve conflicts between agents. Strategies: majority, weighted, arbitrate.",
+        parameters: Type.Object({
+          ns1: Type.String({ description: "First namespace" }),
+          ns2: Type.String({ description: "Second namespace" }),
+          strategy: Type.Optional(
+            Type.Unsafe<string>({
+              type: "string",
+              enum: ["majority", "weighted", "arbitrate"],
+              description: "Consensus strategy (default: weighted)",
+            }),
+          ),
+        }),
+        async execute(_toolCallId, params) {
+          const {
+            ns1,
+            ns2,
+            strategy: strat,
+          } = params as {
+            ns1: string;
+            ns2: string;
+            strategy?: string;
+          };
+
+          if (!consensusEngine) {
+            return {
+              content: [{ type: "text", text: "Kimeru consensus is disabled." }],
+              details: { error: "disabled" },
+            };
+          }
+
+          try {
+            const conflicts = await fusion.detectConflicts(ns1, ns2);
+            if (conflicts.length === 0) {
+              return {
+                content: [{ type: "text", text: "No conflicts detected between the namespaces." }],
+                details: { conflicts: 0 },
+              };
+            }
+
+            const validStrategies = ["majority", "weighted", "arbitrate"];
+            const strategy = (
+              strat && validStrategies.includes(strat) ? strat : cfg.kimeru.defaultStrategy
+            ) as "majority" | "weighted" | "arbitrate";
+
+            const result = await consensusEngine.resolve({
+              id: `manual-${Date.now()}`,
+              conflicts,
+              agentIds: [ns1, ns2],
+              strategy,
+            });
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: [
+                    `Consensus (${strategy}): ${result.breakdown.resolvedCount}/${result.breakdown.totalConflicts} resolved`,
+                    `Confidence: ${(result.confidence * 100).toFixed(1)}%`,
+                    ...result.resolutions.map(
+                      (r) => `  ${r.subject} ${r.predicate}: "${r.resolvedValue}"`,
+                    ),
+                  ].join("\n"),
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            return {
+              content: [{ type: "text", text: `Consensus failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "mesh_consensus" },
     );
 
     // 13. agent_send_message

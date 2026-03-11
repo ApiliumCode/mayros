@@ -89,6 +89,61 @@ export class ModelRouter {
     return [...this.models.values()];
   }
 
+  /**
+   * Build a ModelRouter from the token-economy pricing catalog.
+   * Maps each catalog entry to a ModelCandidate with normalized costs.
+   */
+  static buildFromPricingCatalog(
+    catalog: Array<{
+      provider: string;
+      model: string;
+      entry: {
+        input: number;
+        output: number;
+        contextWindow: number;
+        displayName: string;
+      };
+    }>,
+  ): ModelRouter {
+    const models: ModelCandidate[] = catalog.map(({ provider, model, entry }) => ({
+      id: model,
+      provider,
+      costPer1kInput: entry.input / 1000, // catalog is per 1M, normalize to per 1K
+      costPer1kOutput: entry.output / 1000,
+      capabilities: entry.contextWindow >= 200_000 ? ["long-context"] : [],
+      maxContext: entry.contextWindow,
+      available: true,
+    }));
+
+    const defaultModel = models[0]?.id ?? "";
+    return new ModelRouter({ models, defaultModel });
+  }
+
+  /**
+   * Route with budget awareness — filters models by cost when budget is running low.
+   * Falls back to standard routing if no budget constraint applies.
+   */
+  routeWithBudget(
+    strategy: ModelRoutingStrategy,
+    context?: RoutingContext,
+    budgetRemainingUsd?: number,
+  ): RoutingDecision {
+    if (budgetRemainingUsd !== undefined && budgetRemainingUsd < 0.1) {
+      // Very low budget: force cost-optimized with tight cost cap
+      return this.route("cost-optimized", {
+        ...context,
+        maxCostPer1k: 0.005, // ~$5/1M input = cheapest tier
+      });
+    }
+
+    if (budgetRemainingUsd !== undefined && budgetRemainingUsd < 1.0) {
+      // Low budget: prefer cost-optimized
+      return this.route("cost-optimized", context);
+    }
+
+    return this.route(strategy, context);
+  }
+
   // ── Private strategies ─────────────────────────────────────────────
 
   private routeDefault(_context?: RoutingContext): RoutingDecision {

@@ -15,8 +15,13 @@ import type { MergeStrategy } from "./mesh-protocol.js";
 import type { NamespaceManager } from "./namespace-manager.js";
 import { TeamManager, type TeamManagerConfig } from "./team-manager.js";
 import { getWorkflow, listWorkflows as listDefs } from "./workflows/registry.js";
+import type { TaskRouter } from "./task-router.js";
+import type { ConsensusEngine } from "./consensus-engine.js";
+import type { PerformanceTracker } from "./performance-tracker.js";
 import type {
   PhaseResult,
+  RoutingDecisionEntry,
+  ConsensusResultEntry,
   WorkflowDefinition,
   WorkflowEntry,
   WorkflowResult,
@@ -59,6 +64,9 @@ export class WorkflowOrchestrator {
     private readonly mailbox?: AgentMailbox,
     private readonly bgTracker?: BackgroundTracker,
     private readonly phaseTimeoutMs: number = DEFAULT_PHASE_TIMEOUT_MS,
+    private readonly taskRouter?: TaskRouter,
+    private readonly consensusEngine?: ConsensusEngine,
+    private readonly perfTracker?: PerformanceTracker,
   ) {
     this.teamMgr = teamMgr;
   }
@@ -84,14 +92,39 @@ export class WorkflowOrchestrator {
     const targetPath = opts.path ?? ".";
     const config = opts.config ?? {};
 
-    // Interpolate ${path} in agent task templates
-    const phases = def.phases.map((phase) => ({
-      ...phase,
-      agents: phase.agents.map((agent) => ({
-        ...agent,
-        task: agent.task.replace(/\$\{path\}/g, targetPath),
-      })),
-    }));
+    // Interpolate ${path} in agent task templates and apply Miteru routing
+    const phases = await Promise.all(
+      def.phases.map(async (phase) => {
+        const agents = await Promise.all(
+          phase.agents.map(async (agent) => {
+            const interpolatedTask = agent.task.replace(/\$\{path\}/g, targetPath);
+
+            // Miteru routing: select best agent for this task
+            if (this.taskRouter) {
+              const available = phase.agents.map((a) => a.agentId);
+              try {
+                const decision = await this.taskRouter.selectAgent(
+                  interpolatedTask,
+                  available,
+                  targetPath,
+                );
+                return {
+                  ...agent,
+                  task: interpolatedTask,
+                  routingId: decision.routingId,
+                  routedAgentId: decision.agentId,
+                };
+              } catch {
+                // Fallback to hardcoded agent
+              }
+            }
+
+            return { ...agent, task: interpolatedTask };
+          }),
+        );
+        return { ...phase, agents };
+      }),
+    );
 
     const firstPhase = phases[0]?.name ?? "done";
 
@@ -402,6 +435,78 @@ export class WorkflowOrchestrator {
     await this.updateField(workflowId, "state", "merging");
     const mergeResult = await this.teamMgr.mergeTeamResults(workflow.teamId);
 
+    // Record routing rewards and performance outcomes
+    const routingDecisions: RoutingDecisionEntry[] = [];
+    for (const agent of phase.agents) {
+      const memberResult = mergeResult.memberResults.find((m) => m.agentId === agent.agentId);
+
+      // Record performance outcome
+      if (this.perfTracker && memberResult) {
+        await this.perfTracker.recordOutcome({
+          agentId: agent.agentId,
+          completed: true,
+          durationMs: Date.now() - startTime,
+          costUsd: 0, // cost tracking happens in token-economy
+          findings: memberResult.findings,
+          conflicts: mergeResult.conflicts,
+        });
+      }
+
+      // Record routing reward
+      if (this.taskRouter && agent.routingId) {
+        const reward = this.taskRouter.computeReward({
+          completed: true,
+          findings: memberResult?.findings ?? 0,
+          conflicts: mergeResult.conflicts,
+          durationMs: Date.now() - startTime,
+          costUsd: 0,
+        });
+        await this.taskRouter.recordReward(agent.routingId, reward);
+
+        routingDecisions.push({
+          routingId: agent.routingId,
+          originalAgentId: agent.agentId,
+          routedAgentId: agent.routedAgentId ?? agent.agentId,
+          stateKey: "",
+          confidence: 0,
+          reason: `reward=${reward.total.toFixed(3)}`,
+        });
+      }
+    }
+
+    // Kimeru consensus: resolve conflicts if engine is available
+    let consensusResults: ConsensusResultEntry[] | undefined;
+    if (this.consensusEngine && mergeResult.conflicts > 0) {
+      try {
+        // Detect conflicts between agent namespaces
+        const agentNs = phase.agents.map((a) => `${this.ns}:agent:${a.agentId}`);
+        if (agentNs.length >= 2) {
+          const conflicts = await this.fusion.detectConflicts(agentNs[0]!, agentNs[1]!);
+          if (conflicts.length > 0) {
+            const agentIdByNs: Record<string, string> = {};
+            for (const a of phase.agents) {
+              agentIdByNs[`${this.ns}:agent:${a.agentId}`] = a.agentId;
+            }
+            const results = await this.consensusEngine.resolvePhaseConflicts(
+              conflicts,
+              agentIdByNs,
+              "weighted",
+            );
+            consensusResults = results.map((r) => ({
+              id: r.id,
+              resolved: r.resolved,
+              strategy: r.strategy,
+              confidence: r.confidence,
+              resolvedCount: r.breakdown.resolvedCount,
+              totalConflicts: r.breakdown.totalConflicts,
+            }));
+          }
+        }
+      } catch {
+        // Consensus failure doesn't block workflow
+      }
+    }
+
     const phaseResult: PhaseResult = {
       phase: phase.name,
       status: "completed",
@@ -409,6 +514,8 @@ export class WorkflowOrchestrator {
       conflicts: mergeResult.conflicts,
       duration: Date.now() - startTime,
       completedAt: new Date().toISOString(),
+      routingDecisions: routingDecisions.length > 0 ? routingDecisions : undefined,
+      consensusResults,
     };
 
     // Store phase result

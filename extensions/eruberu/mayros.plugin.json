@@ -1,0 +1,26 @@
+{
+  "id": "eruberu",
+  "kind": "routing",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "strategy": { "type": "string", "default": "auto" },
+      "budgetDrivenFallback": { "type": "boolean", "default": true },
+      "budgetWarnThreshold": { "type": "number", "default": 0.8 },
+      "budgetCriticalThreshold": { "type": "number", "default": 0.95 },
+      "qLearning": {
+        "type": "object",
+        "properties": {
+          "alpha": { "type": "number", "default": 0.1 },
+          "gamma": { "type": "number", "default": 0.9 },
+          "epsilon": { "type": "number", "default": 0.15 },
+          "epsilonDecay": { "type": "number", "default": 0.995 },
+          "minEpsilon": { "type": "number", "default": 0.05 }
+        }
+      },
+      "persistPath": { "type": "string" },
+      "cortexPersist": { "type": "boolean", "default": true }
+    }
+  }
+}

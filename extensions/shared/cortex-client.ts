@@ -700,4 +700,29 @@ export class CortexClient implements CortexClientLike, CortexLike {
       return null;
     }
   }
+
+  // ---------- Motomeru: Vector Search ----------
+
+  async vectorSearch(req: {
+    embedding: number[];
+    k: number;
+    min_similarity?: number;
+    entry_type?: string;
+    tags?: string[];
+  }): Promise<unknown[]> {
+    return this.request<unknown[]>("POST", "/api/v1/memory/search", req);
+  }
+
+  async vectorIndexStats(): Promise<{
+    point_count: number;
+    deleted_count: number;
+    dimensions: number;
+    memory_bytes: number;
+  }> {
+    return this.request("GET", "/api/v1/memory/index/stats");
+  }
+
+  async rebuildVectorIndex(): Promise<void> {
+    return this.request("POST", "/api/v1/memory/index/rebuild");
+  }
 }
