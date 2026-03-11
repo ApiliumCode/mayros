@@ -25,8 +25,12 @@ const kakeruPlugin = {
 
     // Always register Claude bridge (native)
     const claudeBridge = new ClaudeBridge();
-    await claudeBridge.connect();
-    coordinator.registerBridge(claudeBridge);
+    try {
+      await claudeBridge.connect();
+      coordinator.registerBridge(claudeBridge);
+    } catch (err) {
+      api.logger.warn(`kakeru: Claude bridge failed to connect: ${String(err)}`);
+    }
 
     // Optionally register Codex bridge
     if (cfg.codex.enabled) {

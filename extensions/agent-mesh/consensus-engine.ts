@@ -91,10 +91,9 @@ export class ConsensusEngine {
     for (const conflict of request.conflicts) {
       const resolution = await this.resolveConflict(conflict, request.agentIds, request.strategy);
       resolutions.push(resolution);
-      totalConfidence += resolution.votes
-        ? Math.max(...Object.values(resolution.votes)) /
-          Object.values(resolution.votes).reduce((a, b) => a + b, 0)
-        : 0.5;
+      const voteValues = resolution.votes ? Object.values(resolution.votes) : [];
+      const totalVotes = voteValues.reduce((a, b) => a + b, 0);
+      totalConfidence += totalVotes > 0 ? Math.max(...voteValues) / totalVotes : 0.5;
     }
 
     const resolvedCount = resolutions.filter((r) => r.resolvedValue !== "").length;
