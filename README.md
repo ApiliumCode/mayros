@@ -211,7 +211,48 @@ CLI: `mayros kg search|explore|query|stats|triples|namespaces|export|import`
 
 Mayros exposes its tools, resources, and prompts via the [Model Context Protocol](https://modelcontextprotocol.io). Any MCP client — Claude Desktop, Claude Code, VSCode, Cursor, JetBrains — can discover and use Mayros capabilities.
 
-**9 tools exposed:**
+### Connect with Claude Desktop
+
+```bash
+# 1. Install Mayros
+npm install -g @apilium/mayros@latest
+
+# 2. Register with Claude Desktop (auto-detects paths, writes config)
+mayros mcp-setup --desktop
+
+# 3. Restart Claude Desktop — done
+#    The tools icon appears in the chat input
+```
+
+Then in Claude Desktop, just talk naturally:
+
+- _"Remember that our API uses JWT tokens with 24h expiry"_ → stores in semantic memory
+- _"What do you know about our authentication?"_ → recalls from memory and knowledge graph
+- _"Store in the graph: project:api depends_on express v5"_ → creates an RDF triple
+- _"What's the memory status?"_ → shows STM/LTM/graph statistics
+
+### Connect with Claude Code
+
+```bash
+# From your terminal (not inside a Claude Code session)
+mayros mcp-setup
+# or manually:
+claude mcp add mayros -- mayros serve --stdio
+```
+
+### Connect with other MCP clients
+
+```bash
+# Start the HTTP server
+mayros serve --http
+# → MCP endpoint: http://127.0.0.1:19100/mcp
+# → Legacy SSE:   http://127.0.0.1:19100/sse
+# → Health check: http://127.0.0.1:19100/health
+```
+
+Point any MCP client to `http://127.0.0.1:19100/mcp` (Streamable HTTP) or `http://127.0.0.1:19100/sse` (legacy SSE for older clients).
+
+### Tools
 
 | Tool                  | Description                                           |
 | --------------------- | ----------------------------------------------------- |
@@ -224,20 +265,6 @@ Mayros exposes its tools, resources, and prompts via the [Model Context Protocol
 | `mayros_cortex_query` | Query the knowledge graph by subject/predicate/object |
 | `mayros_cortex_store` | Store RDF triples in the knowledge graph              |
 | `mayros_memory_stats` | STM/LTM/HNSW/graph statistics                         |
-
-**Setup (one command):**
-
-```bash
-# Claude Desktop
-mayros mcp-setup --desktop
-
-# Claude Code
-mayros mcp-setup
-```
-
-**Transports:** Streamable HTTP (MCP spec 2025-03-26) and legacy SSE (MCP spec 2024-11-05) for Claude Desktop compatibility.
-
-**Manual start:** `mayros serve --http` (port 19100) or `mayros serve --stdio` (for IDE integration).
 
 ---
 
