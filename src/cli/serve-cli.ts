@@ -136,13 +136,13 @@ export function registerServeCli(program: Command): void {
         shuttingDown = true;
         try {
           await server.stop();
-        } catch (err) {
-          process.stderr.write(`ERROR stopping server: ${err}\n`);
+        } catch (err: unknown) {
+          process.stderr.write(`ERROR stopping server: ${String(err)}\n`);
         }
         try {
           if (sidecar) await sidecar.stop();
-        } catch (err) {
-          process.stderr.write(`ERROR stopping sidecar: ${err}\n`);
+        } catch (err: unknown) {
+          process.stderr.write(`ERROR stopping sidecar: ${String(err)}\n`);
         }
       };
 

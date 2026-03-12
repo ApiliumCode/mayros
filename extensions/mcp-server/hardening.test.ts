@@ -65,7 +65,7 @@ describe("governance word-boundary matching", () => {
   it("DENY rule 'rm' should not match 'format'", async () => {
     const mod = await import("./governance-tools.js");
     const tools = mod.createGovernanceTools();
-    const tool = tools[0];
+    const _tool = tools[0];
 
     // Mock fs to return a policy with "- DENY: rm"
     vi.doMock("node:fs/promises", () => mockFs);
