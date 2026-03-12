@@ -4,6 +4,51 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.1.15 (2026-03-12)
+
+MCP Server production-ready, Claude Desktop and Claude Code integration, documentation, and product page update.
+
+### MCP Server
+
+- 9 tools exposed via Model Context Protocol: memory (remember, recall, search, forget), budget, governance, cortex (query, store, stats)
+- Cortex sidecar auto-starts on `mayros serve`, persistent storage at `~/.mayros/cortex-data/`
+- Dual transport: `--stdio` for IDE/Claude Desktop, `--http` for remote clients
+- Default port aligned to Mayros convention: 19100
+
+### MCP Setup
+
+- `mayros mcp-setup` — one-command registration for Claude Code (stdio or HTTP)
+- `mayros mcp-setup --desktop` — auto-configures Claude Desktop config file
+- Resolves absolute paths to `node` and `mayros.mjs` for Claude Desktop compatibility
+- Cross-platform config detection: macOS, Windows, Linux
+
+### Documentation
+
+- New: `tools/mcp-server.mdx` — architecture, 9 tools reference, setup guides, configuration
+- New: `cli/mcp-setup.mdx` — CLI reference with options and platform-specific paths
+- Updated: `cli/serve.mdx` — port 19100, tools table, Cortex sidecar section
+- Updated: `README.md` — step-by-step MCP setup guides, usage examples
+
+### Product Page
+
+- New capability cards: Intelligent Model Routing (Q-learning) and Policy Enforcement (governance)
+- Updated capabilities: HNSW vector search, Byzantine consensus, response caching, budget tracking
+- Updated architecture layers: Q-learning routing, governance gates, MCP Server, WASM transforms
+- Security layers expanded from 6 to 10 (governance gates, HMAC audit trail, trust tiers, rate limiting)
+- Updated numbers: 67 extensions, 75+ CLI commands, 20 security layers
+- FAQ updated with MCP server and HNSW references
+
+### Badges
+
+- MCP Compatible badge (shields.io)
+- Works with Claude badge (Anthropic logo)
+
+### Infrastructure
+
+- Require AIngle Cortex >= 0.4.3
+
+---
+
 ## 0.1.14 (2026-03-11)
 
 Intelligent routing, multi-agent consensus, execution safety, code transforms, governance, dual-platform coordination, and MCP server enhancements.

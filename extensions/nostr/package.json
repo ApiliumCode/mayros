@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-nostr",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Mayros Nostr channel plugin for NIP-04 encrypted DMs",
   "license": "MIT",
   "type": "module",

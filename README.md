@@ -23,6 +23,8 @@
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/extensions-55-8B5CF6?style=for-the-badge" alt="55 extensions">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-999?style=for-the-badge" alt="macOS | Linux">
+  <img src="https://img.shields.io/badge/MCP-Compatible-6366F1?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA4LTggOHoiLz48cGF0aCBkPSJNMTIgNmMtMy4zMSAwLTYgMi42OS02IDZzMi42OSA2IDYgNiA2LTIuNjkgNi02LTIuNjktNi02LTZ6Ii8+PC9zdmc+" alt="MCP Compatible">
+  <img src="https://img.shields.io/badge/Works_with-Claude-D97706?style=for-the-badge&logo=anthropic&logoColor=white" alt="Works with Claude">
 </p>
 
 <p align="center">
