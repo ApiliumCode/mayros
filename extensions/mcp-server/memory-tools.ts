@@ -66,31 +66,43 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
         ];
 
         // Store in Cortex graph
+        const errors: string[] = [];
         for (const triple of triples) {
-          await fetch(`${cortexBaseUrl}/api/v1/triples`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(triple),
-          });
+          try {
+            const tripleRes = await fetch(`${cortexBaseUrl}/api/v1/triples`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(triple),
+            });
+            if (!tripleRes.ok) errors.push(`triple store: ${tripleRes.statusText}`);
+          } catch (err) {
+            errors.push(`triple store: ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
 
         // Also store in Ineru STM for vector search
-        await fetch(`${cortexBaseUrl}/api/v1/memory/remember`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            entry_type: category,
-            data: { content, tags },
-            tags,
-            importance,
-          }),
-        });
+        try {
+          const memRes = await fetch(`${cortexBaseUrl}/api/v1/memory/remember`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              entry_type: category,
+              data: { content, tags },
+              tags,
+              importance,
+            }),
+          });
+          if (!memRes.ok) errors.push(`ineru store: ${memRes.statusText}`);
+        } catch (err) {
+          errors.push(`ineru store: ${err instanceof Error ? err.message : String(err)}`);
+        }
 
+        const summary = `Remembered: "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}" [${category}]${tags.length > 0 ? ` #${tags.join(" #")}` : ""}`;
         return {
           content: [
             {
               type: "text" as const,
-              text: `Remembered: "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}" [${category}]${tags.length > 0 ? ` #${tags.join(" #")}` : ""}`,
+              text: errors.length > 0 ? `${summary}\nWarnings: ${errors.join("; ")}` : summary,
             },
           ],
         };
@@ -117,38 +129,71 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
         const limit = (params.limit as number) ?? 10;
 
         // Query Ineru recall endpoint
-        const recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: query,
-            tags: tags ?? [],
-            entry_type: category,
-            limit,
-          }),
-        });
-
-        if (!recallRes.ok) {
-          // Fallback: query Cortex graph directly
-          const graphRes = await fetch(
-            `${cortexBaseUrl}/api/v1/triples?predicate=${encodeURIComponent(`${namespace}:memory:content`)}&limit=${limit}`,
-          );
-          const graphData = (await graphRes.json()) as {
-            triples?: Array<{ object: string }>;
-          };
-          const triples = graphData.triples ?? [];
-
+        let recallRes: Response;
+        try {
+          recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: query,
+              tags: tags ?? [],
+              entry_type: category,
+              limit,
+            }),
+          });
+        } catch {
           return {
             content: [
               {
                 type: "text" as const,
-                text:
-                  triples.length > 0
-                    ? triples.map((t, i) => `${i + 1}. ${t.object}`).join("\n")
-                    : "No memories found.",
+                text: "Memory recall unavailable. Cortex may not be running.",
               },
             ],
           };
+        }
+
+        if (!recallRes.ok) {
+          // Fallback: query Cortex graph directly
+          try {
+            const graphRes = await fetch(
+              `${cortexBaseUrl}/api/v1/triples?predicate=${encodeURIComponent(`${namespace}:memory:content`)}&limit=${limit}`,
+            );
+            if (!graphRes.ok) {
+              return {
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "Memory recall unavailable. Cortex may not be running.",
+                  },
+                ],
+              };
+            }
+            const graphData = (await graphRes.json()) as {
+              triples?: Array<{ object: string }>;
+            };
+            const triples = graphData.triples ?? [];
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text:
+                    triples.length > 0
+                      ? triples.map((t, i) => `${i + 1}. ${t.object}`).join("\n")
+                      : "No memories found.",
+                },
+              ],
+            };
+          } catch {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Memory recall unavailable. Cortex may not be running.",
+                },
+              ],
+            };
+          }
         }
 
         const memories = (await recallRes.json()) as Array<{
@@ -201,11 +246,23 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
         const text = params.text as string;
         const k = (params.k as number) ?? 5;
 
-        const recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, limit: k }),
-        });
+        let recallRes: Response;
+        try {
+          recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, limit: k }),
+          });
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Vector search unavailable. Cortex may not be running.",
+              },
+            ],
+          };
+        }
 
         if (!recallRes.ok) {
           return {
@@ -254,19 +311,33 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
         const memoryId = params.id as string;
-        const res = await fetch(`${cortexBaseUrl}/api/v1/memory/${encodeURIComponent(memoryId)}`, {
-          method: "DELETE",
-        });
-        return {
-          content: [
+        try {
+          const res = await fetch(
+            `${cortexBaseUrl}/api/v1/memory/${encodeURIComponent(memoryId)}`,
             {
-              type: "text" as const,
-              text: res.ok
-                ? `Memory ${memoryId} forgotten.`
-                : `Failed to forget: ${res.statusText}`,
+              method: "DELETE",
             },
-          ],
-        };
+          );
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: res.ok
+                  ? `Memory ${memoryId} forgotten.`
+                  : `Failed to forget: ${res.statusText}`,
+              },
+            ],
+          };
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Memory delete unavailable. Cortex may not be running.",
+              },
+            ],
+          };
+        }
       },
     },
   ];

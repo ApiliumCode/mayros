@@ -9,7 +9,7 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { McpProtocolDispatcher } from "./protocol.js";
 
 // ============================================================================
@@ -74,7 +74,7 @@ export class McpHttpTransport {
 
   /** Stop the HTTP server. */
   async stop(): Promise<void> {
-    // Close all active SSE sessions
+    // Close all active SSE sessions (legacy + modern)
     for (const [id, res] of this.sseSessions) {
       if (!res.destroyed) res.end();
       this.sseSessions.delete(id);
@@ -85,6 +85,8 @@ export class McpHttpTransport {
         resolve();
         return;
       }
+      // Destroy all remaining keep-alive connections so server.close() resolves
+      this.server.closeAllConnections();
       this.server.close(() => {
         this.server = null;
         resolve();
@@ -118,10 +120,15 @@ export class McpHttpTransport {
       return;
     }
 
-    // Auth check
+    // Auth check (timing-safe comparison)
     if (this.authToken) {
       const auth = req.headers.authorization;
-      if (!auth || auth !== `Bearer ${this.authToken}`) {
+      const expected = `Bearer ${this.authToken}`;
+      if (
+        !auth ||
+        auth.length !== expected.length ||
+        !timingSafeEqual(Buffer.from(auth), Buffer.from(expected))
+      ) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized" }));
         return;
@@ -211,11 +218,16 @@ export class McpHttpTransport {
   }
 
   private handleMcpSse(res: ServerResponse): void {
+    const sessionId = `mcp-sse-${randomUUID()}`;
+
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
+
+    // Track session for cleanup on shutdown
+    this.sseSessions.set(sessionId, res);
 
     // Send initial ping
     res.write("event: ping\ndata: {}\n\n");
@@ -231,6 +243,7 @@ export class McpHttpTransport {
 
     res.on("close", () => {
       clearInterval(keepAlive);
+      this.sseSessions.delete(sessionId);
     });
   }
 

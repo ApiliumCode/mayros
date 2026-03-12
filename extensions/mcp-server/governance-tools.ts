@@ -26,29 +26,59 @@ export function createGovernanceTools(): AdaptableTool[] {
         const target = params.target as string;
 
         const { readFile, access } = await import("node:fs/promises");
-        const policyPath = `${process.cwd()}/MAYROS.md`;
+        const { join } = await import("node:path");
+        const { homedir } = await import("node:os");
+
+        // Search policy file in project dir, then user config
+        const candidates = [
+          join(process.cwd(), "MAYROS.md"),
+          join(homedir(), ".mayros", "MAYROS.md"),
+        ];
+
+        let policyContent: string | null = null;
+        let policyPath = candidates[0];
+        for (const candidate of candidates) {
+          try {
+            await access(candidate);
+            policyContent = await readFile(candidate, "utf-8");
+            policyPath = candidate;
+            break;
+          } catch {
+            // Try next candidate
+          }
+        }
 
         try {
-          await access(policyPath);
-          const content = await readFile(policyPath, "utf-8");
+          if (!policyContent) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `ALLOWED (no policy): No MAYROS.md found. All actions permitted.`,
+                },
+              ],
+            };
+          }
 
           // Pattern matching against DENY/ALLOW rules
           const denyPatterns: string[] = [];
-          for (const line of content.split("\n")) {
+          for (const line of policyContent.split("\n")) {
             const trimmed = line.trim();
             if (trimmed.startsWith("- DENY:")) {
               denyPatterns.push(trimmed.slice(7).trim());
             }
           }
 
-          // Check deny rules
+          // Check deny rules with word-boundary matching
           for (const pattern of denyPatterns) {
-            if (target.includes(pattern) || action.includes(pattern)) {
+            const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const regex = new RegExp(`(?:^|[\\s/\\\\.:_-])${escaped}(?:$|[\\s/\\\\.:_-])`, "i");
+            if (regex.test(target) || regex.test(action)) {
               return {
                 content: [
                   {
                     type: "text" as const,
-                    text: `DENIED: "${target}" matches deny rule "${pattern}"`,
+                    text: `DENIED: "${target}" matches deny rule "${pattern}" (from ${policyPath})`,
                   },
                 ],
               };
@@ -59,16 +89,16 @@ export function createGovernanceTools(): AdaptableTool[] {
             content: [
               {
                 type: "text" as const,
-                text: `ALLOWED: "${action}" on "${target}" — no deny rules matched (${denyPatterns.length} rules checked)`,
+                text: `ALLOWED: "${action}" on "${target}" — no deny rules matched (${denyPatterns.length} rules checked, from ${policyPath})`,
               },
             ],
           };
-        } catch {
+        } catch (err) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `ALLOWED (no policy): No MAYROS.md found at ${policyPath}. All actions permitted.`,
+                text: `Policy check error: ${err instanceof Error ? err.message : String(err)}`,
               },
             ],
           };

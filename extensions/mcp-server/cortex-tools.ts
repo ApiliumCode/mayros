@@ -31,39 +31,50 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
         limit: Type.Optional(Type.Number({ description: "Max results (default 20)" })),
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
-        const limit = (params.limit as number) ?? 20;
+        const limit = Math.min((params.limit as number) ?? 20, 500);
         const queryParams = new URLSearchParams();
         if (params.subject) queryParams.set("subject", params.subject as string);
         if (params.predicate) queryParams.set("predicate", params.predicate as string);
         if (params.object) queryParams.set("object", params.object as string);
         queryParams.set("limit", String(limit));
 
-        const res = await fetch(`${cortexBaseUrl}/api/v1/triples?${queryParams}`);
-        if (!res.ok) {
+        try {
+          const res = await fetch(`${cortexBaseUrl}/api/v1/triples?${queryParams}`);
+          if (!res.ok) {
+            return {
+              content: [{ type: "text" as const, text: `Query failed: ${res.statusText}` }],
+            };
+          }
+
+          const data = (await res.json()) as {
+            triples: Array<{ subject: string; predicate: string; object: unknown }>;
+          };
+          if (!data.triples || data.triples.length === 0) {
+            return { content: [{ type: "text" as const, text: "No triples found." }] };
+          }
+
+          const formatted = data.triples
+            .map((t) => `  ${t.subject} -> ${t.predicate} -> ${JSON.stringify(t.object)}`)
+            .join("\n");
+
           return {
-            content: [{ type: "text" as const, text: `Query failed: ${res.statusText}` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `Found ${data.triples.length} triples:\n${formatted}`,
+              },
+            ],
+          };
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Cortex query unavailable. Cortex may not be running.",
+              },
+            ],
           };
         }
-
-        const data = (await res.json()) as {
-          triples: Array<{ subject: string; predicate: string; object: unknown }>;
-        };
-        if (!data.triples || data.triples.length === 0) {
-          return { content: [{ type: "text" as const, text: "No triples found." }] };
-        }
-
-        const formatted = data.triples
-          .map((t) => `  ${t.subject} -> ${t.predicate} -> ${JSON.stringify(t.object)}`)
-          .join("\n");
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Found ${data.triples.length} triples:\n${formatted}`,
-            },
-          ],
-        };
       },
     },
 
@@ -80,30 +91,41 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
         object: Type.String({ description: "Object/value (e.g., 'Express.js')" }),
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
-        const res = await fetch(`${cortexBaseUrl}/api/v1/triples`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subject: params.subject,
-            predicate: params.predicate,
-            object: params.object,
-          }),
-        });
+        try {
+          const res = await fetch(`${cortexBaseUrl}/api/v1/triples`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: params.subject,
+              predicate: params.predicate,
+              object: params.object,
+            }),
+          });
 
-        if (!res.ok) {
+          if (!res.ok) {
+            return {
+              content: [{ type: "text" as const, text: `Store failed: ${res.statusText}` }],
+            };
+          }
+
           return {
-            content: [{ type: "text" as const, text: `Store failed: ${res.statusText}` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `Stored: ${params.subject as string} -> ${params.predicate as string} -> ${params.object as string}`,
+              },
+            ],
+          };
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Cortex store unavailable. Cortex may not be running.",
+              },
+            ],
           };
         }
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Stored: ${params.subject as string} -> ${params.predicate as string} -> ${params.object as string}`,
-            },
-          ],
-        };
       },
     },
 

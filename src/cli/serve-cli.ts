@@ -129,15 +129,22 @@ export function registerServeCli(program: Command): void {
 
       await server.start();
 
-      // Shutdown handler: stop server + sidecar
-      const shutdown = () => {
-        void (async () => {
-          if (sidecar) await sidecar.stop();
+      // Shutdown handler: stop server + sidecar (both must run even if one fails)
+      let shuttingDown = false;
+      const shutdown = async () => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        try {
           await server.stop();
-        })();
+        } catch (err) {
+          process.stderr.write(`ERROR stopping server: ${err}\n`);
+        }
+        try {
+          if (sidecar) await sidecar.stop();
+        } catch (err) {
+          process.stderr.write(`ERROR stopping sidecar: ${err}\n`);
+        }
       };
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
 
       if (transport !== "stdio") {
         const status = server.status();
@@ -148,9 +155,15 @@ export function registerServeCli(program: Command): void {
         );
 
         await new Promise<void>((resolve) => {
-          process.on("SIGINT", resolve);
-          process.on("SIGTERM", resolve);
+          const onSignal = () => {
+            void shutdown().finally(resolve);
+          };
+          process.once("SIGINT", onSignal);
+          process.once("SIGTERM", onSignal);
         });
+      } else {
+        process.once("SIGINT", () => void shutdown());
+        process.once("SIGTERM", () => void shutdown());
       }
     });
 }
