@@ -35,6 +35,44 @@ export function registerServeCli(program: Command): void {
         host,
       });
 
+      // Auto-start Cortex sidecar
+      let sidecar: { stop: () => Promise<void> } | null = null;
+      try {
+        const { CortexSidecar } =
+          (await import("../../extensions/memory-semantic/cortex-sidecar.js")) as {
+            CortexSidecar: new (cfg: unknown) => {
+              start: () => Promise<boolean>;
+              stop: () => Promise<void>;
+            };
+          };
+        const instance = new CortexSidecar(config.cortex);
+        const started = await instance.start();
+        if (started) {
+          sidecar = instance;
+          process.stderr.write("Cortex sidecar started\n");
+        }
+      } catch {
+        // Cortex sidecar not available
+      }
+
+      // Load dedicated MCP tools
+      const cortexPort = config.cortex?.port ?? 19090;
+      const cortexBase = `http://127.0.0.1:${cortexPort}`;
+      const ns = config.agentNamespace || "mayros";
+
+      const { createMemoryTools } = await import("../../extensions/mcp-server/memory-tools.js");
+      const { createBudgetTools } = await import("../../extensions/mcp-server/budget-tools.js");
+      const { createGovernanceTools } =
+        await import("../../extensions/mcp-server/governance-tools.js");
+      const { createCortexTools } = await import("../../extensions/mcp-server/cortex-tools.js");
+
+      const tools = [
+        ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+        ...createBudgetTools(),
+        ...createGovernanceTools(),
+        ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+      ];
+
       // Discover agents
       let agentInfos: Array<{
         id: string;
@@ -64,7 +102,7 @@ export function registerServeCli(program: Command): void {
 
       const server = new McpServer({
         config,
-        tools: [],
+        tools,
         resourceSources: {
           listAgents: () => agentInfos,
           getAgent: (id) => agentInfos.find((a) => a.id === id) ?? null,
@@ -93,6 +131,16 @@ export function registerServeCli(program: Command): void {
 
       await server.start();
 
+      // Shutdown handler: stop server + sidecar
+      const shutdown = () => {
+        void (async () => {
+          if (sidecar) await sidecar.stop();
+          await server.stop();
+        })();
+      };
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
+
       if (transport !== "stdio") {
         const status = server.status();
         process.stderr.write(
@@ -102,12 +150,8 @@ export function registerServeCli(program: Command): void {
         );
 
         await new Promise<void>((resolve) => {
-          process.on("SIGINT", () => {
-            void server.stop().then(resolve);
-          });
-          process.on("SIGTERM", () => {
-            void server.stop().then(resolve);
-          });
+          process.on("SIGINT", resolve);
+          process.on("SIGTERM", resolve);
         });
       }
     });
