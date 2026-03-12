@@ -31,9 +31,9 @@
 
 ---
 
-**Mayros** is an open-source AI agent framework that runs on your own devices. It ships with an interactive **coding CLI** (`mayros code`), connects to **17 messaging channels** (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, and more), speaks and listens on **macOS/iOS/Android**, and has a **knowledge graph** that remembers everything across sessions. All backed by a local-first Gateway and an 18-layer security architecture.
+**Mayros** is an open-source AI agent framework that runs on your own devices. It ships with an interactive **coding CLI** (`mayros code`), connects to **17 messaging channels** (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, and more), speaks and listens on **macOS/iOS/Android**, and has a **knowledge graph** that remembers everything across sessions. All backed by a local-first Gateway and an 20-layer security architecture.
 
-> **55 extensions · 9,200+ tests · 29 hooks · MCP support · Multi-model · Multi-agent**
+> **55 extensions · 11,700+ tests · 29 hooks · MCP server & client · Multi-model · Multi-agent**
 
 ```bash
 npm install -g @apilium/mayros@latest
@@ -50,11 +50,11 @@ mayros code   # interactive coding CLI
 | 🧠 **Knowledge Graph** | AIngle Cortex — persistent memory across sessions, projects, and agents                              | Flat conversation history |
 | 🤖 **Multi-Agent**     | Teams, workflows, mailbox, background tasks, git worktree isolation                                  | Single agent              |
 | 📱 **Multi-Channel**   | 17 channels — WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, Matrix, WebChat, and more | Terminal only             |
-| 🔒 **Security**        | 18 layers — WASM sandbox, bash scanner, interactive permissions, namespace isolation, rate limiter   | Basic sandboxing          |
+| 🔒 **Security**        | 20 layers — WASM sandbox, bash scanner, interactive permissions, namespace isolation, rate limiter   | Basic sandboxing          |
 | 🎙️ **Voice**           | Always-on Voice Wake + Talk Mode on macOS, iOS, Android                                              | None                      |
 | 🖥️ **IDE**             | VSCode + JetBrains plugins with chat, plan, traces, KG                                               | VSCode only               |
 | 📊 **Observability**   | Full trace system, decision graph, session fork/rewind                                               | Basic logging             |
-| 🔌 **Extensions**      | 55 plugin extensions, 29 hook types, MCP client (4 transports)                                       | Limited plugins           |
+| 🔌 **Extensions**      | 55 plugin extensions, 29 hook types, MCP server + client (4 transports)                              | Limited plugins           |
 | 🗺️ **Plan Mode**       | Cortex-backed semantic planning: explore → assert → approve → execute                                | Simple plan files         |
 
 ---
@@ -157,8 +157,10 @@ Full beginner guide: **[Getting started](https://apilium.com/en/doc/mayros/start
                                    │
           ┌────────────┬───────────┼───────────┬────────────┐
           │            │           │           │            │
-     mayros code   VSCode /   Pi Agent    macOS App    iOS/Android
-      (TUI)       JetBrains   (RPC)      (menu bar)     Nodes
+     mayros code   VSCode /   Pi Agent    macOS App    MCP Server
+      (TUI)       JetBrains   (RPC)      (menu bar)   :19100
+                                                     Claude Desktop
+                                                     Claude Code
 ```
 
 The Gateway is the single control plane — every client, channel, tool, and event connects through it.
@@ -205,16 +207,64 @@ CLI: `mayros kg search|explore|query|stats|triples|namespaces|export|import`
 
 ---
 
+## MCP Server
+
+Mayros exposes its tools, resources, and prompts via the [Model Context Protocol](https://modelcontextprotocol.io). Any MCP client — Claude Desktop, Claude Code, VSCode, Cursor, JetBrains — can discover and use Mayros capabilities.
+
+**9 tools exposed:**
+
+| Tool                  | Description                                           |
+| --------------------- | ----------------------------------------------------- |
+| `mayros_remember`     | Store information in persistent semantic memory       |
+| `mayros_recall`       | Search memory by text, tags, or type                  |
+| `mayros_search`       | Vector similarity search over memory (HNSW)           |
+| `mayros_forget`       | Delete a memory entry                                 |
+| `mayros_budget`       | Check token usage and budget status                   |
+| `mayros_policy_check` | Evaluate actions against governance policies          |
+| `mayros_cortex_query` | Query the knowledge graph by subject/predicate/object |
+| `mayros_cortex_store` | Store RDF triples in the knowledge graph              |
+| `mayros_memory_stats` | STM/LTM/HNSW/graph statistics                         |
+
+**Setup (one command):**
+
+```bash
+# Claude Desktop
+mayros mcp-setup --desktop
+
+# Claude Code
+mayros mcp-setup
+```
+
+**Transports:** Streamable HTTP (MCP spec 2025-03-26) and legacy SSE (MCP spec 2024-11-05) for Claude Desktop compatibility.
+
+**Manual start:** `mayros serve --http` (port 19100) or `mayros serve --stdio` (for IDE integration).
+
+---
+
+## Intelligent Routing
+
+Adaptive routing that learns and improves over time.
+
+- **Eruberu** (Q-Learning model routing) — learns optimal provider/model per task type, budget level, and time slot
+- **Miteru** (task-to-agent routing) — learns which agent handles each task type best via EMA scoring
+- **Hayameru** (code transforms) — deterministic WASM transforms that bypass the LLM for simple edits (var→const, remove console, sort imports). 0 tokens, sub-millisecond
+
+CLI: `mayros routing status|strategy|reset`
+
+---
+
 ## Multi-Agent Mesh
 
 Agents that work together. Mayros supports coordinated multi-agent workflows with shared knowledge.
 
 - **Team manager** — Cortex-backed lifecycle: create, assign roles, merge results, disband
 - **Workflow orchestrator** — built-in workflows (code-review, research, refactor) + custom definitions
+- **Kimeru consensus** — majority vote, weighted (EMA), LLM-arbitrated, Byzantine (PBFT with HMAC), Raft leader election
 - **Agent mailbox** — persistent inter-agent messaging (send/inbox/outbox/archive)
 - **Background task tracker** — long-running tasks with status and cancellation
 - **Git worktree isolation** — each agent works in its own worktree to avoid conflicts
 - **Session fork/rewind** — checkpoint-based exploration with rewind capability
+- **Kakeru bridge** — dual-platform coordination (Claude + Codex CLI) with file lock coordination
 
 CLI: `mayros workflow run|list` · `mayros dashboard team|summary|agent` · `mayros tasks list|status|cancel|summary` · `mayros mailbox list|read|send|archive|stats`
 
@@ -256,15 +306,21 @@ Both connect to `ws://127.0.0.1:18789`.
 | Category      | Extension                 | Purpose                                                                   |
 | ------------- | ------------------------- | ------------------------------------------------------------------------- |
 | Skills        | `semantic-skills`         | QuickJS WASM sandbox, 6 semantic tools, skill marketplace                 |
-| Agents        | `agent-mesh`              | Teams, workflows, delegation, mailbox, background tasks                   |
+| Agents        | `agent-mesh`              | Teams, workflows, consensus (majority/weighted/Byzantine/Raft), mailbox   |
 | Memory        | `memory-semantic`         | Cortex integration, rules engine, agent memory, contextual awareness      |
 | Observability | `semantic-observability`  | Traces, decision graph, session fork/rewind                               |
 | Indexer       | `code-indexer`            | Codebase scanning + RDF mapping (incremental)                             |
 | Security      | `bash-sandbox`            | Command parsing, domain checker, blocklist, audit log                     |
+| Governance    | `osameru-governance`      | Policy enforcement, HMAC audit trail, trust tiers                         |
 | Permissions   | `interactive-permissions` | Runtime permission dialogs, intent classification, policy store           |
+| Routing       | `eruberu`                 | Q-Learning model routing, budget-driven fallback, task classification     |
+| Transforms    | `hayameru`                | Deterministic code transforms that bypass LLM (0 tokens, sub-ms)          |
+| Rate Limit    | `tomeru-guard`            | Sliding window rate limiter, loop breaker, velocity circuit breaker       |
 | Hooks         | `llm-hooks`               | Markdown-defined hook evaluation with safe condition parser               |
-| MCP           | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP)               |
-| Economy       | `token-economy`           | Budget tracking, prompt cache optimization                                |
+| MCP Server    | `mcp-server`              | 9 tools exposed via MCP (memory, budget, governance, graph)               |
+| MCP Client    | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP)               |
+| Economy       | `token-economy`           | Budget tracking, response cache, prompt cache optimization                |
+| Bridge        | `kakeru-bridge`           | Dual-platform coordination (Claude + Codex CLI)                           |
 | Hub           | `skill-hub`               | Apilium Hub marketplace, Ed25519 signing, dependency audit                |
 | IoT           | `iot-bridge`              | IoT node fleet management                                                 |
 | Channels      | 17 plugins                | Discord, Telegram, WhatsApp, Slack, Signal, iMessage, Teams, Matrix, etc. |
@@ -284,9 +340,9 @@ Both connect to `ws://127.0.0.1:18789`.
 
 ---
 
-## Security (18 layers)
+## Security (20 layers)
 
-Mayros takes security seriously. 18 layers of defense:
+Mayros takes security seriously. 20 layers of defense:
 
 | Layer                       | Description                                                     |
 | --------------------------- | --------------------------------------------------------------- |
@@ -307,6 +363,8 @@ Mayros takes security seriously. 18 layers of defense:
 | DM Pairing                  | Unknown senders get pairing code, not access                    |
 | Audit Logging               | Skill name + operation tagged on all sandbox writes             |
 | Docker Sandboxing           | Per-session Docker containers for non-main sessions             |
+| Governance (Osameru)        | Policy compilation, enforcement gates, HMAC audit trail         |
+| Rate Limit (Tomeru)         | Sliding window, token bucket, loop breaking, velocity breaker   |
 | Enterprise Managed Settings | Enforced config overrides with locked keys                      |
 
 ---
