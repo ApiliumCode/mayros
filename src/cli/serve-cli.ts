@@ -19,20 +19,18 @@ export function registerServeCli(program: Command): void {
     .description("Start MCP server to expose Mayros tools, resources, and prompts")
     .option("--stdio", "Use stdio transport (for IDE integration)")
     .option("--http", "Use HTTP transport (for remote clients)")
-    .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+    .option("--port <port>", "HTTP port (default: 19100)", parseInt)
     .option("--host <host>", "HTTP host (default: 127.0.0.1)")
     .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
       const { McpServer } = await import("../../extensions/mcp-server/server.js");
       const { mcpServerConfigSchema } = await import("../../extensions/mcp-server/config.js");
 
       const transport = opts.stdio ? ("stdio" as const) : ("http" as const);
-      const port = opts.port ?? 3100;
-      const host = opts.host ?? "127.0.0.1";
 
       const config = mcpServerConfigSchema.parse({
         transport,
-        port,
-        host,
+        ...(opts.port != null && { port: opts.port }),
+        ...(opts.host != null && { host: opts.host }),
       });
 
       // Auto-start Cortex sidecar

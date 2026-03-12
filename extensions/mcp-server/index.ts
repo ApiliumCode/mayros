@@ -147,7 +147,7 @@ const mcpServerPlugin = {
       serve
         .option("--stdio", "Use stdio transport (for IDE integration)")
         .option("--http", "Use HTTP transport (for remote clients)")
-        .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+        .option("--port <port>", "HTTP port (default: 19100)", parseInt)
         .option("--host <host>", "HTTP host (default: 127.0.0.1)")
         .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
           const transport = opts.stdio ? "stdio" : opts.http ? "http" : cfg.transport;
@@ -249,7 +249,7 @@ const mcpServerPlugin = {
         .description("Register Mayros as an MCP server in Claude Code")
         .option("--stdio", "Use stdio transport (Claude manages the process, default)")
         .option("--http", "Use HTTP transport (connect to pre-running server)")
-        .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+        .option("--port <port>", "HTTP port (default: 19100)", parseInt)
         .option("--host <host>", "HTTP host (default: 127.0.0.1)")
         .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
           const { setupClaudeCodeMcp } = await import("./setup-claude.js");
