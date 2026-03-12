@@ -441,6 +441,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "mcp-setup",
+    description: "Register Mayros as an MCP server in Claude (Code or Desktop)",
+    hasSubcommands: false,
+    register: async (program) => {
+      const mod = await import("../serve-cli.js");
+      mod.registerMcpSetupCli(program);
+    },
+  },
+  {
     name: "search",
     description: "Search conversation history across sessions",
     hasSubcommands: false,

@@ -154,3 +154,31 @@ export function registerServeCli(program: Command): void {
       }
     });
 }
+
+export function registerMcpSetupCli(program: Command): void {
+  program
+    .command("mcp-setup")
+    .description("Register Mayros as an MCP server in Claude (Code or Desktop)")
+    .option("--desktop", "Configure Claude Desktop (writes config file)")
+    .option("--stdio", "Use stdio transport (default)")
+    .option("--http", "Use HTTP transport (connect to pre-running server)")
+    .option("--port <port>", "HTTP port (default: 19100)", parseInt)
+    .option("--host <host>", "HTTP host (default: 127.0.0.1)")
+    .action(
+      async (opts: {
+        desktop?: boolean;
+        stdio?: boolean;
+        http?: boolean;
+        port?: number;
+        host?: string;
+      }) => {
+        const { setupClaudeCodeMcp } = await import("../../extensions/mcp-server/setup-claude.js");
+        await setupClaudeCodeMcp({
+          port: opts.port ?? 19100,
+          host: opts.host ?? "127.0.0.1",
+          transport: opts.http ? "http" : "stdio",
+          target: opts.desktop ? "desktop" : "code",
+        });
+      },
+    );
+}

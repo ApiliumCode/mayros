@@ -246,19 +246,29 @@ const mcpServerPlugin = {
       // mcp-setup command
       program
         .command("mcp-setup")
-        .description("Register Mayros as an MCP server in Claude Code")
-        .option("--stdio", "Use stdio transport (Claude manages the process, default)")
+        .description("Register Mayros as an MCP server in Claude (Code or Desktop)")
+        .option("--desktop", "Configure Claude Desktop (writes config file)")
+        .option("--stdio", "Use stdio transport (default)")
         .option("--http", "Use HTTP transport (connect to pre-running server)")
         .option("--port <port>", "HTTP port (default: 19100)", parseInt)
         .option("--host <host>", "HTTP host (default: 127.0.0.1)")
-        .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
-          const { setupClaudeCodeMcp } = await import("./setup-claude.js");
-          await setupClaudeCodeMcp({
-            port: opts.port ?? cfg.port,
-            host: opts.host ?? cfg.host,
-            transport: opts.http ? "http" : "stdio",
-          });
-        });
+        .action(
+          async (opts: {
+            desktop?: boolean;
+            stdio?: boolean;
+            http?: boolean;
+            port?: number;
+            host?: string;
+          }) => {
+            const { setupClaudeCodeMcp } = await import("./setup-claude.js");
+            await setupClaudeCodeMcp({
+              port: opts.port ?? cfg.port,
+              host: opts.host ?? cfg.host,
+              transport: opts.http ? "http" : "stdio",
+              target: opts.desktop ? "desktop" : "code",
+            });
+          },
+        );
     });
 
     // ── Register service lifecycle ──────────────────────────────────
