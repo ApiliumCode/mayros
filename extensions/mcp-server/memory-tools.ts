@@ -49,8 +49,8 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
       execute: async (_id: string, params: Record<string, unknown>) => {
         const content = params.content as string;
         const category = (params.category as string) ?? "general";
-        const tags = (params.tags as string[]) ?? [];
-        const importance = (params.importance as number) ?? 0.7;
+        const tags = Array.isArray(params.tags) ? (params.tags as string[]) : [];
+        const importance = Number(params.importance) || 0.7;
 
         // Store as RDF triple in Cortex (timestamp + random suffix to avoid collisions)
         const subject = `${namespace}:memory:${Date.now()}-${randomBytes(4).toString("hex")}`;
@@ -124,9 +124,9 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
         const query = params.query as string | undefined;
-        const tags = params.tags as string[] | undefined;
+        const tags = Array.isArray(params.tags) ? (params.tags as string[]) : undefined;
         const category = params.category as string | undefined;
-        const limit = (params.limit as number) ?? 10;
+        const limit = Math.min(Number(params.limit) || 10, 100);
 
         // Query Ineru recall endpoint
         let recallRes: Response;
@@ -196,7 +196,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           }
         }
 
-        const memories = (await recallRes.json()) as Array<{
+        let memories: Array<{
           id: string;
           entry_type: string;
           data: { content?: string };
@@ -205,6 +205,18 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           relevance: number;
           source: string;
         }>;
+        try {
+          memories = (await recallRes.json()) as typeof memories;
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Memory recall failed: invalid response from Cortex.",
+              },
+            ],
+          };
+        }
 
         if (memories.length === 0) {
           return {
@@ -216,7 +228,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           .map(
             (m, i) =>
               `${i + 1}. [${m.entry_type}] ${m.data.content ?? JSON.stringify(m.data)}` +
-              (m.tags.length > 0 ? ` #${m.tags.join(" #")}` : "") +
+              (m.tags?.length > 0 ? ` #${m.tags.join(" #")}` : "") +
               ` (relevance: ${(m.relevance * 100).toFixed(0)}%, source: ${m.source})`,
           )
           .join("\n");
@@ -244,7 +256,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
         const text = params.text as string;
-        const k = (params.k as number) ?? 5;
+        const k = Math.min(Number(params.k) || 5, 100);
 
         let recallRes: Response;
         try {
@@ -275,12 +287,24 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           };
         }
 
-        const results = (await recallRes.json()) as Array<{
+        let results: Array<{
           data: { content?: string };
           relevance: number;
           entry_type: string;
           tags: string[];
         }>;
+        try {
+          results = (await recallRes.json()) as typeof results;
+        } catch {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Vector search failed: invalid response from Cortex.",
+              },
+            ],
+          };
+        }
 
         if (results.length === 0) {
           return {
@@ -292,7 +316,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           .map(
             (r, i) =>
               `${i + 1}. [${(r.relevance * 100).toFixed(0)}%] ${r.data.content ?? JSON.stringify(r.data)}` +
-              (r.tags.length > 0 ? ` #${r.tags.join(" #")}` : ""),
+              (r.tags?.length > 0 ? ` #${r.tags.join(" #")}` : ""),
           )
           .join("\n");
 

@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { homedir, platform } from "node:os";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -53,12 +53,21 @@ function setupCode(opts: SetupClaudeOpts): void {
     return;
   }
 
+  if (!Number.isFinite(opts.port) || opts.port < 1 || opts.port > 65535) {
+    console.error(`Invalid port: ${String(opts.port)}. Must be 1-65535.`);
+    return;
+  }
+
   try {
     if (transport === "stdio") {
-      execSync("claude mcp add mayros -- mayros serve --stdio", { stdio: "inherit" });
+      execFileSync("claude", ["mcp", "add", "mayros", "--", "mayros", "serve", "--stdio"], {
+        stdio: "inherit",
+      });
     } else {
       const url = `http://${opts.host}:${opts.port}/mcp`;
-      execSync(`claude mcp add mayros -s http --url ${JSON.stringify(url)}`, { stdio: "inherit" });
+      execFileSync("claude", ["mcp", "add", "mayros", "-s", "http", "--url", url], {
+        stdio: "inherit",
+      });
     }
     console.log("Mayros registered with Claude Code.");
   } catch {

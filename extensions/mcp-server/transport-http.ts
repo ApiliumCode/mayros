@@ -31,6 +31,8 @@ export type HttpTransportOptions = {
 // Transport
 // ============================================================================
 
+const MAX_SSE_SESSIONS = 50;
+
 export class McpHttpTransport {
   private readonly dispatcher: McpProtocolDispatcher;
   private readonly port: number;
@@ -160,6 +162,12 @@ export class McpHttpTransport {
 
     // MCP endpoint
     if (url === "/mcp" && method === "POST") {
+      const ct = req.headers["content-type"] ?? "";
+      if (!ct.includes("application/json")) {
+        res.writeHead(415, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Content-Type must be application/json" }));
+        return;
+      }
       await this.handleMcpPost(req, res);
       return;
     }
@@ -178,6 +186,12 @@ export class McpHttpTransport {
 
     // Legacy SSE session POST endpoint
     if (url.startsWith("/mcp/session/") && method === "POST") {
+      const ct = req.headers["content-type"] ?? "";
+      if (!ct.includes("application/json")) {
+        res.writeHead(415, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Content-Type must be application/json" }));
+        return;
+      }
       await this.handleLegacySsePost(url, req, res);
       return;
     }
@@ -218,6 +232,11 @@ export class McpHttpTransport {
   }
 
   private handleMcpSse(res: ServerResponse): void {
+    if (this.sseSessions.size >= MAX_SSE_SESSIONS) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Too many SSE sessions" }));
+      return;
+    }
     const sessionId = `mcp-sse-${randomUUID()}`;
 
     res.writeHead(200, {
@@ -248,6 +267,11 @@ export class McpHttpTransport {
   }
 
   private handleLegacySse(res: ServerResponse): void {
+    if (this.sseSessions.size >= MAX_SSE_SESSIONS) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Too many SSE sessions" }));
+      return;
+    }
     const sessionId = randomUUID();
     const postUrl = `/mcp/session/${sessionId}`;
 
@@ -323,11 +347,15 @@ export class McpHttpTransport {
   }
 
   private setCorsHeaders(req: IncomingMessage, res: ServerResponse): void {
-    const origin = req.headers.origin ?? "*";
-    const allowed =
-      this.allowedOrigins.length === 0 ||
-      this.allowedOrigins.includes("*") ||
-      this.allowedOrigins.includes(origin);
+    const origin = req.headers.origin;
+
+    // No Origin header = same-origin or non-browser request — always allowed
+    if (!origin) return;
+
+    // If no origins configured, deny cross-origin requests (secure default)
+    if (this.allowedOrigins.length === 0) return;
+
+    const allowed = this.allowedOrigins.includes("*") || this.allowedOrigins.includes(origin);
 
     if (allowed) {
       res.setHeader("Access-Control-Allow-Origin", origin);
