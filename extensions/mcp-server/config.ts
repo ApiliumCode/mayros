@@ -50,7 +50,7 @@ export type McpServerConfig = {
 
 const DEFAULT_NAMESPACE = "mayros";
 const DEFAULT_TRANSPORT: McpServerTransportMode = "stdio";
-const DEFAULT_PORT = 3100;
+const DEFAULT_PORT = 19100;
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_SERVER_NAME = "mayros";
 const DEFAULT_SERVER_VERSION = "0.1.0";

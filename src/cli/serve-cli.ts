@@ -19,21 +19,57 @@ export function registerServeCli(program: Command): void {
     .description("Start MCP server to expose Mayros tools, resources, and prompts")
     .option("--stdio", "Use stdio transport (for IDE integration)")
     .option("--http", "Use HTTP transport (for remote clients)")
-    .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+    .option("--port <port>", "HTTP port (default: 19100)", parseInt)
     .option("--host <host>", "HTTP host (default: 127.0.0.1)")
     .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
       const { McpServer } = await import("../../extensions/mcp-server/server.js");
       const { mcpServerConfigSchema } = await import("../../extensions/mcp-server/config.js");
 
       const transport = opts.stdio ? ("stdio" as const) : ("http" as const);
-      const port = opts.port ?? 3100;
-      const host = opts.host ?? "127.0.0.1";
 
       const config = mcpServerConfigSchema.parse({
         transport,
-        port,
-        host,
+        ...(opts.port != null && { port: opts.port }),
+        ...(opts.host != null && { host: opts.host }),
       });
+
+      // Auto-start Cortex sidecar
+      let sidecar: { stop: () => Promise<void> } | null = null;
+      try {
+        const { CortexSidecar } =
+          (await import("../../extensions/memory-semantic/cortex-sidecar.js")) as {
+            CortexSidecar: new (cfg: unknown) => {
+              start: () => Promise<boolean>;
+              stop: () => Promise<void>;
+            };
+          };
+        const instance = new CortexSidecar(config.cortex);
+        const started = await instance.start();
+        if (started) {
+          sidecar = instance;
+          process.stderr.write("Cortex sidecar started\n");
+        }
+      } catch {
+        // Cortex sidecar not available
+      }
+
+      // Load dedicated MCP tools
+      const cortexPort = config.cortex?.port ?? 19090;
+      const cortexBase = `http://127.0.0.1:${cortexPort}`;
+      const ns = config.agentNamespace || "mayros";
+
+      const { createMemoryTools } = await import("../../extensions/mcp-server/memory-tools.js");
+      const { createBudgetTools } = await import("../../extensions/mcp-server/budget-tools.js");
+      const { createGovernanceTools } =
+        await import("../../extensions/mcp-server/governance-tools.js");
+      const { createCortexTools } = await import("../../extensions/mcp-server/cortex-tools.js");
+
+      const tools = [
+        ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+        ...createBudgetTools(),
+        ...createGovernanceTools(),
+        ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+      ];
 
       // Discover agents
       let agentInfos: Array<{
@@ -64,7 +100,7 @@ export function registerServeCli(program: Command): void {
 
       const server = new McpServer({
         config,
-        tools: [],
+        tools,
         resourceSources: {
           listAgents: () => agentInfos,
           getAgent: (id) => agentInfos.find((a) => a.id === id) ?? null,
@@ -93,6 +129,16 @@ export function registerServeCli(program: Command): void {
 
       await server.start();
 
+      // Shutdown handler: stop server + sidecar
+      const shutdown = () => {
+        void (async () => {
+          if (sidecar) await sidecar.stop();
+          await server.stop();
+        })();
+      };
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
+
       if (transport !== "stdio") {
         const status = server.status();
         process.stderr.write(
@@ -102,13 +148,37 @@ export function registerServeCli(program: Command): void {
         );
 
         await new Promise<void>((resolve) => {
-          process.on("SIGINT", () => {
-            void server.stop().then(resolve);
-          });
-          process.on("SIGTERM", () => {
-            void server.stop().then(resolve);
-          });
+          process.on("SIGINT", resolve);
+          process.on("SIGTERM", resolve);
         });
       }
     });
+}
+
+export function registerMcpSetupCli(program: Command): void {
+  program
+    .command("mcp-setup")
+    .description("Register Mayros as an MCP server in Claude (Code or Desktop)")
+    .option("--desktop", "Configure Claude Desktop (writes config file)")
+    .option("--stdio", "Use stdio transport (default)")
+    .option("--http", "Use HTTP transport (connect to pre-running server)")
+    .option("--port <port>", "HTTP port (default: 19100)", parseInt)
+    .option("--host <host>", "HTTP host (default: 127.0.0.1)")
+    .action(
+      async (opts: {
+        desktop?: boolean;
+        stdio?: boolean;
+        http?: boolean;
+        port?: number;
+        host?: string;
+      }) => {
+        const { setupClaudeCodeMcp } = await import("../../extensions/mcp-server/setup-claude.js");
+        await setupClaudeCodeMcp({
+          port: opts.port ?? 19100,
+          host: opts.host ?? "127.0.0.1",
+          transport: opts.http ? "http" : "stdio",
+          target: opts.desktop ? "desktop" : "code",
+        });
+      },
+    );
 }

@@ -181,12 +181,14 @@ export class McpServer {
   }
 
   private async startHttp(): Promise<void> {
+    const cortexHealthUrl = `http://${this.config.cortex.host}:${this.config.cortex.port}/api/v1/health`;
     this.httpTransport = new McpHttpTransport({
       dispatcher: this.dispatcher,
       port: this.config.port,
       host: this.config.host,
       authToken: this.config.auth.token,
       allowedOrigins: this.config.auth.allowedOrigins,
+      cortexHealthUrl,
       onError: (err) => {
         this.logger.error(`[mcp-server:http] ${err.message}`);
       },

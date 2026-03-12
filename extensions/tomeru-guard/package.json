@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-tomeru-guard",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Mayros rate limiting and loop breaking plugin — prevents runaway tool execution",
   "type": "module",

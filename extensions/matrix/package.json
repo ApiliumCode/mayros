@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-matrix",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Mayros Matrix channel plugin",
   "license": "MIT",
   "type": "module",

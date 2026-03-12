@@ -17,12 +17,7 @@ import type { MayrosPluginApi, MayrosPluginToolContext } from "@apilium/mayros";
 import { mcpServerConfigSchema, type McpServerConfig } from "./config.js";
 import { McpServer, type McpServerOptions } from "./server.js";
 import type { AdaptableTool } from "./tool-adapter.js";
-import type {
-  ResourceDataSources,
-  AgentInfo,
-  ConventionInfo,
-  RuleInfo,
-} from "./resource-provider.js";
+import type { ResourceDataSources, AgentInfo } from "./resource-provider.js";
 import type { PromptDataSources } from "./prompt-provider.js";
 
 // ============================================================================
@@ -47,9 +42,7 @@ const mcpServerPlugin = {
         // at module load time. resolvePluginTools discovers all registered
         // plugin tools for the given context and returns AnyAgentTool[].
         const { resolvePluginTools } = (await import("../../src/plugins/tools.js")) as {
-          resolvePluginTools: (params: {
-            context: MayrosPluginToolContext;
-          }) => Array<{
+          resolvePluginTools: (params: { context: MayrosPluginToolContext }) => Array<{
             name: string;
             label?: string;
             description?: string;
@@ -154,7 +147,7 @@ const mcpServerPlugin = {
       serve
         .option("--stdio", "Use stdio transport (for IDE integration)")
         .option("--http", "Use HTTP transport (for remote clients)")
-        .option("--port <port>", "HTTP port (default: 3100)", parseInt)
+        .option("--port <port>", "HTTP port (default: 19100)", parseInt)
         .option("--host <host>", "HTTP host (default: 127.0.0.1)")
         .action(async (opts: { stdio?: boolean; http?: boolean; port?: number; host?: string }) => {
           const transport = opts.stdio ? "stdio" : opts.http ? "http" : cfg.transport;
@@ -168,10 +161,53 @@ const mcpServerPlugin = {
             host,
           };
 
-          const tools = await collectTools({});
+          // Auto-start Cortex sidecar for memory and graph tools
+          let sidecar: { stop: () => Promise<void> } | null = null;
+          try {
+            const { CortexSidecar } = (await import("../memory-semantic/cortex-sidecar.js")) as {
+              CortexSidecar: new (cfg: unknown) => {
+                start: () => Promise<boolean>;
+                stop: () => Promise<void>;
+              };
+            };
+            const instance = new CortexSidecar(serverCfg.cortex);
+            const started = await instance.start();
+            if (started) {
+              sidecar = instance;
+              api.logger.info("Cortex sidecar started for MCP server");
+            } else {
+              api.logger.warn("Cortex sidecar failed to start — memory tools will be unavailable");
+            }
+          } catch (err) {
+            api.logger.warn(`Cortex sidecar not available: ${String(err)}`);
+          }
+
+          // Collect auto-discovered plugin tools
+          const pluginTools = await collectTools({});
+
+          // Register dedicated MCP tools
+          const cortexPort = cfg.cortex?.port ?? 19090;
+          const cortexBase = `http://127.0.0.1:${cortexPort}`;
+          const ns = serverCfg.agentNamespace || "mayros";
+
+          const { createMemoryTools } = await import("./memory-tools.js");
+          const { createBudgetTools } = await import("./budget-tools.js");
+          const { createGovernanceTools } = await import("./governance-tools.js");
+          const { createCortexTools } = await import("./cortex-tools.js");
+
+          const mcpTools: AdaptableTool[] = [
+            ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+            ...createBudgetTools(),
+            ...createGovernanceTools(),
+            ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+          ];
+
+          // Combine: dedicated MCP tools first, then auto-discovered plugin tools
+          const allTools = [...mcpTools, ...pluginTools];
+
           const serverOpts: McpServerOptions = {
             config: serverCfg,
-            tools,
+            tools: allTools,
             resourceSources,
             promptSources,
             logger: {
@@ -184,6 +220,16 @@ const mcpServerPlugin = {
           server = new McpServer(serverOpts);
           await server.start();
 
+          // Register shutdown handler for sidecar cleanup
+          const shutdown = () => {
+            void (async () => {
+              if (sidecar) await sidecar.stop();
+              await server?.stop();
+            })();
+          };
+          process.on("SIGINT", shutdown);
+          process.on("SIGTERM", shutdown);
+
           if (transport !== "stdio") {
             const status = server.status();
             api.logger.info(
@@ -191,15 +237,38 @@ const mcpServerPlugin = {
             );
             // Keep process alive for HTTP mode
             await new Promise<void>((resolve) => {
-              process.on("SIGINT", () => {
-                void server?.stop().then(resolve);
-              });
-              process.on("SIGTERM", () => {
-                void server?.stop().then(resolve);
-              });
+              process.on("SIGINT", resolve);
+              process.on("SIGTERM", resolve);
             });
           }
         });
+
+      // mcp-setup command
+      program
+        .command("mcp-setup")
+        .description("Register Mayros as an MCP server in Claude (Code or Desktop)")
+        .option("--desktop", "Configure Claude Desktop (writes config file)")
+        .option("--stdio", "Use stdio transport (default)")
+        .option("--http", "Use HTTP transport (connect to pre-running server)")
+        .option("--port <port>", "HTTP port (default: 19100)", parseInt)
+        .option("--host <host>", "HTTP host (default: 127.0.0.1)")
+        .action(
+          async (opts: {
+            desktop?: boolean;
+            stdio?: boolean;
+            http?: boolean;
+            port?: number;
+            host?: string;
+          }) => {
+            const { setupClaudeCodeMcp } = await import("./setup-claude.js");
+            await setupClaudeCodeMcp({
+              port: opts.port ?? cfg.port,
+              host: opts.host ?? cfg.host,
+              transport: opts.http ? "http" : "stdio",
+              target: opts.desktop ? "desktop" : "code",
+            });
+          },
+        );
     });
 
     // ── Register service lifecycle ──────────────────────────────────
@@ -247,7 +316,7 @@ const mcpServerPlugin = {
               });
               return res.matches.map((m) => ({
                 id: m.subject.split(":").pop() ?? "",
-                text: String(m.object),
+                text: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 category: "general",
                 source: "cortex",
                 confidence: 1,
@@ -291,7 +360,8 @@ const mcpServerPlugin = {
               if (!match) return null;
               return {
                 id,
-                text: String(match.object),
+                text:
+                  typeof match.object === "string" ? match.object : JSON.stringify(match.object),
                 category: "general",
                 source: "cortex",
                 confidence: 1,
@@ -311,7 +381,7 @@ const mcpServerPlugin = {
               });
               return res.matches.map((m) => ({
                 id: m.subject.split(":").pop() ?? "",
-                content: String(m.object),
+                content: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 scope: "global",
                 priority: 0,
                 source: "cortex",
@@ -332,7 +402,8 @@ const mcpServerPlugin = {
               if (!match) return null;
               return {
                 id,
-                content: String(match.object),
+                content:
+                  typeof match.object === "string" ? match.object : JSON.stringify(match.object),
                 scope: "global",
                 priority: 0,
                 source: "cortex",
@@ -354,7 +425,7 @@ const mcpServerPlugin = {
                 predicate: `${ns}:rule:content`,
               });
               return res.matches.map((m) => ({
-                content: String(m.object),
+                content: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 scope,
                 priority: 0,
               }));

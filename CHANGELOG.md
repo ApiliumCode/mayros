@@ -4,9 +4,54 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.1.15 (2026-03-12)
+
+MCP Server production-ready, Claude Desktop and Claude Code integration, documentation, and product page update.
+
+### MCP Server
+
+- 9 tools exposed via Model Context Protocol: memory (remember, recall, search, forget), budget, governance, cortex (query, store, stats)
+- Cortex sidecar auto-starts on `mayros serve`, persistent storage at `~/.mayros/cortex-data/`
+- Dual transport: `--stdio` for IDE/Claude Desktop, `--http` for remote clients
+- Default port aligned to Mayros convention: 19100
+
+### MCP Setup
+
+- `mayros mcp-setup` — one-command registration for Claude Code (stdio or HTTP)
+- `mayros mcp-setup --desktop` — auto-configures Claude Desktop config file
+- Resolves absolute paths to `node` and `mayros.mjs` for Claude Desktop compatibility
+- Cross-platform config detection: macOS, Windows, Linux
+
+### Documentation
+
+- New: `tools/mcp-server.mdx` — architecture, 9 tools reference, setup guides, configuration
+- New: `cli/mcp-setup.mdx` — CLI reference with options and platform-specific paths
+- Updated: `cli/serve.mdx` — port 19100, tools table, Cortex sidecar section
+- Updated: `README.md` — step-by-step MCP setup guides, usage examples
+
+### Product Page
+
+- New capability cards: Intelligent Model Routing (Q-learning) and Policy Enforcement (governance)
+- Updated capabilities: HNSW vector search, Byzantine consensus, response caching, budget tracking
+- Updated architecture layers: Q-learning routing, governance gates, MCP Server, WASM transforms
+- Security layers expanded from 6 to 10 (governance gates, HMAC audit trail, trust tiers, rate limiting)
+- Updated numbers: 67 extensions, 75+ CLI commands, 20 security layers
+- FAQ updated with MCP server and HNSW references
+
+### Badges
+
+- MCP Compatible badge (shields.io)
+- Works with Claude badge (Anthropic logo)
+
+### Infrastructure
+
+- Require AIngle Cortex >= 0.4.3
+
+---
+
 ## 0.1.14 (2026-03-11)
 
-Intelligent routing, multi-agent consensus, and execution safety.
+Intelligent routing, multi-agent consensus, execution safety, code transforms, governance, dual-platform coordination, and MCP server enhancements.
 
 ### Eruberu — Adaptive Model Routing
 
@@ -54,10 +99,50 @@ Intelligent routing, multi-agent consensus, and execution safety.
 - `buildFromPricingCatalog()`: construct router from token-economy pricing catalog
 - `routeWithBudget()`: budget-aware routing that filters by remaining spend
 
+### Hayameru — WASM Code Transforms
+
+- Deterministic code transforms that bypass LLM for simple edits (0 tokens, sub-millisecond)
+- Intent detector: keyword-based prompt classification with confidence scoring
+- 5 transforms: var→const, remove console, sort imports, add semicolons, remove comments
+- Path safety validation and atomic file writes
+- Integrates via `before_agent_run` hook — short-circuits LLM when confidence is high
+- Metrics tracking: token savings, transform counts, timing
+
+### Kimeru — Byzantine & Raft Consensus
+
+- Byzantine fault tolerance: HMAC-SHA256 signed votes, PBFT phases (pre-prepare → prepare → commit)
+- Quorum math: 2f+1 agreement required, minimum 4 agents, auto-fallback to weighted
+- Raft leader election: highest EMA score wins, majority follower confirmation
+- Re-election support with agent exclusion
+
+### Osameru — Governance Control Plane
+
+- Policy compiler: parses MAYROS.md for ALLOW/DENY/REQUIRE-APPROVAL rules
+- Enforcement gate: evaluates tool calls, agent starts, and content against policy bundle
+- HMAC-signed append-only audit trail with hash chain integrity verification
+- Trust tiers: 3-level system (new → established → trusted) based on EMA performance scores
+- Configurable modes: enforce, warn, audit-only, off
+
+### Kakeru — Dual-Platform Bridge
+
+- Platform bridge interface for heterogeneous agent coordination
+- Claude bridge: native subagent integration (always connected)
+- Codex bridge: subprocess-based OpenAI Codex CLI integration with git branch isolation
+- Coordinator: parallel task execution, file lock coordination, branch management
+
+### MCP Server Enhancements
+
+- 9 dedicated MCP tools: remember, recall, search, forget, budget, policy_check, cortex_query, cortex_store, memory_stats
+- Auto-start Cortex sidecar when running `mayros serve`
+- Legacy SSE transport (MCP spec 2024-11-05) for Claude Desktop compatibility
+- `mayros mcp-setup` command for one-step registration in Claude Code
+- Enhanced health endpoint with Cortex sidecar status
+
 ### Infrastructure
 
 - 55 extensions synced at v0.1.14
-- 55 new tests across 7 test files (Q-Learning, task classification, routing, performance tracking, consensus, rate limiting, loop breaking)
+- 112 Phase 2 tests across 16 test files (transforms, intent detection, Byzantine consensus, Raft election, policy compilation, audit trail, trust tiers, enforcement, platform coordination)
+- 55 Phase 1 tests across 7 test files (Q-Learning, task classification, routing, performance tracking, consensus, rate limiting, loop breaking)
 - Auto-release workflow: GitHub Releases created automatically on version tags
 
 ## 0.1.13 (2026-03-08)

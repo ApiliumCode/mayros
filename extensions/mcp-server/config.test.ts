@@ -6,7 +6,7 @@ describe("mcpServerConfigSchema", () => {
   it("parses minimal config with defaults", () => {
     const cfg = mcpServerConfigSchema.parse({});
     expect(cfg.transport).toBe("stdio");
-    expect(cfg.port).toBe(3100);
+    expect(cfg.port).toBe(19100);
     expect(cfg.host).toBe("127.0.0.1");
     expect(cfg.serverName).toBe("mayros");
     expect(cfg.serverVersion).toBe("0.1.0");
@@ -62,7 +62,7 @@ describe("mcpServerConfigSchema", () => {
   it("parses null/undefined as defaults", () => {
     const cfg = mcpServerConfigSchema.parse(null);
     expect(cfg.transport).toBe("stdio");
-    expect(cfg.port).toBe(3100);
+    expect(cfg.port).toBe(19100);
   });
 
   // 7

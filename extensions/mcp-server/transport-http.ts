@@ -9,6 +9,7 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { McpProtocolDispatcher } from "./protocol.js";
 
 // ============================================================================
@@ -21,6 +22,7 @@ export type HttpTransportOptions = {
   host: string;
   authToken?: string;
   allowedOrigins: string[];
+  cortexHealthUrl?: string;
   onError?: (err: Error) => void;
   onRequest?: (method: string, path: string) => void;
 };
@@ -35,9 +37,11 @@ export class McpHttpTransport {
   private readonly host: string;
   private readonly authToken?: string;
   private readonly allowedOrigins: string[];
+  private readonly cortexHealthUrl: string;
   private readonly onError?: (err: Error) => void;
   private readonly onRequest?: (method: string, path: string) => void;
   private server: Server | null = null;
+  private sseSessions = new Map<string, ServerResponse>();
 
   constructor(options: HttpTransportOptions) {
     this.dispatcher = options.dispatcher;
@@ -45,6 +49,7 @@ export class McpHttpTransport {
     this.host = options.host;
     this.authToken = options.authToken;
     this.allowedOrigins = options.allowedOrigins;
+    this.cortexHealthUrl = options.cortexHealthUrl ?? "http://127.0.0.1:19090/api/v1/health";
     this.onError = options.onError;
     this.onRequest = options.onRequest;
   }
@@ -69,6 +74,12 @@ export class McpHttpTransport {
 
   /** Stop the HTTP server. */
   async stop(): Promise<void> {
+    // Close all active SSE sessions
+    for (const [id, res] of this.sseSessions) {
+      if (!res.destroyed) res.end();
+      this.sseSessions.delete(id);
+    }
+
     return new Promise<void>((resolve) => {
       if (!this.server) {
         resolve();
@@ -119,10 +130,24 @@ export class McpHttpTransport {
 
     this.setCorsHeaders(req, res);
 
-    // Health check
+    // Health check (enhanced with Cortex status)
     if (url === "/health" && method === "GET") {
+      let cortexHealthy = false;
+      try {
+        const cortexRes = await fetch(this.cortexHealthUrl);
+        cortexHealthy = cortexRes.ok;
+      } catch {
+        /* Cortex not available */
+      }
+
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", transport: "streamable-http" }));
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          transport: "streamable-http",
+          cortex: cortexHealthy ? "healthy" : "unavailable",
+        }),
+      );
       return;
     }
 
@@ -135,6 +160,18 @@ export class McpHttpTransport {
     // SSE endpoint (for future server-initiated notifications)
     if (url === "/mcp" && method === "GET") {
       this.handleMcpSse(res);
+      return;
+    }
+
+    // Legacy SSE transport (Claude Desktop compatibility — MCP spec 2024-11-05)
+    if (url === "/sse" && method === "GET") {
+      this.handleLegacySse(res);
+      return;
+    }
+
+    // Legacy SSE session POST endpoint
+    if (url.startsWith("/mcp/session/") && method === "POST") {
+      await this.handleLegacySsePost(url, req, res);
       return;
     }
 
@@ -195,6 +232,81 @@ export class McpHttpTransport {
     res.on("close", () => {
       clearInterval(keepAlive);
     });
+  }
+
+  private handleLegacySse(res: ServerResponse): void {
+    const sessionId = randomUUID();
+    const postUrl = `/mcp/session/${sessionId}`;
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    // Send endpoint URL per legacy MCP SSE spec
+    res.write(`event: endpoint\ndata: ${postUrl}\n\n`);
+
+    // Store SSE connection for this session
+    this.sseSessions.set(sessionId, res);
+
+    // Keep alive
+    const keepAlive = setInterval(() => {
+      if (res.destroyed) {
+        clearInterval(keepAlive);
+        return;
+      }
+      res.write(": ping\n\n");
+    }, 15_000);
+
+    res.on("close", () => {
+      clearInterval(keepAlive);
+      this.sseSessions.delete(sessionId);
+    });
+  }
+
+  private async handleLegacySsePost(
+    url: string,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const sessionId = url.split("/mcp/session/")[1];
+    if (!sessionId) {
+      res.writeHead(400);
+      res.end();
+      return;
+    }
+
+    const sseRes = this.sseSessions.get(sessionId);
+    if (!sseRes || sseRes.destroyed) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "SSE session not found" }));
+      return;
+    }
+
+    try {
+      const body = await readBody(req);
+      const response = await this.dispatcher.handleMessage(body);
+
+      // Send response through the SSE stream
+      if (response) {
+        sseRes.write(`event: message\ndata: ${response}\n\n`);
+      }
+
+      // Acknowledge the POST
+      res.writeHead(202);
+      res.end();
+    } catch (err) {
+      this.onError?.(err instanceof Error ? err : new Error(String(err)));
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32603, message: "Internal server error" },
+        }),
+      );
+    }
   }
 
   private setCorsHeaders(req: IncomingMessage, res: ServerResponse): void {

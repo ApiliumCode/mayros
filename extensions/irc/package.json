@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-irc",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Mayros IRC channel plugin",
   "license": "MIT",
   "type": "module",
