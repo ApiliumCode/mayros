@@ -17,12 +17,7 @@ import type { MayrosPluginApi, MayrosPluginToolContext } from "@apilium/mayros";
 import { mcpServerConfigSchema, type McpServerConfig } from "./config.js";
 import { McpServer, type McpServerOptions } from "./server.js";
 import type { AdaptableTool } from "./tool-adapter.js";
-import type {
-  ResourceDataSources,
-  AgentInfo,
-  ConventionInfo,
-  RuleInfo,
-} from "./resource-provider.js";
+import type { ResourceDataSources, AgentInfo } from "./resource-provider.js";
 import type { PromptDataSources } from "./prompt-provider.js";
 
 // ============================================================================
@@ -311,7 +306,7 @@ const mcpServerPlugin = {
               });
               return res.matches.map((m) => ({
                 id: m.subject.split(":").pop() ?? "",
-                text: String(m.object),
+                text: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 category: "general",
                 source: "cortex",
                 confidence: 1,
@@ -355,7 +350,8 @@ const mcpServerPlugin = {
               if (!match) return null;
               return {
                 id,
-                text: String(match.object),
+                text:
+                  typeof match.object === "string" ? match.object : JSON.stringify(match.object),
                 category: "general",
                 source: "cortex",
                 confidence: 1,
@@ -375,7 +371,7 @@ const mcpServerPlugin = {
               });
               return res.matches.map((m) => ({
                 id: m.subject.split(":").pop() ?? "",
-                content: String(m.object),
+                content: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 scope: "global",
                 priority: 0,
                 source: "cortex",
@@ -396,7 +392,8 @@ const mcpServerPlugin = {
               if (!match) return null;
               return {
                 id,
-                content: String(match.object),
+                content:
+                  typeof match.object === "string" ? match.object : JSON.stringify(match.object),
                 scope: "global",
                 priority: 0,
                 source: "cortex",
@@ -418,7 +415,7 @@ const mcpServerPlugin = {
                 predicate: `${ns}:rule:content`,
               });
               return res.matches.map((m) => ({
-                content: String(m.object),
+                content: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
                 scope,
                 priority: 0,
               }));
