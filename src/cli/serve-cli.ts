@@ -38,19 +38,23 @@ export function registerServeCli(program: Command): void {
       try {
         const { CortexSidecar } =
           (await import("../../extensions/memory-semantic/cortex-sidecar.js")) as {
-            CortexSidecar: new (cfg: unknown) => {
+            CortexSidecar: new (
+              cfg: unknown,
+              opts?: { skipSignalHandlers?: boolean },
+            ) => {
               start: () => Promise<boolean>;
               stop: () => Promise<void>;
             };
           };
-        const instance = new CortexSidecar(config.cortex);
+        // skipSignalHandlers: serve-cli manages shutdown, sidecar must not steal SIGINT/SIGTERM
+        const instance = new CortexSidecar(config.cortex, { skipSignalHandlers: true });
         const started = await instance.start();
         if (started) {
           sidecar = instance;
           process.stderr.write("Cortex sidecar started\n");
         }
-      } catch {
-        // Cortex sidecar not available
+      } catch (err: unknown) {
+        process.stderr.write(`WARN: Cortex sidecar not available: ${String(err)}\n`);
       }
 
       // Load dedicated MCP tools
@@ -94,8 +98,8 @@ export function registerServeCli(program: Command): void {
           identity: a.identity,
           origin: a.origin,
         }));
-      } catch {
-        // Agent discovery not available
+      } catch (err: unknown) {
+        process.stderr.write(`WARN: Agent discovery not available: ${String(err)}\n`);
       }
 
       const server = new McpServer({
@@ -129,15 +133,25 @@ export function registerServeCli(program: Command): void {
 
       await server.start();
 
-      // Shutdown handler: stop server + sidecar
-      const shutdown = () => {
-        void (async () => {
-          if (sidecar) await sidecar.stop();
-          await server.stop();
+      // Shutdown handler: stop server + sidecar (both must run even if one fails).
+      // Cache the promise so concurrent signals reuse the same shutdown sequence.
+      let shutdownPromise: Promise<void> | null = null;
+      const shutdown = (): Promise<void> => {
+        if (shutdownPromise) return shutdownPromise;
+        shutdownPromise = (async () => {
+          try {
+            await server.stop();
+          } catch (err: unknown) {
+            process.stderr.write(`ERROR stopping server: ${String(err)}\n`);
+          }
+          try {
+            if (sidecar) await sidecar.stop();
+          } catch (err: unknown) {
+            process.stderr.write(`ERROR stopping sidecar: ${String(err)}\n`);
+          }
         })();
+        return shutdownPromise;
       };
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
 
       if (transport !== "stdio") {
         const status = server.status();
@@ -148,9 +162,23 @@ export function registerServeCli(program: Command): void {
         );
 
         await new Promise<void>((resolve) => {
-          process.on("SIGINT", resolve);
-          process.on("SIGTERM", resolve);
+          const onSignal = () => {
+            void shutdown().finally(resolve);
+          };
+          process.once("SIGINT", onSignal);
+          process.once("SIGTERM", onSignal);
         });
+        process.exit(0);
+      } else {
+        const onSignal = () => {
+          void shutdown()
+            .catch((e: unknown) => {
+              process.stderr.write(`ERROR during shutdown: ${String(e)}\n`);
+            })
+            .finally(() => process.exit(0));
+        };
+        process.once("SIGINT", onSignal);
+        process.once("SIGTERM", onSignal);
       }
     });
 }

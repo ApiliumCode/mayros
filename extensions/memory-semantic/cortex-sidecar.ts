@@ -21,6 +21,11 @@ import { CortexClient } from "./cortex-client.js";
 
 export type SidecarStatus = "stopped" | "starting" | "running" | "failed";
 
+export type SidecarOptions = {
+  /** When true, skip registering process signal handlers (caller manages shutdown). */
+  skipSignalHandlers?: boolean;
+};
+
 export class CortexSidecar {
   private process: ChildProcess | null = null;
   private _status: SidecarStatus = "stopped";
@@ -30,11 +35,16 @@ export class CortexSidecar {
   private stopping = false;
   private lockPath: string | null = null;
   private stderrBuffer: string[] = [];
+  private readonly skipSignalHandlers: boolean;
   private static readonly MAX_RESTARTS = 3;
   private static readonly STDERR_BUFFER_SIZE = 50;
 
-  constructor(private readonly config: CortexConfig) {
+  constructor(
+    private readonly config: CortexConfig,
+    options?: SidecarOptions,
+  ) {
     this.client = new CortexClient(config);
+    this.skipSignalHandlers = options?.skipSignalHandlers ?? false;
   }
 
   get status(): SidecarStatus {
@@ -346,12 +356,15 @@ export class CortexSidecar {
       this.restartCount = 0; // reset for future crashes
 
       // Register process signal handlers for graceful sidecar shutdown
-      const cleanup = () => {
-        void this.stop();
-      };
-      for (const signal of ["SIGTERM", "SIGINT", "beforeExit"] as const) {
-        process.once(signal, cleanup);
-        this.signalHandlers.set(signal, cleanup);
+      // (skipped when caller manages shutdown, e.g. serve-cli)
+      if (!this.skipSignalHandlers) {
+        const cleanup = () => {
+          void this.stop();
+        };
+        for (const signal of ["SIGTERM", "SIGINT", "beforeExit"] as const) {
+          process.once(signal, cleanup);
+          this.signalHandlers.set(signal, cleanup);
+        }
       }
     } else {
       this._status = "failed";

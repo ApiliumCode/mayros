@@ -135,6 +135,11 @@ export const mcpServerConfigSchema = {
     }
 
     const host = typeof cfg.host === "string" ? cfg.host : DEFAULT_HOST;
+    if (!/^[a-zA-Z0-9._-]+$/.test(host)) {
+      throw new Error(
+        `Invalid host: "${host}". Must contain only alphanumeric, dots, hyphens, or underscores.`,
+      );
+    }
 
     const auth = parseAuthConfig(cfg.auth);
     const capabilities = parseCapabilities(cfg.capabilities);

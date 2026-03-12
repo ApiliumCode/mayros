@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { homedir, platform } from "node:os";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -39,15 +39,35 @@ export async function setupClaudeCodeMcp(opts: SetupClaudeOpts): Promise<void> {
 
 // ── Claude Code ────────────────────────────────────────────────────
 
+function validateHost(host: string): boolean {
+  return /^[a-zA-Z0-9._-]+$/.test(host);
+}
+
 function setupCode(opts: SetupClaudeOpts): void {
   const transport = opts.transport ?? "stdio";
 
+  if (!validateHost(opts.host)) {
+    console.error(
+      `Invalid host: "${opts.host}". Must contain only alphanumeric, dots, hyphens, or underscores.`,
+    );
+    return;
+  }
+
+  if (!Number.isFinite(opts.port) || opts.port < 1 || opts.port > 65535) {
+    console.error(`Invalid port: ${String(opts.port)}. Must be 1-65535.`);
+    return;
+  }
+
   try {
     if (transport === "stdio") {
-      execSync("claude mcp add mayros -- mayros serve --stdio", { stdio: "inherit" });
+      execFileSync("claude", ["mcp", "add", "mayros", "--", "mayros", "serve", "--stdio"], {
+        stdio: "inherit",
+      });
     } else {
       const url = `http://${opts.host}:${opts.port}/mcp`;
-      execSync(`claude mcp add mayros -s http --url ${url}`, { stdio: "inherit" });
+      execFileSync("claude", ["mcp", "add", "mayros", "-s", "http", "--url", url], {
+        stdio: "inherit",
+      });
     }
     console.log("Mayros registered with Claude Code.");
   } catch {
@@ -126,11 +146,15 @@ function getDesktopConfigPath(): string | null {
 }
 
 function resolveNodePath(): string | null {
+  const os = platform();
   try {
-    return execSync("which node", { encoding: "utf-8" }).trim();
+    const cmd = os === "win32" ? "where node" : "which node";
+    return execSync(cmd, { encoding: "utf-8" }).trim().split("\n")[0];
   } catch {
-    // Fallback common paths
-    const candidates = ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"];
+    const candidates =
+      os === "win32"
+        ? ["C:\\Program Files\\nodejs\\node.exe", "C:\\Program Files (x86)\\nodejs\\node.exe"]
+        : ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"];
     return candidates.find((p) => existsSync(p)) ?? null;
   }
 }
