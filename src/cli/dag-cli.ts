@@ -56,7 +56,7 @@ export function registerDagCli(program: Command) {
     .command("dag")
     .description("Semantic DAG — audit, time-travel, and history")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)");
 
   // ------------------------------------------------------------------

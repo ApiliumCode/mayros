@@ -6,7 +6,7 @@
  *   1. CLI flags (--cortex-host, --cortex-port, --cortex-token)
  *   2. Environment variables (CORTEX_HOST, CORTEX_PORT, CORTEX_AUTH_TOKEN)
  *   3. Plugin config from mayros.yaml
- *   4. Defaults (127.0.0.1:8080)
+ *   4. Defaults (127.0.0.1:19090)
  */
 
 import { parseCortexConfig } from "../../../extensions/shared/cortex-config.js";
@@ -22,7 +22,7 @@ export type CortexCliOpts = {
 export type ResolveCortexOptions = {
   /** Plugin name(s) to check in config. First match wins. */
   pluginName?: string | string[];
-  /** Default port when no config/env/flag is set (default: 8080). */
+  /** Default port when no config/env/flag is set (default: 19090). */
   defaultPort?: number;
 };
 
@@ -36,7 +36,7 @@ export function resolveCortexClient(
   opts: CortexCliOpts,
   options?: ResolveCortexOptions,
 ): CortexClient {
-  const defaultPort = options?.defaultPort ?? 8080;
+  const defaultPort = options?.defaultPort ?? 19090;
   const pluginNames = options?.pluginName
     ? Array.isArray(options.pluginName)
       ? options.pluginName

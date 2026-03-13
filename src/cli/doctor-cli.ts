@@ -348,7 +348,7 @@ export function registerDoctorCli(program: Command) {
     .command("diagnose")
     .description("Diagnostic checks — runtime, Cortex, plugins, security, config")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)")
     .option("--json", "Output as JSON");
 

@@ -26,7 +26,7 @@ export function registerTasksCli(program: Command) {
     .command("tasks")
     .description("Background tasks — list, inspect, and manage background agent tasks")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)");
 
   // ---- list ----
