@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-code-indexer",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Mayros code indexer plugin — regex-based codebase scanning with RDF triple storage in Cortex",
   "type": "module",
