@@ -4,7 +4,6 @@ import {
   type ResourceDataSources,
   type AgentInfo,
 } from "./resource-provider.js";
-import { ErrorCodes } from "./protocol.js";
 
 // ── Mock data ─────────────────────────────────────────────────────────
 

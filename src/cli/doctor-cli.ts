@@ -14,7 +14,6 @@
 
 import { execSync } from "node:child_process";
 import type { Command } from "commander";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { REQUIRED_CORTEX_VERSION } from "../../extensions/shared/cortex-version.js";
 import { resolveCortexClient } from "./shared/cortex-resolution.js";
 import { detectRuntime, runtimeSatisfies, parseSemver, isAtLeast } from "../infra/runtime-guard.js";

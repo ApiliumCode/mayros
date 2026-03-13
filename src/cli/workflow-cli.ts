@@ -17,10 +17,7 @@ import { KnowledgeFusion } from "../../extensions/agent-mesh/knowledge-fusion.js
 import { NamespaceManager } from "../../extensions/agent-mesh/namespace-manager.js";
 import { TeamManager } from "../../extensions/agent-mesh/team-manager.js";
 import { WorkflowOrchestrator } from "../../extensions/agent-mesh/workflow-orchestrator.js";
-import {
-  listWorkflows as listWorkflowDefs,
-  getWorkflow as getWorkflowDef,
-} from "../../extensions/agent-mesh/workflows/registry.js";
+import { listWorkflows as listWorkflowDefs } from "../../extensions/agent-mesh/workflows/registry.js";
 import { parseTeamsConfig } from "../../extensions/agent-mesh/config.js";
 import { loadConfig } from "../config/config.js";
 import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";

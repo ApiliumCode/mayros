@@ -181,7 +181,10 @@ export function createDagTools(deps: DagToolDeps): AdaptableTool[] {
           if (!data.actions || data.actions.length === 0) {
             return {
               content: [
-                { type: "text" as const, text: `No DAG actions for author "${params.author}".` },
+                {
+                  type: "text" as const,
+                  text: `No DAG actions for author "${String(params.author)}".`,
+                },
               ],
             };
           }
@@ -194,7 +197,7 @@ export function createDagTools(deps: DagToolDeps): AdaptableTool[] {
             content: [
               {
                 type: "text" as const,
-                text: `${data.actions.length} action(s) by "${params.author}":\n${lines.join("\n")}`,
+                text: `${data.actions.length} action(s) by "${String(params.author)}":\n${lines.join("\n")}`,
               },
             ],
           };
@@ -249,7 +252,10 @@ export function createDagTools(deps: DagToolDeps): AdaptableTool[] {
           if (!data.actions || data.actions.length === 0) {
             return {
               content: [
-                { type: "text" as const, text: `No DAG history for subject "${params.subject}".` },
+                {
+                  type: "text" as const,
+                  text: `No DAG history for subject "${String(params.subject)}".`,
+                },
               ],
             };
           }
@@ -262,7 +268,7 @@ export function createDagTools(deps: DagToolDeps): AdaptableTool[] {
             content: [
               {
                 type: "text" as const,
-                text: `${data.actions.length} action(s) for "${params.subject}":\n${lines.join("\n")}`,
+                text: `${data.actions.length} action(s) for "${String(params.subject)}":\n${lines.join("\n")}`,
               },
             ],
           };
