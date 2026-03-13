@@ -64,6 +64,7 @@ vi.mock("../../extensions/shared/cortex-client.js", () => ({
     async p2pAddPeer(addr: string) {
       return mockState.p2pAddPeerFn(addr);
     }
+    destroy() {}
   },
 }));
 
