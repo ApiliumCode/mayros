@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-zalo",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Mayros Zalo channel plugin",
   "license": "MIT",
   "type": "module",

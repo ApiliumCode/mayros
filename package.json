@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Multi-channel AI agent framework with knowledge graph, MCP support, and coding CLI",
   "keywords": [
     "agent",
