@@ -37,7 +37,7 @@ Semantic DAG integration — full audit trail, time-travel, and verifiable histo
 
 ### Infrastructure
 
-- Require AIngle Cortex >= 0.6.0
+- Require AIngle Cortex >= 0.6.1
 - Version 0.1.16 → 0.2.0
 - Removed unused `parseWorktreeConfig` import from workflow-cli
 
