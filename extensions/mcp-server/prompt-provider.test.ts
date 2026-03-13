@@ -148,4 +148,36 @@ describe("McpPromptProvider", () => {
   it("unknown prompt throws PROMPT_NOT_FOUND", async () => {
     await expect(provider.getPrompt("nonexistent", {})).rejects.toThrow();
   });
+
+  // 17
+  it("listPrompts includes dag-audit", () => {
+    const prompts = provider.listPrompts();
+    const names = prompts.map((p) => p.name);
+    expect(names).toContain("dag-audit");
+  });
+
+  // 18
+  it("dag-audit returns audit workflow instructions", async () => {
+    const messages = await provider.getPrompt("dag-audit", {
+      subject: "project:api",
+      depth: "5",
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.content.text).toContain("project:api");
+    expect(messages[0]!.content.text).toContain("last 5 actions");
+    expect(messages[0]!.content.text).toContain("mayros_dag_history");
+    expect(messages[0]!.content.text).toContain("mayros_dag_verify");
+    expect(messages[0]!.content.text).toContain("mayros_dag_diff");
+  });
+
+  // 19
+  it("dag-audit defaults depth to 10", async () => {
+    const messages = await provider.getPrompt("dag-audit", { subject: "test:sub" });
+    expect(messages[0]!.content.text).toContain("last 10 actions");
+  });
+
+  // 20
+  it("dag-audit throws without subject", async () => {
+    await expect(provider.getPrompt("dag-audit", {})).rejects.toThrow("subject");
+  });
 });

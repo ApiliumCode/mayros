@@ -4,6 +4,55 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.2.0 (2026-03-13)
+
+Semantic DAG integration — full audit trail, time-travel, and verifiable history for the knowledge graph.
+
+### Semantic DAG
+
+- 12 new CortexClient methods: `dagTips`, `dagAction`, `dagHistory`, `dagChain`, `dagStats`, `dagPrune`, `dagAt`, `dagDiff`, `dagExport`, `dagSync`, `dagSyncPull`, `dagVerify`
+- DAG DTOs: `DagActionDto` (with `signature` field), `DagTipsResponse`, `DagStatsResponse`, `DagTimeTravelResponse`, `DagDiffResponse`, `DagPruneRequest/Response`, `DagSyncRequest/Response`, `DagPullRequest/Response`, `DagVerifyResponse`
+- `DagSyncResponse.actions` properly typed as `DagActionDto[]`
+
+### MCP Server
+
+- 10 new DAG tools: `mayros_dag_tips`, `mayros_dag_action`, `mayros_dag_chain`, `mayros_dag_history`, `mayros_dag_time_travel`, `mayros_dag_diff`, `mayros_dag_export`, `mayros_dag_stats`, `mayros_dag_verify`, `mayros_dag_prune`
+- 2 new DAG resources: `mayros:///dag/tips`, `mayros:///dag/stats`
+- 1 new prompt: `dag-audit` — guided audit workflow with history, verification, and diff
+- Total MCP tools: 19
+- All MCP tools now have 30s request timeout (`AbortSignal.timeout`)
+- `mayros_memory_stats` fetches 3 endpoints in parallel (`Promise.allSettled`)
+- `mayros_remember` stores triples + Ineru entry in parallel
+- `min_similarity` parameter now wired through to Cortex in `mayros_search`
+- Fixed: `importance: 0` was impossible to set (changed `||` to `??`)
+- Fixed: `listGraphSubjects` resource null guard for Cortex offline
+- Fixed: agent ID regex now accepts uppercase, dots, and dashes
+- Fixed: negative `depth` in `dag-audit` prompt now clamped to minimum 1
+
+### CLI
+
+- `mayros dag` with 10 subcommands: `tips`, `action`, `history`, `chain`, `stats`, `export`, `diff`, `at`, `verify`, `prune`
+- `mayros dag prune` now requires interactive confirmation (`[y/N]`) or `--yes` flag
+- All 7 CLI modules now use `try/finally { client.destroy() }` (dashboard, session, mailbox, tasks, sync, workflow, teleport)
+
+### Infrastructure
+
+- Require AIngle Cortex >= 0.6.1
+- Version 0.1.16 → 0.2.0
+- Removed unused `parseWorktreeConfig` import from workflow-cli
+
+---
+
+## 0.1.16 (2026-03-13)
+
+MCP server production hardening and Cortex version bump.
+
+- Deep hardening for MCP server production readiness (input validation, error boundaries)
+- Resolved lint warnings in hardening code
+- Require AIngle Cortex >= 0.5.0
+
+---
+
 ## 0.1.15 (2026-03-12)
 
 MCP Server production-ready, Claude Desktop and Claude Code integration, documentation, and product page update.

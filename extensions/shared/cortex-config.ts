@@ -18,6 +18,11 @@ export type P2pConfig = {
   mdns: boolean;
 };
 
+export type DagConfig = {
+  /** Enable Semantic DAG (default: true). Set to false to disable DAG tools and audit trail. */
+  enabled: boolean;
+};
+
 export type CortexConfig = {
   host: string;
   port: number;
@@ -28,6 +33,8 @@ export type CortexConfig = {
   requireAuth?: boolean;
   strictVersionCheck?: boolean;
   p2p?: P2pConfig;
+  /** Semantic DAG configuration. Enabled by default in Cortex >= 0.6.1. */
+  dag?: DagConfig;
   /** Directory for Cortex persistent data (graph.sled, ineru.snapshot). */
   dataDir?: string;
 };
@@ -80,6 +87,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
         "requireAuth",
         "strictVersionCheck",
         "p2p",
+        "dag",
         "dataDir",
       ],
       "cortex config",
@@ -100,6 +108,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
   const requireAuth = cortex.requireAuth === true;
   const strictVersionCheck = cortex.strictVersionCheck === true;
   const p2p = parseP2pConfig(cortex.p2p);
+  const dag = parseDagConfig(cortex.dag);
   const dataDir = typeof cortex.dataDir === "string" ? cortex.dataDir : undefined;
 
   return {
@@ -112,6 +121,7 @@ export function parseCortexConfig(raw: unknown): CortexConfig {
     requireAuth,
     strictVersionCheck,
     p2p,
+    dag,
     dataDir,
   };
 }
@@ -143,6 +153,15 @@ export function parseP2pConfig(raw: unknown): P2pConfig | undefined {
   const mdns = p.mdns === true;
 
   return { enabled, port, seed, manualPeers, mdns };
+}
+
+export function parseDagConfig(raw: unknown): DagConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { enabled: true };
+  }
+  const d = raw as Record<string, unknown>;
+  assertAllowedKeys(d, ["enabled"], "dag config");
+  return { enabled: d.enabled !== false };
 }
 
 function parseResilienceConfig(raw: unknown): ResilienceConfig | undefined {

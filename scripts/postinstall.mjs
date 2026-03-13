@@ -8,7 +8,14 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { createWriteStream, existsSync, chmodSync, unlinkSync } from "node:fs";
+import {
+  createWriteStream,
+  existsSync,
+  chmodSync,
+  unlinkSync,
+  renameSync,
+  readdirSync,
+} from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir, platform, arch } from "node:os";
 import { join } from "node:path";
@@ -114,15 +121,24 @@ async function main() {
     execFileSync("tar", ["xzf", archivePath, "-C", INSTALL_DIR], { timeout: 30_000 });
   }
 
-  // Verify + permissions
+  // Verify + rename platform-suffixed binary if needed
   if (!existsSync(binaryPath)) {
-    console.warn(
-      `[mayros] Cortex binary not found after extraction. Install later with: mayros update`,
+    const baseName = BINARY_NAME.replace(/\.exe$/, "");
+    const candidates = readdirSync(INSTALL_DIR).filter(
+      (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
     );
-    try {
-      unlinkSync(archivePath);
-    } catch {}
-    return;
+    if (candidates.length === 1) {
+      renameSync(join(INSTALL_DIR, candidates[0]), binaryPath);
+      console.log(`[mayros] Renamed ${candidates[0]} → ${BINARY_NAME}`);
+    } else {
+      console.warn(
+        `[mayros] Cortex binary not found after extraction. Install later with: mayros update`,
+      );
+      try {
+        unlinkSync(archivePath);
+      } catch {}
+      return;
+    }
   }
   if (!IS_WIN) {
     chmodSync(binaryPath, 0o755);
