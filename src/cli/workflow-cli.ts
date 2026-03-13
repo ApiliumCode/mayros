@@ -12,7 +12,6 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
 import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { KnowledgeFusion } from "../../extensions/agent-mesh/knowledge-fusion.js";
 import { NamespaceManager } from "../../extensions/agent-mesh/namespace-manager.js";
@@ -22,51 +21,9 @@ import {
   listWorkflows as listWorkflowDefs,
   getWorkflow as getWorkflowDef,
 } from "../../extensions/agent-mesh/workflows/registry.js";
-import { parseTeamsConfig, parseWorktreeConfig } from "../../extensions/agent-mesh/config.js";
+import { parseTeamsConfig } from "../../extensions/agent-mesh/config.js";
 import { loadConfig } from "../config/config.js";
-
-// ============================================================================
-// Cortex resolution (reads from agent-mesh plugin config)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["agent-mesh"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["agent-mesh"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 function resolveTeamsConfig(): {
   maxTeamSize: number;
@@ -122,22 +79,25 @@ export function registerWorkflowCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (name, opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
-
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot run workflow.");
-        return;
-      }
-
-      const orchestrator = createOrchestrator(client, ns);
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "agent-mesh" },
+      );
+      const ns = resolveNamespace("agent-mesh");
 
       try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot run workflow.");
+          return;
+        }
+
+        const orchestrator = createOrchestrator(client, ns);
+
         const entry = await orchestrator.startWorkflow({
           workflowName: name,
           path: opts.path,
@@ -176,7 +136,10 @@ export function registerWorkflowCli(program: Command) {
         const result = await orchestrator.completeWorkflow(entry.id);
         console.log(`\nResult: ${result.summary}`);
       } catch (err) {
-        console.error(`Error: ${String(err)}`);
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 
@@ -215,72 +178,82 @@ export function registerWorkflowCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (id, opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "agent-mesh" },
+      );
+      const ns = resolveNamespace("agent-mesh");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot get workflow status.");
-        return;
-      }
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot get workflow status.");
+          return;
+        }
 
-      const orchestrator = createOrchestrator(client, ns);
+        const orchestrator = createOrchestrator(client, ns);
 
-      if (!id) {
-        // List recent runs
-        const runs = await orchestrator.listWorkflowRuns();
-        if (runs.length === 0) {
-          console.log("No workflow runs found.");
+        if (!id) {
+          // List recent runs
+          const runs = await orchestrator.listWorkflowRuns();
+          if (runs.length === 0) {
+            console.log("No workflow runs found.");
+            return;
+          }
+
+          if (opts.format === "json") {
+            console.log(JSON.stringify(runs, null, 2));
+            return;
+          }
+
+          console.log(`Recent workflow runs (${runs.length}):`);
+          for (const r of runs) {
+            console.log(`  - ${r.id}: ${r.name} [${r.state}] (updated: ${r.updatedAt})`);
+          }
+          return;
+        }
+
+        const entry = await orchestrator.getWorkflow(id);
+        if (!entry) {
+          console.log(`Workflow ${id} not found.`);
           return;
         }
 
         if (opts.format === "json") {
-          console.log(JSON.stringify(runs, null, 2));
+          console.log(JSON.stringify(entry, null, 2));
           return;
         }
 
-        console.log(`Recent workflow runs (${runs.length}):`);
-        for (const r of runs) {
-          console.log(`  - ${r.id}: ${r.name} [${r.state}] (updated: ${r.updatedAt})`);
+        console.log(`Workflow "${entry.name}" (${entry.id}):`);
+        console.log(`  state: ${entry.state}`);
+        console.log(`  path: ${entry.path}`);
+        console.log(`  current phase: ${entry.currentPhase}`);
+        console.log(`  team: ${entry.teamId}`);
+        console.log(`  created: ${entry.createdAt}`);
+        console.log(`  updated: ${entry.updatedAt}`);
+
+        const phaseResults = Object.values(entry.phaseResults);
+        if (phaseResults.length > 0) {
+          console.log(`  phase results:`);
+          for (const pr of phaseResults) {
+            console.log(
+              `    ${pr.phase}: ${pr.status} (${pr.agentResults.length} agents, ${pr.conflicts} conflicts)`,
+            );
+          }
         }
-        return;
-      }
 
-      const entry = await orchestrator.getWorkflow(id);
-      if (!entry) {
-        console.log(`Workflow ${id} not found.`);
-        return;
-      }
-
-      if (opts.format === "json") {
-        console.log(JSON.stringify(entry, null, 2));
-        return;
-      }
-
-      console.log(`Workflow "${entry.name}" (${entry.id}):`);
-      console.log(`  state: ${entry.state}`);
-      console.log(`  path: ${entry.path}`);
-      console.log(`  current phase: ${entry.currentPhase}`);
-      console.log(`  team: ${entry.teamId}`);
-      console.log(`  created: ${entry.createdAt}`);
-      console.log(`  updated: ${entry.updatedAt}`);
-
-      const phaseResults = Object.values(entry.phaseResults);
-      if (phaseResults.length > 0) {
-        console.log(`  phase results:`);
-        for (const pr of phaseResults) {
-          console.log(
-            `    ${pr.phase}: ${pr.status} (${pr.agentResults.length} agents, ${pr.conflicts} conflicts)`,
-          );
+        if (entry.result) {
+          console.log(`  result: ${entry.result.summary}`);
         }
-      }
-
-      if (entry.result) {
-        console.log(`  result: ${entry.result.summary}`);
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 
@@ -293,39 +266,49 @@ export function registerWorkflowCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
-
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot list workflow history.");
-        return;
-      }
-
-      const orchestrator = createOrchestrator(client, ns);
-      const runs = await orchestrator.listWorkflowRuns();
-      const limit = Number.parseInt(opts.limit, 10) || 20;
-      const limited = runs.slice(0, limit);
-
-      if (opts.format === "json") {
-        console.log(JSON.stringify(limited, null, 2));
-        return;
-      }
-
-      if (limited.length === 0) {
-        console.log("No workflow runs found.");
-        return;
-      }
-
-      console.log(
-        `Workflow history (${limited.length}${runs.length > limit ? ` of ${runs.length}` : ""}):`,
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "agent-mesh" },
       );
-      for (const r of limited) {
-        console.log(`  - ${r.id}: ${r.name} [${r.state}] (updated: ${r.updatedAt})`);
+      const ns = resolveNamespace("agent-mesh");
+
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot list workflow history.");
+          return;
+        }
+
+        const orchestrator = createOrchestrator(client, ns);
+        const runs = await orchestrator.listWorkflowRuns();
+        const limit = Number.parseInt(opts.limit, 10) || 20;
+        const limited = runs.slice(0, limit);
+
+        if (opts.format === "json") {
+          console.log(JSON.stringify(limited, null, 2));
+          return;
+        }
+
+        if (limited.length === 0) {
+          console.log("No workflow runs found.");
+          return;
+        }
+
+        console.log(
+          `Workflow history (${limited.length}${runs.length > limit ? ` of ${runs.length}` : ""}):`,
+        );
+        for (const r of limited) {
+          console.log(`  - ${r.id}: ${r.name} [${r.state}] (updated: ${r.updatedAt})`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 }

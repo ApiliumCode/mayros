@@ -80,6 +80,14 @@ function createMockSources(): ResourceDataSources {
       predicateCount: 45,
     }),
     listGraphSubjects: async () => ["mayros:project:convention:c1", "mayros:rule:global:r1"],
+    getDagTips: async () => ({
+      tips: ["abc123", "def456"],
+      count: 2,
+    }),
+    getDagStats: async () => ({
+      actionCount: 42,
+      tipCount: 2,
+    }),
   };
 }
 
@@ -184,6 +192,46 @@ describe("McpResourceProvider", () => {
   });
 
   // 13
+  it("listResources includes DAG resources", async () => {
+    const resources = await provider.listResources();
+    const uris = resources.map((r) => r.uri);
+    expect(uris).toContain("mayros:///dag/tips");
+    expect(uris).toContain("mayros:///dag/stats");
+  });
+
+  // 14
+  it("readResource dag tips", async () => {
+    const result = await provider.readResource("mayros:///dag/tips");
+    const data = JSON.parse(result.text!);
+    expect(data.tips).toEqual(["abc123", "def456"]);
+    expect(data.count).toBe(2);
+  });
+
+  // 15
+  it("readResource dag stats", async () => {
+    const result = await provider.readResource("mayros:///dag/stats");
+    const data = JSON.parse(result.text!);
+    expect(data.actionCount).toBe(42);
+    expect(data.tipCount).toBe(2);
+  });
+
+  // 16
+  it("readResource dag tips returns error when Cortex unavailable", async () => {
+    provider.updateSources({ getDagTips: async () => null });
+    const result = await provider.readResource("mayros:///dag/tips");
+    const data = JSON.parse(result.text!);
+    expect(data.error).toBe("Cortex unavailable");
+  });
+
+  // 17
+  it("readResource dag stats returns error when Cortex unavailable", async () => {
+    provider.updateSources({ getDagStats: async () => null });
+    const result = await provider.readResource("mayros:///dag/stats");
+    const data = JSON.parse(result.text!);
+    expect(data.error).toBe("Cortex unavailable");
+  });
+
+  // 18
   it("updateSources replaces data sources", async () => {
     provider.updateSources({
       listAgents: () => [],

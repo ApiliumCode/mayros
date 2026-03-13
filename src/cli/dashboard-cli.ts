@@ -10,55 +10,13 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
 import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { AgentMailbox } from "../../extensions/agent-mesh/agent-mailbox.js";
 import { TeamManager } from "../../extensions/agent-mesh/team-manager.js";
 import { TeamDashboardService } from "../../extensions/agent-mesh/team-dashboard.js";
-import { loadConfig } from "../config/config.js";
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
-// ============================================================================
-// Cortex resolution (reads from agent-mesh plugin config)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["agent-mesh"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["agent-mesh"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+const CORTEX_PLUGIN = { pluginName: "agent-mesh" } as const;
 
 function resolveDashboard(client: CortexClient, ns: string): TeamDashboardService {
   const mailbox = new AgentMailbox(client, ns);
@@ -94,44 +52,54 @@ export function registerDashboardCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (teamId, opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        CORTEX_PLUGIN,
+      );
+      const ns = resolveNamespace("agent-mesh");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot load dashboard.");
-        return;
-      }
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot load dashboard.");
+          return;
+        }
 
-      const dashboard = resolveDashboard(client, ns);
-      const d = await dashboard.getTeamDashboard(teamId);
+        const dashboard = resolveDashboard(client, ns);
+        const d = await dashboard.getTeamDashboard(teamId);
 
-      if (!d) {
-        console.log(`Team ${teamId} not found.`);
-        return;
-      }
+        if (!d) {
+          console.log(`Team ${teamId} not found.`);
+          return;
+        }
 
-      if (opts.format === "json") {
-        console.log(JSON.stringify(d, null, 2));
-        return;
-      }
+        if (opts.format === "json") {
+          console.log(JSON.stringify(d, null, 2));
+          return;
+        }
 
-      console.log(`Dashboard: "${d.teamName}" (${d.teamId})`);
-      console.log(`  status: ${d.teamStatus}`);
-      console.log(`  strategy: ${d.strategy}`);
-      console.log(`  created: ${d.createdAt}`);
-      console.log(`  updated: ${d.updatedAt}`);
-      console.log(`  mail: ${d.mailboxSummary.total} total, ${d.mailboxSummary.unread} unread`);
-      console.log(`  members:`);
-      for (const m of d.members) {
-        const events = m.totalEvents > 0 ? ` events:${m.totalEvents}` : "";
-        const errors = m.errors > 0 ? ` errors:${m.errors}` : "";
-        const unread = m.unreadMessages > 0 ? ` unread:${m.unreadMessages}` : "";
-        console.log(`    - ${m.agentId} (${m.role}): ${m.status}${events}${errors}${unread}`);
+        console.log(`Dashboard: "${d.teamName}" (${d.teamId})`);
+        console.log(`  status: ${d.teamStatus}`);
+        console.log(`  strategy: ${d.strategy}`);
+        console.log(`  created: ${d.createdAt}`);
+        console.log(`  updated: ${d.updatedAt}`);
+        console.log(`  mail: ${d.mailboxSummary.total} total, ${d.mailboxSummary.unread} unread`);
+        console.log(`  members:`);
+        for (const m of d.members) {
+          const events = m.totalEvents > 0 ? ` events:${m.totalEvents}` : "";
+          const errors = m.errors > 0 ? ` errors:${m.errors}` : "";
+          const unread = m.unreadMessages > 0 ? ` unread:${m.unreadMessages}` : "";
+          console.log(`    - ${m.agentId} (${m.role}): ${m.status}${events}${errors}${unread}`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 
@@ -142,42 +110,52 @@ export function registerDashboardCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        CORTEX_PLUGIN,
+      );
+      const ns = resolveNamespace("agent-mesh");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot load dashboard.");
-        return;
-      }
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot load dashboard.");
+          return;
+        }
 
-      const dashboard = resolveDashboard(client, ns);
-      const s = await dashboard.getSummary();
+        const dashboard = resolveDashboard(client, ns);
+        const s = await dashboard.getSummary();
 
-      if (opts.format === "json") {
-        console.log(JSON.stringify(s, null, 2));
-        return;
-      }
+        if (opts.format === "json") {
+          console.log(JSON.stringify(s, null, 2));
+          return;
+        }
 
-      if (s.activeTeams === 0) {
-        console.log("No active teams.");
-        return;
-      }
+        if (s.activeTeams === 0) {
+          console.log("No active teams.");
+          return;
+        }
 
-      console.log(`Dashboard Summary:`);
-      console.log(`  active teams: ${s.activeTeams}`);
-      console.log(`  total agents: ${s.totalAgents}`);
-      console.log(`  total unread: ${s.totalUnread}`);
-      console.log(`  total errors: ${s.totalErrors}`);
-      console.log();
-      for (const t of s.teams) {
-        console.log(
-          `  ${t.teamId}: "${t.teamName}" [${t.teamStatus}] — ${t.members.length} members`,
-        );
+        console.log(`Dashboard Summary:`);
+        console.log(`  active teams: ${s.activeTeams}`);
+        console.log(`  total agents: ${s.totalAgents}`);
+        console.log(`  total unread: ${s.totalUnread}`);
+        console.log(`  total errors: ${s.totalErrors}`);
+        console.log();
+        for (const t of s.teams) {
+          console.log(
+            `  ${t.teamId}: "${t.teamName}" [${t.teamStatus}] — ${t.members.length} members`,
+          );
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 
@@ -189,41 +167,53 @@ export function registerDashboardCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (agentId, opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        CORTEX_PLUGIN,
+      );
+      const ns = resolveNamespace("agent-mesh");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot load agent activity.");
-        return;
-      }
-
-      const dashboard = resolveDashboard(client, ns);
-      const act = await dashboard.getAgentActivity(agentId);
-
-      if (opts.format === "json") {
-        console.log(JSON.stringify(act, null, 2));
-        return;
-      }
-
-      console.log(`Agent Activity: ${act.agentId}`);
-      if (act.teams.length === 0) {
-        console.log("  Not a member of any team.");
-      } else {
-        console.log(`  teams (${act.teams.length}):`);
-        for (const t of act.teams) {
-          console.log(`    - ${t.teamId}: "${t.teamName}" role:${t.role} status:${t.status}`);
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot load agent activity.");
+          return;
         }
-      }
-      console.log(`  mailbox: ${act.mailboxStats.total} total, ${act.mailboxStats.unread} unread`);
-      if (act.traceStats) {
+
+        const dashboard = resolveDashboard(client, ns);
+        const act = await dashboard.getAgentActivity(agentId);
+
+        if (opts.format === "json") {
+          console.log(JSON.stringify(act, null, 2));
+          return;
+        }
+
+        console.log(`Agent Activity: ${act.agentId}`);
+        if (act.teams.length === 0) {
+          console.log("  Not a member of any team.");
+        } else {
+          console.log(`  teams (${act.teams.length}):`);
+          for (const t of act.teams) {
+            console.log(`    - ${t.teamId}: "${t.teamName}" role:${t.role} status:${t.status}`);
+          }
+        }
         console.log(
-          `  trace: ${act.traceStats.totalEvents} events, ${act.traceStats.errors} errors`,
+          `  mailbox: ${act.mailboxStats.total} total, ${act.mailboxStats.unread} unread`,
         );
+        if (act.traceStats) {
+          console.log(
+            `  trace: ${act.traceStats.totalEvents} events, ${act.traceStats.errors} errors`,
+          );
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 }

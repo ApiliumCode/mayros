@@ -61,6 +61,18 @@ export type GraphStatsInfo = {
   predicateCount: number;
 };
 
+/** DAG tips info for resource exposure. */
+export type DagTipsInfo = {
+  tips: string[];
+  count: number;
+};
+
+/** DAG statistics for resource exposure. */
+export type DagStatsInfo = {
+  actionCount: number;
+  tipCount: number;
+};
+
 // ============================================================================
 // Data Source Callbacks
 // ============================================================================
@@ -74,6 +86,8 @@ export type ResourceDataSources = {
   getRule: (id: string) => Promise<RuleInfo | null>;
   getGraphStats: () => Promise<GraphStatsInfo | null>;
   listGraphSubjects: () => Promise<string[]>;
+  getDagTips: () => Promise<DagTipsInfo | null>;
+  getDagStats: () => Promise<DagStatsInfo | null>;
 };
 
 // ============================================================================
@@ -132,6 +146,20 @@ export class McpResourceProvider {
       mimeType: "application/json",
     });
 
+    resources.push({
+      uri: "mayros:///dag/tips",
+      name: "DAG Tips",
+      description: "Current DAG tip hashes (frontier of the semantic DAG)",
+      mimeType: "application/json",
+    });
+
+    resources.push({
+      uri: "mayros:///dag/stats",
+      name: "DAG Statistics",
+      description: "Semantic DAG action count and tip count",
+      mimeType: "application/json",
+    });
+
     // Dynamic agent resources
     const agents = this.sources.listAgents();
     for (const agent of agents) {
@@ -166,7 +194,7 @@ export class McpResourceProvider {
       return { uri, mimeType: "application/json", text: JSON.stringify(summary, null, 2) };
     }
 
-    const agentMatch = path.match(/^\/agents\/([a-z][a-z0-9_-]*)$/);
+    const agentMatch = path.match(/^\/agents\/([a-zA-Z][a-zA-Z0-9_.-]*)$/);
     if (agentMatch) {
       const agent = this.sources.getAgent(agentMatch[1]!);
       if (!agent) {
@@ -226,7 +254,40 @@ export class McpResourceProvider {
 
     if (path === "/graph/subjects") {
       const subjects = await this.sources.listGraphSubjects();
+      if (!subjects) {
+        return {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ error: "Cortex unavailable" }),
+        };
+      }
       return { uri, mimeType: "application/json", text: JSON.stringify(subjects, null, 2) };
+    }
+
+    // ── DAG ───────────────────────────────────────────────────────────
+
+    if (path === "/dag/tips") {
+      const tips = await this.sources.getDagTips();
+      if (!tips) {
+        return {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ error: "Cortex unavailable" }),
+        };
+      }
+      return { uri, mimeType: "application/json", text: JSON.stringify(tips, null, 2) };
+    }
+
+    if (path === "/dag/stats") {
+      const stats = await this.sources.getDagStats();
+      if (!stats) {
+        return {
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ error: "Cortex unavailable" }),
+        };
+      }
+      return { uri, mimeType: "application/json", text: JSON.stringify(stats, null, 2) };
     }
 
     throw new McpError(ErrorCodes.RESOURCE_NOT_FOUND, `Unknown resource: ${uri}`);

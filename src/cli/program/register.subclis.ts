@@ -315,6 +315,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "dag",
+    description: "Semantic DAG — audit, time-travel, and history",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../dag-cli.js");
+      mod.registerDagCli(program);
+    },
+  },
+  {
     name: "workflow",
     description: "Multi-agent workflows — run, list, and track workflow execution",
     hasSubcommands: true,

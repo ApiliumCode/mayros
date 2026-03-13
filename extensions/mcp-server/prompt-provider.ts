@@ -117,6 +117,23 @@ const PROMPT_DEFINITIONS: McpPromptDef[] = [
       },
     ],
   },
+  {
+    name: "dag-audit",
+    description:
+      "Audit the semantic DAG for a subject: review history, verify signatures, and diff changes",
+    arguments: [
+      {
+        name: "subject",
+        description: "Subject to audit (e.g., 'project:api')",
+        required: true,
+      },
+      {
+        name: "depth",
+        description: "Number of recent actions to review (default: 10)",
+        required: false,
+      },
+    ],
+  },
 ];
 
 // ============================================================================
@@ -160,6 +177,9 @@ export class McpPromptProvider {
 
       case "feature-development":
         return this.buildFeatureDev(args.feature, args.phase);
+
+      case "dag-audit":
+        return this.buildDagAudit(args.subject, args.depth);
 
       default:
         throw new McpError(ErrorCodes.PROMPT_NOT_FOUND, `Unknown prompt: ${name}`);
@@ -402,6 +422,54 @@ export class McpPromptProvider {
       {
         role: "assistant",
         content: { type: "text", text },
+      },
+    ];
+  }
+
+  private buildDagAudit(subject?: string, depth?: string): McpPromptMessage[] {
+    if (!subject) {
+      throw new McpError(ErrorCodes.INVALID_PARAMS, "Missing required argument: subject");
+    }
+
+    const parsed = depth ? parseInt(depth, 10) : 10;
+    const limit = Number.isNaN(parsed) || parsed < 1 ? 10 : parsed;
+
+    const instructions = [
+      `# DAG Audit: ${subject}`,
+      ``,
+      `## Objective`,
+      `Perform a complete audit of the semantic DAG for subject "${subject}".`,
+      `Review the last ${limit} actions, verify signatures, and identify anomalies.`,
+      ``,
+      `## Step 1: Retrieve History`,
+      `Use the \`mayros_dag_history\` tool with:`,
+      `  - subject: "${subject}"`,
+      `  - limit: ${limit}`,
+      ``,
+      `Review each action's payload type, author, timestamp, and sequence number.`,
+      `Flag any gaps in sequence numbers or unexpected authors.`,
+      ``,
+      `## Step 2: Verify Signatures`,
+      `For each signed action in the history, use the \`mayros_dag_verify\` tool`,
+      `to confirm Ed25519 signature validity. Report any invalid signatures.`,
+      ``,
+      `## Step 3: Diff Analysis`,
+      `If there are at least 2 actions, use \`mayros_dag_diff\` between the`,
+      `oldest and newest action hashes to see the full change set.`,
+      `Summarize what changed and whether the mutations are consistent.`,
+      ``,
+      `## Output Format`,
+      `Provide a structured audit report with:`,
+      `- Timeline of actions`,
+      `- Signature verification results`,
+      `- Anomalies or concerns`,
+      `- Summary assessment`,
+    ];
+
+    return [
+      {
+        role: "assistant",
+        content: { type: "text", text: instructions.join("\n") },
       },
     ];
   }

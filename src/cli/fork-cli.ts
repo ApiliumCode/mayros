@@ -11,54 +11,9 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { TraceEmitter } from "../../extensions/semantic-observability/trace-emitter.js";
 import { SessionForkManager } from "../../extensions/semantic-observability/session-fork.js";
-import { loadConfig } from "../config/config.js";
-
-// ============================================================================
-// Cortex resolution (reads from semantic-observability plugin config)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 // ============================================================================
 // Registration
@@ -81,35 +36,45 @@ export function registerSessionCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot create checkpoint.");
-        return;
-      }
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot create checkpoint.");
+          return;
+        }
 
-      const emitter = new TraceEmitter(client, ns, 5000);
-      const mgr = new SessionForkManager(client, emitter, ns);
+        const emitter = new TraceEmitter(client, ns, 5000);
+        const mgr = new SessionForkManager(client, emitter, ns);
 
-      const cp = await mgr.checkpoint(opts.session);
+        const cp = await mgr.checkpoint(opts.session);
 
-      if (opts.format === "json") {
-        console.log(JSON.stringify(cp, null, 2));
-        return;
-      }
+        if (opts.format === "json") {
+          console.log(JSON.stringify(cp, null, 2));
+          return;
+        }
 
-      console.log(`Checkpoint created:`);
-      console.log(`  session: ${cp.sessionKey}`);
-      console.log(`  timestamp: ${cp.timestamp}`);
-      console.log(`  events: ${cp.eventCount}`);
-      if (cp.lastEventId) {
-        console.log(`  lastEvent: ${cp.lastEventId}`);
+        console.log(`Checkpoint created:`);
+        console.log(`  session: ${cp.sessionKey}`);
+        console.log(`  timestamp: ${cp.timestamp}`);
+        console.log(`  events: ${cp.eventCount}`);
+        if (cp.lastEventId) {
+          console.log(`  lastEvent: ${cp.lastEventId}`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 
@@ -123,34 +88,44 @@ export function registerSessionCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot fork session.");
-        return;
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot fork session.");
+          return;
+        }
+
+        const emitter = new TraceEmitter(client, ns, 5000);
+        const mgr = new SessionForkManager(client, emitter, ns);
+
+        const result = await mgr.fork(opts.session, opts.name);
+
+        if (opts.format === "json") {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        console.log(`Session forked:`);
+        console.log(`  original: ${result.originalSession}`);
+        console.log(`  forked: ${result.forkedSession}`);
+        console.log(`  forkedAt: ${result.forkedAt}`);
+        console.log(`  events copied: ${result.eventsCopied}`);
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
-
-      const emitter = new TraceEmitter(client, ns, 5000);
-      const mgr = new SessionForkManager(client, emitter, ns);
-
-      const result = await mgr.fork(opts.session, opts.name);
-
-      if (opts.format === "json") {
-        console.log(JSON.stringify(result, null, 2));
-        return;
-      }
-
-      console.log(`Session forked:`);
-      console.log(`  original: ${result.originalSession}`);
-      console.log(`  forked: ${result.forkedSession}`);
-      console.log(`  forkedAt: ${result.forkedAt}`);
-      console.log(`  events copied: ${result.eventsCopied}`);
     });
 
   // ---- rewind ----
@@ -163,34 +138,44 @@ export function registerSessionCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot rewind session.");
-        return;
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot rewind session.");
+          return;
+        }
+
+        const emitter = new TraceEmitter(client, ns, 5000);
+        const mgr = new SessionForkManager(client, emitter, ns);
+
+        const result = await mgr.rewind(opts.session, opts.to);
+
+        if (opts.format === "json") {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        console.log(`Session rewound:`);
+        console.log(`  session: ${result.sessionKey}`);
+        console.log(`  rewindPoint: ${result.rewindPoint}`);
+        console.log(`  events removed: ${result.eventsRemoved}`);
+        console.log(`  events retained: ${result.eventsRetained}`);
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
-
-      const emitter = new TraceEmitter(client, ns, 5000);
-      const mgr = new SessionForkManager(client, emitter, ns);
-
-      const result = await mgr.rewind(opts.session, opts.to);
-
-      if (opts.format === "json") {
-        console.log(JSON.stringify(result, null, 2));
-        return;
-      }
-
-      console.log(`Session rewound:`);
-      console.log(`  session: ${result.sessionKey}`);
-      console.log(`  rewindPoint: ${result.rewindPoint}`);
-      console.log(`  events removed: ${result.eventsRemoved}`);
-      console.log(`  events retained: ${result.eventsRetained}`);
     });
 
   // ---- forks ----
@@ -202,40 +187,50 @@ export function registerSessionCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
 
-      const healthy = await client.isHealthy();
-      if (!healthy) {
-        console.log("Cortex offline. Cannot list forks.");
-        return;
-      }
+      try {
+        const healthy = await client.isHealthy();
+        if (!healthy) {
+          console.log("Cortex offline. Cannot list forks.");
+          return;
+        }
 
-      const emitter = new TraceEmitter(client, ns, 5000);
-      const mgr = new SessionForkManager(client, emitter, ns);
+        const emitter = new TraceEmitter(client, ns, 5000);
+        const mgr = new SessionForkManager(client, emitter, ns);
 
-      const forks = await mgr.listForks(opts.session);
+        const forks = await mgr.listForks(opts.session);
 
-      if (opts.format === "json") {
-        console.log(JSON.stringify(forks, null, 2));
-        return;
-      }
+        if (opts.format === "json") {
+          console.log(JSON.stringify(forks, null, 2));
+          return;
+        }
 
-      if (forks.length === 0) {
-        console.log("No fork/rewind history found.");
-        return;
-      }
+        if (forks.length === 0) {
+          console.log("No fork/rewind history found.");
+          return;
+        }
 
-      console.log(`Session history (${forks.length} entries):`);
-      for (const f of forks) {
-        const parent = f.parentSession ? ` (parent: ${f.parentSession})` : "";
-        const forkTime = f.forkedAt ? ` forked: ${f.forkedAt}` : "";
-        const cpCount = f.checkpoints.length > 0 ? ` checkpoints: ${f.checkpoints.length}` : "";
-        console.log(`  ${f.sessionKey} [${f.status}]${parent}${forkTime}${cpCount}`);
+        console.log(`Session history (${forks.length} entries):`);
+        for (const f of forks) {
+          const parent = f.parentSession ? ` (parent: ${f.parentSession})` : "";
+          const forkTime = f.forkedAt ? ` forked: ${f.forkedAt}` : "";
+          const cpCount = f.checkpoints.length > 0 ? ` checkpoints: ${f.checkpoints.length}` : "";
+          console.log(`  ${f.sessionKey} [${f.status}]${parent}${forkTime}${cpCount}`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        client.destroy();
       }
     });
 }

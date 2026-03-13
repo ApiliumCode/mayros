@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-feishu",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "description": "Mayros Feishu/Lark channel plugin (community maintained by @m1heng)",
   "license": "MIT",
   "type": "module",

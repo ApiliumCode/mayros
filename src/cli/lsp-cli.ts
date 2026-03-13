@@ -13,54 +13,9 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { LspCortexBackend } from "../../extensions/lsp-bridge/lsp-cortex-backend.js";
 import { severityLabel } from "../../extensions/lsp-bridge/lsp-protocol.js";
-import { loadConfig } from "../config/config.js";
-
-// ============================================================================
-// Cortex resolution
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["lsp-bridge"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["lsp-bridge"]?.config as
-      | { namespace?: string }
-      | undefined;
-    return pluginCfg?.namespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 // ============================================================================
 // Registration
@@ -83,12 +38,15 @@ export function registerLspCli(program: Command) {
     .option("--format <format>", "Output format (terminal|json)", "terminal")
     .action(async (opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "lsp-bridge" },
+      );
+      const ns = resolveNamespace("lsp-bridge");
 
       const healthy = await client.isHealthy();
       if (!healthy) {
@@ -140,11 +98,14 @@ export function registerLspCli(program: Command) {
     .description("Show LSP bridge status (Cortex connectivity)")
     .action(async (_opts, cmd) => {
       const parentOpts = cmd.parent.opts();
-      const client = resolveCortexClient({
-        host: parentOpts.cortexHost,
-        port: parentOpts.cortexPort,
-        token: parentOpts.cortexToken,
-      });
+      const client = resolveCortexClient(
+        {
+          host: parentOpts.cortexHost,
+          port: parentOpts.cortexPort,
+          token: parentOpts.cortexToken,
+        },
+        { pluginName: "lsp-bridge" },
+      );
 
       const healthy = await client.isHealthy();
       console.log(`Cortex: ${healthy ? "connected" : "offline"}`);

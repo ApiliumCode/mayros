@@ -13,56 +13,10 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { DecisionGraph } from "../../extensions/semantic-observability/decision-graph.js";
 import { ObservabilityQueryEngine } from "../../extensions/semantic-observability/query-engine.js";
 import { ObservabilityFormatter } from "../../extensions/semantic-observability/formatters.js";
-import { loadConfig } from "../config/config.js";
-
-// ============================================================================
-// Cortex resolution
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  // Try to read from mayros config plugin entries as fallback
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 // ============================================================================
 // Registration
@@ -92,12 +46,11 @@ export function registerTraceCli(program: Command) {
     .option("--format <fmt>", "Output format: terminal, json, markdown", "terminal")
     .action(async (opts) => {
       const parent = trace.opts();
-      const client = resolveCortexClient({
-        host: parent.cortexHost,
-        port: parent.cortexPort,
-        token: parent.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
       const graph = new DecisionGraph(client, ns);
 
       try {
@@ -129,12 +82,11 @@ export function registerTraceCli(program: Command) {
     .argument("<eventId>", "Event ID to explain")
     .action(async (eventId: string) => {
       const parent = trace.opts();
-      const client = resolveCortexClient({
-        host: parent.cortexHost,
-        port: parent.cortexPort,
-        token: parent.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
       const graph = new DecisionGraph(client, ns);
 
       try {
@@ -157,12 +109,11 @@ export function registerTraceCli(program: Command) {
     .option("--format <fmt>", "Output format: terminal, json", "terminal")
     .action(async (opts) => {
       const parent = trace.opts();
-      const client = resolveCortexClient({
-        host: parent.cortexHost,
-        port: parent.cortexPort,
-        token: parent.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
       const queryEngine = new ObservabilityQueryEngine(client, ns);
 
       try {
@@ -193,12 +144,11 @@ export function registerTraceCli(program: Command) {
     .option("--format <fmt>", "Output format: terminal, json", "terminal")
     .action(async (sessionKey: string, opts: { format?: string }) => {
       const parent = trace.opts();
-      const client = resolveCortexClient({
-        host: parent.cortexHost,
-        port: parent.cortexPort,
-        token: parent.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
       const graph = new DecisionGraph(client, ns);
 
       try {
@@ -229,12 +179,11 @@ export function registerTraceCli(program: Command) {
     .description("Check Cortex connectivity and configuration")
     .action(async () => {
       const parent = trace.opts();
-      const client = resolveCortexClient({
-        host: parent.cortexHost,
-        port: parent.cortexPort,
-        token: parent.cortexToken,
-      });
-      const ns = resolveNamespace();
+      const client = resolveCortexClient(
+        { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+        { pluginName: "semantic-observability" },
+      );
+      const ns = resolveNamespace("semantic-observability");
 
       try {
         console.log(`Cortex endpoint: ${client.baseUrl}`);

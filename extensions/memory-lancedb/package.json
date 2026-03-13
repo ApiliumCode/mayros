@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-memory-lancedb",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "private": true,
   "description": "Mayros LanceDB-backed long-term memory plugin with auto-recall/capture",
   "type": "module",
