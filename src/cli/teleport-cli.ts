@@ -14,9 +14,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, resolve } from "node:path";
 import process from "node:process";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
-import { loadConfig } from "../config/config.js";
+import {
+  resolveCortexClient,
+  resolveNamespace,
+  type CortexCliOpts,
+} from "./shared/cortex-resolution.js";
 import {
   exportSession,
   importSession,
@@ -28,51 +30,11 @@ import {
 // Cortex resolution
 // ============================================================================
 
-function resolveCortexClient(opts: {
-  host?: string;
-  port?: string;
-  token?: string;
-}): CortexClient | undefined {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const rawPort = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const port = Number.isFinite(rawPort) ? rawPort : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["memory-semantic"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available
-    }
-  }
-
+function resolveCortexClientSafe(opts: CortexCliOpts) {
   try {
-    return new CortexClient(parseCortexConfig({ host, port, authToken }));
+    return resolveCortexClient(opts);
   } catch {
     return undefined;
-  }
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["memory-semantic"]?.config as
-      | { namespace?: string }
-      | undefined;
-    return pluginCfg?.namespace ?? "mayros";
-  } catch {
-    return "mayros";
   }
 }
 
@@ -124,32 +86,39 @@ export function registerTeleportCli(program: Command) {
       }
 
       const paths = resolveSessionPaths(sessionKey);
-      const cortexClient = resolveCortexClient({
+      const cortexClient = resolveCortexClientSafe({
         host: parentOpts.cortexHost,
         port: parentOpts.cortexPort,
         token: parentOpts.cortexToken,
       });
       const ns = resolveNamespace();
 
-      console.log(`Exporting session: ${sessionKey}`);
+      try {
+        console.log(`Exporting session: ${sessionKey}`);
 
-      const result = await exportSession({
-        sessionKey,
-        transcriptPath: paths.transcriptPath,
-        storePath: paths.storePath,
-        cortexClient,
-        namespace: ns,
-        includeProjectMemory: opts.projectMemory,
-      });
+        const result = await exportSession({
+          sessionKey,
+          transcriptPath: paths.transcriptPath,
+          storePath: paths.storePath,
+          cortexClient,
+          namespace: ns,
+          includeProjectMemory: opts.projectMemory,
+        });
 
-      const safeKey = basename(sessionKey).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const outputFile = opts.output ?? `teleport-${safeKey}.json`;
-      writeFileSync(outputFile, JSON.stringify(result.bundle, null, 2), "utf-8");
+        const safeKey = basename(sessionKey).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const outputFile = opts.output ?? `teleport-${safeKey}.json`;
+        writeFileSync(outputFile, JSON.stringify(result.bundle, null, 2), "utf-8");
 
-      console.log(`Exported to: ${outputFile}`);
-      console.log(`  transcript: ${result.transcriptSize} bytes`);
-      console.log(`  cortex triples: ${result.tripleCount}`);
-      console.log(`  device: ${result.bundle.sourceDeviceId}`);
+        console.log(`Exported to: ${outputFile}`);
+        console.log(`  transcript: ${result.transcriptSize} bytes`);
+        console.log(`  cortex triples: ${result.tripleCount}`);
+        console.log(`  device: ${result.bundle.sourceDeviceId}`);
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        cortexClient?.destroy();
+      }
     });
 
   // ---- import ----
@@ -185,32 +154,39 @@ export function registerTeleportCli(program: Command) {
 
       const bundle = data as TeleportBundle;
       const paths = resolveSessionPaths(opts.remap ?? bundle.sessionKey);
-      const cortexClient = resolveCortexClient({
+      const cortexClient = resolveCortexClientSafe({
         host: parentOpts.cortexHost,
         port: parentOpts.cortexPort,
         token: parentOpts.cortexToken,
       });
       const ns = resolveNamespace();
 
-      console.log(`Importing session from: ${file}`);
-      console.log(`  source device: ${bundle.sourceDeviceId}`);
-      console.log(`  exported at: ${bundle.exportedAt}`);
+      try {
+        console.log(`Importing session from: ${file}`);
+        console.log(`  source device: ${bundle.sourceDeviceId}`);
+        console.log(`  exported at: ${bundle.exportedAt}`);
 
-      const result = await importSession({
-        bundle,
-        targetTranscriptDir: paths.sessionsDir,
-        targetStorePath: paths.storePath,
-        cortexClient,
-        namespace: ns,
-        remapSessionKey: opts.remap,
-      });
+        const result = await importSession({
+          bundle,
+          targetTranscriptDir: paths.sessionsDir,
+          targetStorePath: paths.storePath,
+          cortexClient,
+          namespace: ns,
+          remapSessionKey: opts.remap,
+        });
 
-      console.log(`\nImported successfully:`);
-      console.log(`  session key: ${result.sessionKey}`);
-      console.log(`  transcript: ${result.transcriptPath}`);
-      console.log(`  cortex triples: ${result.triplesImported}`);
-      if (result.remapped) {
-        console.log(`  remapped from: ${bundle.sessionKey}`);
+        console.log(`\nImported successfully:`);
+        console.log(`  session key: ${result.sessionKey}`);
+        console.log(`  transcript: ${result.transcriptPath}`);
+        console.log(`  cortex triples: ${result.triplesImported}`);
+        if (result.remapped) {
+          console.log(`  remapped from: ${bundle.sessionKey}`);
+        }
+      } catch (err) {
+        console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = 1;
+      } finally {
+        cortexClient?.destroy();
       }
     });
 

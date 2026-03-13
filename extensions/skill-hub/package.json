@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-skill-hub",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "private": true,
   "description": "Apilium Hub marketplace — publish, install, sign, and verify semantic skills",
   "type": "module",

@@ -43,6 +43,8 @@ function createEmptyResourceSources(): ResourceDataSources {
     getRule: async () => null,
     getGraphStats: async () => null,
     listGraphSubjects: async () => [],
+    getDagTips: async () => null,
+    getDagStats: async () => null,
   };
 }
 

@@ -12,10 +12,24 @@ import type { AdaptableTool } from "./tool-adapter.js";
 export type MemoryToolDeps = {
   cortexBaseUrl: string;
   namespace: string;
+  authToken?: string;
 };
+
+/** Default timeout for Cortex HTTP requests (30 s). */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
   const { cortexBaseUrl, namespace } = deps;
+
+  const defaultHeaders: Record<string, string> = {};
+  if (deps.authToken) {
+    defaultHeaders["Authorization"] = deps.authToken;
+  }
+
+  const postHeaders: Record<string, string> = {
+    ...defaultHeaders,
+    "Content-Type": "application/json",
+  };
 
   return [
     // ── mayros_remember ──────────────────────────────────────────────
@@ -50,7 +64,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
         const content = params.content as string;
         const category = (params.category as string) ?? "general";
         const tags = Array.isArray(params.tags) ? (params.tags as string[]) : [];
-        const importance = Number(params.importance) || 0.7;
+        const importance = Number(params.importance ?? 0.7);
 
         // Store as RDF triple in Cortex (timestamp + random suffix to avoid collisions)
         const subject = `${namespace}:memory:${Date.now()}-${randomBytes(4).toString("hex")}`;
@@ -65,37 +79,43 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           })),
         ];
 
-        // Store in Cortex graph
+        // Store in Cortex graph (parallel) + Ineru STM
         const errors: string[] = [];
-        for (const triple of triples) {
-          try {
-            const tripleRes = await fetch(`${cortexBaseUrl}/api/v1/triples`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(triple),
-            });
-            if (!tripleRes.ok) errors.push(`triple store: ${tripleRes.statusText}`);
-          } catch (err) {
-            errors.push(`triple store: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }
 
-        // Also store in Ineru STM for vector search
-        try {
-          const memRes = await fetch(`${cortexBaseUrl}/api/v1/memory/remember`, {
+        const triplePromises = triples.map((triple) =>
+          fetch(`${cortexBaseUrl}/api/v1/triples`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              entry_type: category,
-              data: { content, tags },
-              tags,
-              importance,
+            headers: postHeaders,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            body: JSON.stringify(triple),
+          })
+            .then((res) => {
+              if (!res.ok) errors.push(`triple store: ${res.statusText}`);
+            })
+            .catch((err) => {
+              errors.push(`triple store: ${err instanceof Error ? err.message : String(err)}`);
             }),
+        );
+
+        const ineruPromise = fetch(`${cortexBaseUrl}/api/v1/memory/remember`, {
+          method: "POST",
+          headers: postHeaders,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          body: JSON.stringify({
+            entry_type: category,
+            data: { content, tags },
+            tags,
+            importance,
+          }),
+        })
+          .then((res) => {
+            if (!res.ok) errors.push(`ineru store: ${res.statusText}`);
+          })
+          .catch((err) => {
+            errors.push(`ineru store: ${err instanceof Error ? err.message : String(err)}`);
           });
-          if (!memRes.ok) errors.push(`ineru store: ${memRes.statusText}`);
-        } catch (err) {
-          errors.push(`ineru store: ${err instanceof Error ? err.message : String(err)}`);
-        }
+
+        await Promise.allSettled([...triplePromises, ineruPromise]);
 
         const summary = `Remembered: "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}" [${category}]${tags.length > 0 ? ` #${tags.join(" #")}` : ""}`;
         return {
@@ -126,14 +146,15 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
         const query = params.query as string | undefined;
         const tags = Array.isArray(params.tags) ? (params.tags as string[]) : undefined;
         const category = params.category as string | undefined;
-        const limit = Math.min(Number(params.limit) || 10, 100);
+        const limit = Math.min((params.limit as number) ?? 10, 100);
 
         // Query Ineru recall endpoint
         let recallRes: Response;
         try {
           recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: postHeaders,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             body: JSON.stringify({
               text: query,
               tags: tags ?? [],
@@ -157,6 +178,7 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
           try {
             const graphRes = await fetch(
               `${cortexBaseUrl}/api/v1/triples?predicate=${encodeURIComponent(`${namespace}:memory:content`)}&limit=${limit}`,
+              { headers: defaultHeaders, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
             );
             if (!graphRes.ok) {
               return {
@@ -256,14 +278,16 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
       }),
       execute: async (_id: string, params: Record<string, unknown>) => {
         const text = params.text as string;
-        const k = Math.min(Number(params.k) || 5, 100);
+        const k = Math.min((params.k as number) ?? 5, 100);
+        const minSim = Number(params.min_similarity ?? 0.3);
 
         let recallRes: Response;
         try {
           recallRes = await fetch(`${cortexBaseUrl}/api/v1/memory/recall`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, limit: k }),
+            headers: postHeaders,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            body: JSON.stringify({ text, limit: k, min_similarity: minSim }),
           });
         } catch {
           return {
@@ -340,6 +364,8 @@ export function createMemoryTools(deps: MemoryToolDeps): AdaptableTool[] {
             `${cortexBaseUrl}/api/v1/memory/${encodeURIComponent(memoryId)}`,
             {
               method: "DELETE",
+              headers: defaultHeaders,
+              signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             },
           );
           return {

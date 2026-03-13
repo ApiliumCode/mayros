@@ -61,18 +61,36 @@ export function registerServeCli(program: Command): void {
       const cortexPort = config.cortex?.port ?? 19090;
       const cortexBase = `http://127.0.0.1:${cortexPort}`;
       const ns = config.agentNamespace || "mayros";
+      const cortexHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (config.cortex?.authToken) {
+        cortexHeaders["Authorization"] = config.cortex.authToken;
+      }
 
       const { createMemoryTools } = await import("../../extensions/mcp-server/memory-tools.js");
       const { createBudgetTools } = await import("../../extensions/mcp-server/budget-tools.js");
       const { createGovernanceTools } =
         await import("../../extensions/mcp-server/governance-tools.js");
       const { createCortexTools } = await import("../../extensions/mcp-server/cortex-tools.js");
+      const { createDagTools } = await import("../../extensions/mcp-server/dag-tools.js");
 
       const tools = [
-        ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+        ...createMemoryTools({
+          cortexBaseUrl: cortexBase,
+          namespace: ns,
+          authToken: config.cortex?.authToken,
+        }),
         ...createBudgetTools(),
         ...createGovernanceTools(),
-        ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+        ...createCortexTools({
+          cortexBaseUrl: cortexBase,
+          namespace: ns,
+          authToken: config.cortex?.authToken,
+        }),
+        ...createDagTools({
+          cortexBaseUrl: cortexBase,
+          namespace: ns,
+          authToken: config.cortex?.authToken,
+        }),
       ];
 
       // Discover agents
@@ -114,6 +132,30 @@ export function registerServeCli(program: Command): void {
           getRule: async () => null,
           getGraphStats: async () => null,
           listGraphSubjects: async () => [],
+          getDagTips: async () => {
+            try {
+              const res = await fetch(`${cortexBase}/api/v1/dag/tips`, {
+                headers: cortexHeaders,
+              });
+              if (!res.ok) return null;
+              const data = (await res.json()) as { tips: string[]; count: number };
+              return { tips: data.tips, count: data.count };
+            } catch {
+              return null;
+            }
+          },
+          getDagStats: async () => {
+            try {
+              const res = await fetch(`${cortexBase}/api/v1/dag/stats`, {
+                headers: cortexHeaders,
+              });
+              if (!res.ok) return null;
+              const data = (await res.json()) as { action_count: number; tip_count: number };
+              return { actionCount: data.action_count, tipCount: data.tip_count };
+            } catch {
+              return null;
+            }
+          },
         },
         promptSources: {
           listConventions: async () => [],

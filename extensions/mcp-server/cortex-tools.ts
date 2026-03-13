@@ -5,13 +5,27 @@
 import { Type } from "@sinclair/typebox";
 import type { AdaptableTool } from "./tool-adapter.js";
 
+/** Default timeout for Cortex HTTP requests (30 s). */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export type CortexToolDeps = {
   cortexBaseUrl: string;
   namespace: string;
+  authToken?: string;
 };
 
 export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
   const { cortexBaseUrl } = deps;
+
+  const defaultHeaders: Record<string, string> = {};
+  if (deps.authToken) {
+    defaultHeaders["Authorization"] = deps.authToken;
+  }
+
+  const postHeaders: Record<string, string> = {
+    ...defaultHeaders,
+    "Content-Type": "application/json",
+  };
 
   return [
     {
@@ -39,7 +53,10 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
         queryParams.set("limit", String(limit));
 
         try {
-          const res = await fetch(`${cortexBaseUrl}/api/v1/triples?${queryParams}`);
+          const res = await fetch(`${cortexBaseUrl}/api/v1/triples?${queryParams}`, {
+            headers: defaultHeaders,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          });
           if (!res.ok) {
             return {
               content: [{ type: "text" as const, text: `Query failed: ${res.statusText}` }],
@@ -94,7 +111,8 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
         try {
           const res = await fetch(`${cortexBaseUrl}/api/v1/triples`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: postHeaders,
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
             body: JSON.stringify({
               subject: params.subject,
               predicate: params.predicate,
@@ -135,13 +153,23 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
         "Get memory system statistics: STM entries, LTM entities, HNSW index size, graph triple count.",
       parameters: Type.Object({}),
       execute: async () => {
+        const fetchOpts = {
+          headers: defaultHeaders,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        };
+
+        const [memResult, idxResult, graphResult] = await Promise.allSettled([
+          fetch(`${cortexBaseUrl}/api/v1/memory/stats`, fetchOpts),
+          fetch(`${cortexBaseUrl}/api/v1/memory/index/stats`, fetchOpts),
+          fetch(`${cortexBaseUrl}/api/v1/stats`, fetchOpts),
+        ]);
+
         const results: string[] = [];
 
         // Ineru stats
-        try {
-          const memRes = await fetch(`${cortexBaseUrl}/api/v1/memory/stats`);
-          if (memRes.ok) {
-            const stats = (await memRes.json()) as {
+        if (memResult.status === "fulfilled" && memResult.value.ok) {
+          try {
+            const stats = (await memResult.value.json()) as {
               stm_count: number;
               stm_capacity: number;
               ltm_entity_count: number;
@@ -154,16 +182,15 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
               `  LTM: ${stats.ltm_entity_count} entities, ${stats.ltm_link_count} links`,
               `  Size: ${(stats.total_memory_bytes / 1024).toFixed(1)} KB`,
             );
+          } catch {
+            /* malformed JSON */
           }
-        } catch {
-          /* Cortex unavailable */
         }
 
         // HNSW stats
-        try {
-          const idxRes = await fetch(`${cortexBaseUrl}/api/v1/memory/index/stats`);
-          if (idxRes.ok) {
-            const idx = (await idxRes.json()) as {
+        if (idxResult.status === "fulfilled" && idxResult.value.ok) {
+          try {
+            const idx = (await idxResult.value.json()) as {
               point_count: number;
               dimensions: number;
               memory_bytes: number;
@@ -174,16 +201,15 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
               `  Dimensions: ${idx.dimensions}`,
               `  Size: ${(idx.memory_bytes / 1024).toFixed(1)} KB`,
             );
+          } catch {
+            /* malformed JSON */
           }
-        } catch {
-          /* */
         }
 
         // Graph stats
-        try {
-          const graphRes = await fetch(`${cortexBaseUrl}/api/v1/stats`);
-          if (graphRes.ok) {
-            const stats = (await graphRes.json()) as {
+        if (graphResult.status === "fulfilled" && graphResult.value.ok) {
+          try {
+            const stats = (await graphResult.value.json()) as {
               graph: {
                 triple_count: number;
                 subject_count: number;
@@ -196,9 +222,9 @@ export function createCortexTools(deps: CortexToolDeps): AdaptableTool[] {
               `  Subjects: ${stats.graph.subject_count}`,
               `  Predicates: ${stats.graph.predicate_count}`,
             );
+          } catch {
+            /* malformed JSON */
           }
-        } catch {
-          /* */
         }
 
         return {

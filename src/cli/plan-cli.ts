@@ -23,9 +23,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
 import { CortexClient } from "../../extensions/shared/cortex-client.js";
-import { loadConfig } from "../config/config.js";
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 // ============================================================================
 // Types
@@ -58,49 +57,6 @@ type AssertionEntry = {
   proofHash?: string;
   addedAt: string;
 };
-
-// ============================================================================
-// Cortex resolution (shared with trace-cli)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["semantic-observability"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
 
 // ============================================================================
 // Plan store (Cortex-backed)
@@ -407,7 +363,7 @@ export function registerPlanCli(program: Command) {
       "Semantic plan mode — explore, assert, approve, execute with Cortex-backed decision graph",
     )
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)");
 
   function getStore(parentOpts: {
@@ -415,12 +371,15 @@ export function registerPlanCli(program: Command) {
     cortexPort?: string;
     cortexToken?: string;
   }) {
-    const client = resolveCortexClient({
-      host: parentOpts.cortexHost,
-      port: parentOpts.cortexPort,
-      token: parentOpts.cortexToken,
-    });
-    const ns = resolveNamespace();
+    const client = resolveCortexClient(
+      {
+        host: parentOpts.cortexHost,
+        port: parentOpts.cortexPort,
+        token: parentOpts.cortexToken,
+      },
+      { pluginName: "semantic-observability" },
+    );
+    const ns = resolveNamespace("semantic-observability");
     return { store: new PlanStore(client, ns), client };
   }
 

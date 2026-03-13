@@ -92,6 +92,8 @@ const mcpServerPlugin = {
       getRule: async () => null,
       getGraphStats: async () => null,
       listGraphSubjects: async () => [],
+      getDagTips: async () => null,
+      getDagStats: async () => null,
     };
 
     const promptSources: PromptDataSources = {
@@ -195,12 +197,21 @@ const mcpServerPlugin = {
           const { createGovernanceTools } = await import("./governance-tools.js");
           const { createCortexTools } = await import("./cortex-tools.js");
 
+          const authToken = cfg.cortex?.authToken;
           const mcpTools: AdaptableTool[] = [
-            ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+            ...createMemoryTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
             ...createBudgetTools(),
             ...createGovernanceTools(),
-            ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns }),
+            ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
           ];
+
+          // DAG tools — enabled by default, opt-out via cortex.dag.enabled = false
+          if (cfg.cortex?.dag?.enabled !== false) {
+            const { createDagTools } = await import("./dag-tools.js");
+            mcpTools.push(
+              ...createDagTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
+            );
+          }
 
           // Combine: dedicated MCP tools first, then auto-discovered plugin tools
           const allTools = [...mcpTools, ...pluginTools];
@@ -433,6 +444,27 @@ const mcpServerPlugin = {
               return [];
             }
           };
+
+          // DAG resources — enabled by default
+          if (cfg.cortex?.dag?.enabled !== false) {
+            resourceSources.getDagTips = async () => {
+              try {
+                const data = await client.dagTips();
+                return { tips: data.tips, count: data.count };
+              } catch {
+                return null;
+              }
+            };
+
+            resourceSources.getDagStats = async () => {
+              try {
+                const data = await client.dagStats();
+                return { actionCount: data.action_count, tipCount: data.tip_count };
+              } catch {
+                return null;
+              }
+            };
+          }
         } catch {
           // Cortex not available
         }

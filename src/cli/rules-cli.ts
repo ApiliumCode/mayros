@@ -13,53 +13,8 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { RulesEngine, type RuleScope } from "../../extensions/memory-semantic/rules-engine.js";
-import { loadConfig } from "../config/config.js";
-
-// ============================================================================
-// Cortex resolution (same pattern as kg-cli.ts)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["memory-semantic"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-function resolveNamespace(): string {
-  try {
-    const cfg = loadConfig();
-    const pluginCfg = cfg.plugins?.entries?.["memory-semantic"]?.config as
-      | { agentNamespace?: string }
-      | undefined;
-    return pluginCfg?.agentNamespace ?? "mayros";
-  } catch {
-    return "mayros";
-  }
-}
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 const VALID_SCOPES = ["global", "project", "agent", "skill", "file"];
 
@@ -72,7 +27,7 @@ export function registerRulesCli(program: Command) {
     .command("rules")
     .description("Rules engine — manage Cortex-backed hierarchical rules")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)");
 
   // ------------------------------------------------------------------

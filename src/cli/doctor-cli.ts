@@ -14,9 +14,8 @@
 
 import { execSync } from "node:child_process";
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
 import { REQUIRED_CORTEX_VERSION } from "../../extensions/shared/cortex-version.js";
+import { resolveCortexClient } from "./shared/cortex-resolution.js";
 import { detectRuntime, runtimeSatisfies, parseSemver, isAtLeast } from "../infra/runtime-guard.js";
 import { loadConfig } from "../config/config.js";
 import { buildPluginStatusReport } from "../plugins/status.js";
@@ -132,7 +131,7 @@ async function checkCortex(opts: {
 }): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
 
-  const client = resolveCortexClient(opts);
+  const client = resolveCortexClient(opts, { pluginName: ["memory-semantic", "agent-mesh"] });
 
   const healthy = await client.isHealthy();
   if (!healthy) {
@@ -341,39 +340,6 @@ function checkConfig(): DoctorCheck[] {
 }
 
 // ============================================================================
-// Cortex resolution (reads from config)
-// ============================================================================
-
-function resolveCortexClient(opts: { host?: string; port?: string; token?: string }): CortexClient {
-  const host = opts.host ?? process.env.CORTEX_HOST ?? "127.0.0.1";
-  const port = opts.port
-    ? Number.parseInt(opts.port, 10)
-    : process.env.CORTEX_PORT
-      ? Number.parseInt(process.env.CORTEX_PORT, 10)
-      : 8080;
-  const authToken = opts.token ?? process.env.CORTEX_AUTH_TOKEN ?? undefined;
-
-  if (!opts.host && !opts.port && !process.env.CORTEX_HOST && !process.env.CORTEX_PORT) {
-    try {
-      const cfg = loadConfig();
-      // Try memory-semantic plugin config
-      const pluginCfg = (cfg.plugins?.entries?.["memory-semantic"]?.config ??
-        cfg.plugins?.entries?.["agent-mesh"]?.config) as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        const cortex = parseCortexConfig(pluginCfg.cortex);
-        return new CortexClient(cortex);
-      }
-    } catch {
-      // Config not available — use defaults
-    }
-  }
-
-  return new CortexClient(parseCortexConfig({ host, port, authToken }));
-}
-
-// ============================================================================
 // Registration
 // ============================================================================
 
@@ -382,7 +348,7 @@ export function registerDoctorCli(program: Command) {
     .command("diagnose")
     .description("Diagnostic checks — runtime, Cortex, plugins, security, config")
     .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
-    .option("--cortex-port <port>", "Cortex port (default: 8080 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
     .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)")
     .option("--json", "Output as JSON");
 

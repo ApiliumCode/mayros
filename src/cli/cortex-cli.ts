@@ -7,51 +7,8 @@
  */
 
 import type { Command } from "commander";
-import { parseCortexConfig } from "../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../extensions/shared/cortex-client.js";
-import { loadConfig } from "../config/config.js";
 import { addGatewayClientOptions, callGatewayFromCli, type GatewayRpcOpts } from "./gateway-rpc.js";
-
-// ============================================================================
-// Cortex resolution
-// ============================================================================
-
-function resolveCortexClient(opts: {
-  cortexHost?: string;
-  cortexPort?: string;
-  cortexToken?: string;
-}): CortexClient {
-  // 1. Try from user config file first (has correct defaults: 127.0.0.1:19090)
-  if (
-    !opts.cortexHost &&
-    !opts.cortexPort &&
-    !process.env.CORTEX_HOST &&
-    !process.env.CORTEX_PORT
-  ) {
-    try {
-      const cfg = loadConfig();
-      const pluginCfg = cfg.plugins?.entries?.["memory-semantic"]?.config as
-        | { cortex?: { host?: string; port?: number; authToken?: string } }
-        | undefined;
-      if (pluginCfg?.cortex) {
-        return new CortexClient(parseCortexConfig(pluginCfg.cortex));
-      }
-    } catch {
-      // Config not available — fall through to env/cli/defaults
-    }
-  }
-
-  // 2. Build from CLI flags → env vars → parseCortexConfig defaults (19090)
-  const raw: Record<string, unknown> = {};
-  const host = opts.cortexHost ?? process.env.CORTEX_HOST;
-  if (host) raw.host = host;
-  const portStr = opts.cortexPort ?? process.env.CORTEX_PORT;
-  if (portStr) raw.port = Number.parseInt(portStr, 10);
-  const authToken = opts.cortexToken ?? process.env.CORTEX_AUTH_TOKEN;
-  if (authToken) raw.authToken = authToken;
-
-  return new CortexClient(parseCortexConfig(raw));
-}
+import { resolveCortexClient } from "./shared/cortex-resolution.js";
 
 // ============================================================================
 // Registration
@@ -105,7 +62,10 @@ export function registerCortexCli(program: Command) {
     }
 
     // Direct check
-    const client = resolveCortexClient(parent);
+    const client = resolveCortexClient(
+      { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+      { defaultPort: 19090 },
+    );
     try {
       console.log(`Endpoint: ${client.baseUrl}`);
       const healthy = await client.isHealthy();
@@ -157,7 +117,10 @@ export function registerCortexCli(program: Command) {
     }
 
     console.log("Gateway unavailable, checking Cortex directly...");
-    const client = resolveCortexClient(parent);
+    const client = resolveCortexClient(
+      { host: parent.cortexHost, port: parent.cortexPort, token: parent.cortexToken },
+      { defaultPort: 19090 },
+    );
     try {
       const healthy = await client.isHealthy();
       if (healthy) {

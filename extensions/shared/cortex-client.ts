@@ -274,6 +274,68 @@ export type P2pDisconnectResponse = {
 };
 
 // ============================================================================
+// DAG DTOs
+// ============================================================================
+
+export type DagActionDto = {
+  hash: string;
+  parents: string[];
+  author: string;
+  seq: number;
+  timestamp: string;
+  payload_type: string;
+  payload_summary: string;
+  signed: boolean;
+  signature: string | null;
+};
+
+export type DagTipsResponse = { tips: string[]; count: number };
+
+export type DagStatsResponse = { action_count: number; tip_count: number };
+
+export type DagTimeTravelResponse = {
+  target_hash: string;
+  target_timestamp: string;
+  actions_replayed: number;
+  triple_count: number;
+  triples: Array<{ subject: string; predicate: string; object: unknown }>;
+};
+
+export type DagDiffResponse = {
+  from: string;
+  to: string;
+  action_count: number;
+  actions: DagActionDto[];
+};
+
+export type DagPruneRequest = {
+  policy: "keep_all" | "keep_since" | "keep_last" | "keep_depth";
+  value?: number;
+  create_checkpoint?: boolean;
+};
+
+export type DagPruneResponse = {
+  pruned_count: number;
+  retained_count: number;
+  checkpoint_hash: string | null;
+};
+
+export type DagSyncRequest = { local_tips: string[]; want?: string[] };
+export type DagSyncResponse = {
+  actions: DagActionDto[];
+  remote_tips: string[];
+  action_count: number;
+};
+export type DagPullRequest = { peer_url: string };
+export type DagPullResponse = { ingested: number; already_had: number; remote_tips: string[] };
+export type DagVerifyResponse = {
+  valid: boolean;
+  public_key: string;
+  action_hash: string;
+  detail: string;
+};
+
+// ============================================================================
 // Error
 // ============================================================================
 
@@ -724,5 +786,78 @@ export class CortexClient implements CortexClientLike, CortexLike {
 
   async rebuildVectorIndex(): Promise<void> {
     return this.request("POST", "/api/v1/memory/index/rebuild");
+  }
+
+  // ---------- Semantic DAG ----------
+
+  async dagTips(): Promise<DagTipsResponse> {
+    return this.request<DagTipsResponse>("GET", "/api/v1/dag/tips");
+  }
+
+  async dagAction(hash: string): Promise<DagActionDto> {
+    return this.request<DagActionDto>("GET", `/api/v1/dag/action/${encodeURIComponent(hash)}`);
+  }
+
+  async dagHistory(opts: {
+    subject: string;
+    limit?: number;
+  }): Promise<{ actions: DagActionDto[] }> {
+    const qs = this.queryString({ subject: opts.subject, limit: opts.limit });
+    return this.request("GET", `/api/v1/dag/history${qs}`);
+  }
+
+  async dagChain(author: string, limit?: number): Promise<{ actions: DagActionDto[] }> {
+    const qs = this.queryString({ author, limit });
+    return this.request("GET", `/api/v1/dag/chain${qs}`);
+  }
+
+  async dagStats(): Promise<DagStatsResponse> {
+    return this.request<DagStatsResponse>("GET", "/api/v1/dag/stats");
+  }
+
+  async dagPrune(req: DagPruneRequest): Promise<DagPruneResponse> {
+    return this.request<DagPruneResponse>("POST", "/api/v1/dag/prune", req);
+  }
+
+  async dagAt(hash: string): Promise<DagTimeTravelResponse> {
+    return this.request<DagTimeTravelResponse>("GET", `/api/v1/dag/at/${encodeURIComponent(hash)}`);
+  }
+
+  async dagDiff(from: string, to: string): Promise<DagDiffResponse> {
+    const qs = this.queryString({ from, to });
+    return this.request<DagDiffResponse>("GET", `/api/v1/dag/diff${qs}`);
+  }
+
+  async dagExport(format: string = "mermaid"): Promise<string> {
+    if (this.destroyed) {
+      throw new CortexError("Client has been destroyed", 0, "CLIENT_DESTROYED");
+    }
+    const url = `${this.baseUrl}/api/v1/dag/export?format=${encodeURIComponent(format)}`;
+    const res = await resilientFetch(
+      url,
+      { method: "GET", headers: this.headers },
+      this.resilienceConfig,
+      this.breaker,
+    );
+    if (!res.ok) {
+      throw new CortexError(`DAG export failed with ${res.status}`, res.status);
+    }
+    return res.text();
+  }
+
+  async dagSync(req: DagSyncRequest): Promise<DagSyncResponse> {
+    return this.request<DagSyncResponse>("POST", "/api/v1/dag/sync", req);
+  }
+
+  async dagSyncPull(req: DagPullRequest): Promise<DagPullResponse> {
+    return this.request<DagPullResponse>("POST", "/api/v1/dag/sync/pull", req);
+  }
+
+  async dagVerify(hash: string, publicKey: string): Promise<DagVerifyResponse> {
+    const qs = this.queryString({ public_key: publicKey });
+    return this.request<DagVerifyResponse>(
+      "GET",
+      `/api/v1/dag/verify/${encodeURIComponent(hash)}${qs}`,
+    );
   }
 }
