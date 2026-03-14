@@ -154,3 +154,4 @@ docs/internal/
 
 # IDE workspace settings (may contain tokens)
 .vscode/
+.secret/
