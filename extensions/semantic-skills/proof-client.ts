@@ -1,5 +1,6 @@
 import type { SkillSandboxConfig } from "./config.js";
 import type { CortexClient } from "./cortex-client.js";
+import { generateSchnorrProof, generateMembershipProof } from "../shared/zk-schnorr.js";
 
 export type ProofType = "schnorr" | "equality" | "membership" | "range";
 
@@ -55,29 +56,63 @@ export class ProofClient {
       throw new Error("ZK proofs are disabled in skill sandbox configuration");
     }
 
-    const response = await Promise.race([
-      this.client.submitProof({
-        proof_type: req.proofType,
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.sandbox.proofTimeoutMs);
+
+    try {
+      const statement = `${req.subject} ${req.predicate}`;
+      const objectStr = req.predicate;
+
+      const proofFields =
+        req.proofType === "membership"
+          ? generateMembershipProof(statement, req.subject, req.predicate, objectStr, "permissions")
+          : generateSchnorrProof(statement, req.subject, req.predicate, objectStr);
+
+      // Both schnorr and membership use Knowledge proof type on Cortex
+      // (Cortex Membership requires Merkle trees not available in JS)
+      const cortexProofType = req.proofType === "membership" ? "knowledge" : req.proofType;
+
+      const proofData: Record<string, unknown> = {
+        type: "Knowledge",
+        statement,
         subject: req.subject,
         predicate: req.predicate,
-        proof_data: { type: req.proofType },
+        object: objectStr,
+        commitment: proofFields.commitment,
+        challenge: proofFields.challenge,
+        response: proofFields.response,
+      };
+      if (req.proofType === "membership") {
+        proofData.set_type = "permissions";
+      }
+
+      const response = await this.client.submitProof({
+        proof_type: cortexProofType,
+        subject: req.subject,
+        predicate: req.predicate,
+        proof_data: proofData,
         metadata: req.metadata,
-      }),
-      timeout(this.sandbox.proofTimeoutMs),
-    ]);
+      });
 
-    if (!response) {
-      throw new Error(`ZK proof request timed out after ${this.sandbox.proofTimeoutMs}ms`);
+      const status = response.status as string;
+      const validStatuses = new Set<string>(["pending", "verified", "failed"]);
+
+      return {
+        proofId: response.id,
+        status: validStatuses.has(status) ? (status as ProofResult["status"]) : "pending",
+        proofType: req.proofType,
+        subject: response.subject ?? req.subject,
+        predicate: response.predicate ?? req.predicate,
+        createdAt: response.created_at,
+      };
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`ZK proof request timed out after ${this.sandbox.proofTimeoutMs}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-
-    return {
-      proofId: response.id,
-      status: response.status as ProofResult["status"],
-      proofType: req.proofType,
-      subject: response.subject ?? req.subject,
-      predicate: response.predicate ?? req.predicate,
-      createdAt: response.created_at,
-    };
   }
 
   async verifyZkProof(proofId: string): Promise<VerifyResult> {
@@ -99,10 +134,4 @@ export class ProofClient {
     });
     return { valid: result.valid, messages: result.messages ?? [] };
   }
-}
-
-function timeout(ms: number): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
-  });
 }

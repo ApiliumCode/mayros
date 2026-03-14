@@ -71,6 +71,9 @@ importers:
       '@napi-rs/canvas':
         specifier: ^0.1.89
         version: 0.1.95
+      '@noble/curves':
+        specifier: ^2.0.1
+        version: 2.0.1
       '@sinclair/typebox':
         specifier: 0.34.48
         version: 0.34.48
