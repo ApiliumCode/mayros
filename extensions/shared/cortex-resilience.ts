@@ -92,6 +92,7 @@ export class CircuitBreaker {
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 300;
+const MAX_RETRY_DELAY_MS = 60_000;
 
 function isRetryable(err: unknown): boolean {
   if (err instanceof Response) {
@@ -126,21 +127,19 @@ export async function resilientFetch(
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    try {
       const res = await fetch(url, {
         ...init,
         signal: controller.signal,
       });
 
-      clearTimeout(timer);
-
       if (res.status >= 500) {
         breaker?.recordFailure();
         if (attempt < maxRetries) {
-          await delay(jitter(retryDelayMs * 2 ** attempt));
+          await delay(jitter(Math.min(retryDelayMs * 2 ** attempt, MAX_RETRY_DELAY_MS)));
           continue;
         }
         return res;
@@ -153,9 +152,11 @@ export async function resilientFetch(
       breaker?.recordFailure();
 
       if (attempt < maxRetries && isRetryable(err)) {
-        await delay(jitter(retryDelayMs * 2 ** attempt));
+        await delay(jitter(Math.min(retryDelayMs * 2 ** attempt, MAX_RETRY_DELAY_MS)));
         continue;
       }
+    } finally {
+      clearTimeout(timer);
     }
   }
 
