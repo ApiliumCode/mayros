@@ -149,6 +149,11 @@ function schnorrProve(secretSeed: Uint8Array): {
   const c = bytesToScalar(cBytes);
 
   // Response s = k + c * x — matches Rust's s = k + c*secret
+  // Note: JS BigInt is not constant-time. We add a dummy computation
+  // with the same shape using random values to obscure timing.
+  const dummy = randomBytes(32);
+  const d = bytesToScalar(dummy);
+  const _pad = (((d + c * d) % L) + L) % L; // same operations, random inputs
   const s = (((k + c * x) % L) + L) % L;
 
   return {

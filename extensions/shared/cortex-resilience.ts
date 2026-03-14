@@ -105,9 +105,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Add 0-30% random jitter to prevent thundering herd. */
+/** Add 0-30% random jitter to prevent thundering herd (CSPRNG). */
 function jitter(ms: number): number {
-  return ms + ms * Math.random() * 0.3;
+  const buf = new Uint8Array(2);
+  crypto.getRandomValues(buf);
+  const fraction = ((buf[0]! << 8) | buf[1]!) / 65536; // 0..1 with 16-bit resolution
+  return ms + ms * fraction * 0.3;
 }
 
 export async function resilientFetch(
