@@ -4,6 +4,29 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.2.1 (2026-03-14)
+
+Memory health tools — conflict detection and digest summaries for proactive memory maintenance.
+
+### MCP Server
+
+- `mayros_memory_conflicts` — scan for duplicate memories and graph-level contradictions (same subject+predicate, different values)
+- `mayros_memory_digest` — summarize memory state: total count, category distribution, recent entries, DAG stats
+- Parallel fetching in digest tool (content, categories, graph stats, DAG stats via `Promise.all`)
+- Both tools degrade gracefully when Cortex is down or DAG is disabled
+
+### CLI
+
+- `mayros memory conflicts` — scan Cortex for contradictions and duplicates (supports `--json`, `--limit`)
+- `mayros memory digest` — summarize stored memories with categories and recency (supports `--json`, `--limit`)
+- Both commands support `--cortex-host`, `--cortex-port`, `--cortex-token` flags
+
+### Tests
+
+- 13 new tests for memory health tools (duplicates, graph conflicts, empty state, Cortex down, limit capping, sort order, DAG disabled)
+
+---
+
 ## 0.2.0 (2026-03-13)
 
 Semantic DAG integration — full audit trail, time-travel, and verifiable history for the knowledge graph.

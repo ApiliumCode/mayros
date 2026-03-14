@@ -17,6 +17,8 @@ import { shortenHomeInString, shortenHomePath } from "../utils.js";
 import { formatErrorMessage, withManager } from "./cli-utils.js";
 import { formatHelpExamples } from "./help-format.js";
 import { withProgress, withProgressTotals } from "./progress.js";
+import { CortexError } from "../../extensions/shared/cortex-client.js";
+import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
 
 type MemoryCommandOptions = {
   agent?: string;
@@ -545,7 +547,9 @@ export function registerMemoryCli(program: Command) {
         `\n${theme.heading("Examples:")}\n${formatHelpExamples([
           ["mayros memory status", "Show index and provider status."],
           ["mayros memory index --force", "Force a full reindex."],
-          ['mayros memory search --query "deployment notes"', "Search indexed memory entries."],
+          ['mayros memory search "deployment notes"', "Search indexed memory entries."],
+          ["mayros memory conflicts", "Scan for duplicate/contradictory memories."],
+          ["mayros memory digest", "Summarize stored memories and categories."],
           ["mayros memory status --json", "Output machine-readable JSON."],
         ])}\n\n${theme.muted("Docs:")} ${formatDocsLink("/cli/memory", "apilium.com/us/doc/mayros/cli/memory")}\n`,
     );
@@ -757,6 +761,341 @@ export function registerMemoryCli(program: Command) {
             defaultRuntime.log(lines.join("\n").trim());
           },
         });
+      },
+    );
+
+  // ── memory conflicts ─────────────────────────────────────────────
+
+  memory
+    .command("conflicts")
+    .description("Scan Cortex memory for contradictions and duplicates")
+    .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
+    .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)")
+    .option("--limit <n>", "Max triples to scan (default 200)", (v: string) => Number(v))
+    .option("--json", "Print JSON")
+    .action(
+      async (opts: {
+        cortexHost?: string;
+        cortexPort?: string;
+        cortexToken?: string;
+        limit?: number;
+        json?: boolean;
+      }) => {
+        const client = resolveCortexClient({
+          host: opts.cortexHost,
+          port: opts.cortexPort,
+          token: opts.cortexToken,
+        });
+        const ns = resolveNamespace();
+        const limit = Math.min(Math.max(opts.limit ?? 200, 1), 1000);
+
+        try {
+          // Step 1: Get memory content triples
+          const memResult = await client.patternQuery({
+            predicate: `${ns}:memory:content`,
+            limit,
+          });
+          const contentTriples = memResult.matches;
+
+          if (contentTriples.length === 0) {
+            defaultRuntime.log("No memories found to scan for conflicts.");
+            return;
+          }
+
+          // Step 2: Detect exact duplicates
+          const contentMap = new Map<string, Array<{ subject: string; created_at?: string }>>();
+          for (const triple of contentTriples) {
+            const content =
+              typeof triple.object === "string" ? triple.object : JSON.stringify(triple.object);
+            const group = contentMap.get(content) ?? [];
+            group.push({
+              subject: triple.subject,
+              created_at: triple.created_at,
+            });
+            contentMap.set(content, group);
+          }
+
+          const duplicates = [...contentMap.entries()]
+            .filter(([, group]) => group.length > 1)
+            .map(([content, group]) => ({
+              content,
+              count: group.length,
+              subjects: group.map((g) => g.subject),
+            }));
+
+          // Step 3: Scan non-memory graph for subject-predicate conflicts
+          const allResult = await client.patternQuery({ limit });
+          const groups = new Map<string, Set<string>>();
+          for (const triple of allResult.matches) {
+            if (typeof triple.predicate === "string" && triple.predicate.includes(":memory:")) {
+              continue;
+            }
+            const key = `${triple.subject}\0${triple.predicate}`;
+            const values = groups.get(key) ?? new Set<string>();
+            const objStr =
+              typeof triple.object === "string" ? triple.object : JSON.stringify(triple.object);
+            values.add(objStr);
+            groups.set(key, values);
+          }
+
+          const subjectConflicts = [...groups.entries()]
+            .filter(([, values]) => values.size > 1)
+            .map(([key, values]) => {
+              const sep = key.indexOf("\0");
+              return {
+                subject: key.slice(0, sep),
+                predicate: key.slice(sep + 1),
+                values: [...values],
+              };
+            });
+
+          if (opts.json) {
+            defaultRuntime.log(
+              JSON.stringify(
+                { scanned: contentTriples.length, duplicates, subjectConflicts },
+                null,
+                2,
+              ),
+            );
+            return;
+          }
+
+          const rich = isRich();
+          const lines: string[] = [];
+          lines.push(
+            colorize(
+              rich,
+              theme.heading,
+              `Memory Conflict Scan (${contentTriples.length} memories scanned)`,
+            ),
+          );
+          lines.push("");
+
+          if (duplicates.length === 0 && subjectConflicts.length === 0) {
+            lines.push(colorize(rich, theme.success, "No conflicts detected."));
+            defaultRuntime.log(lines.join("\n"));
+            return;
+          }
+
+          if (duplicates.length > 0) {
+            lines.push(colorize(rich, theme.warn, `Duplicate Memories: ${duplicates.length}`));
+            for (const dup of duplicates.slice(0, 20)) {
+              const preview = dup.content.slice(0, 100) + (dup.content.length > 100 ? "..." : "");
+              lines.push(`  [${dup.count}x] "${preview}"`);
+              lines.push(
+                colorize(
+                  rich,
+                  theme.muted,
+                  `    Subjects: ${dup.subjects.map((s) => s.split(":").pop()).join(", ")}`,
+                ),
+              );
+            }
+            lines.push("");
+          }
+
+          if (subjectConflicts.length > 0) {
+            lines.push(colorize(rich, theme.warn, `Graph Conflicts: ${subjectConflicts.length}`));
+            for (const conflict of subjectConflicts.slice(0, 20)) {
+              lines.push(`  ${conflict.subject} :: ${conflict.predicate}`);
+              for (const val of conflict.values.slice(0, 5)) {
+                lines.push(
+                  colorize(
+                    rich,
+                    theme.muted,
+                    `    - ${val.slice(0, 100)}${val.length > 100 ? "..." : ""}`,
+                  ),
+                );
+              }
+            }
+          }
+
+          defaultRuntime.log(lines.join("\n"));
+        } catch (err) {
+          if (err instanceof CortexError) {
+            if (err.code === "CONNECTION_ERROR") {
+              defaultRuntime.error(
+                "Cortex is not running. Start it with `mayros cortex start` or check --cortex-host/--cortex-port.",
+              );
+            } else {
+              defaultRuntime.error(`Cortex error (${err.status}): ${err.message}`);
+            }
+          } else {
+            defaultRuntime.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          process.exitCode = 1;
+        } finally {
+          client.destroy();
+        }
+      },
+    );
+
+  // ── memory digest ────────────────────────────────────────────────
+
+  memory
+    .command("digest")
+    .description("Summarize what is stored in Cortex memory")
+    .option("--cortex-host <host>", "Cortex host (default: 127.0.0.1 or from config)")
+    .option("--cortex-port <port>", "Cortex port (default: 19090 or from config)")
+    .option("--cortex-token <token>", "Cortex auth token (or set CORTEX_AUTH_TOKEN)")
+    .option("--limit <n>", "Max recent memories to show (default 20)", (v: string) => Number(v))
+    .option("--json", "Print JSON")
+    .action(
+      async (opts: {
+        cortexHost?: string;
+        cortexPort?: string;
+        cortexToken?: string;
+        limit?: number;
+        json?: boolean;
+      }) => {
+        const client = resolveCortexClient({
+          host: opts.cortexHost,
+          port: opts.cortexPort,
+          token: opts.cortexToken,
+        });
+        const ns = resolveNamespace();
+        const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
+
+        try {
+          // Parallel queries: content, categories, graph stats, DAG stats
+          const [memResult, catResult, graphStats, dagStats] = await Promise.all([
+            client
+              .patternQuery({
+                predicate: `${ns}:memory:content`,
+                limit: 500,
+              })
+              .catch(() => ({
+                matches: [] as Array<{ subject: string; object: unknown; created_at?: string }>,
+                total: 0,
+              })),
+            client
+              .patternQuery({
+                predicate: `${ns}:memory:category`,
+                limit: 500,
+              })
+              .catch(() => ({ matches: [] as Array<{ object: unknown }>, total: 0 })),
+            client.stats().catch(() => null),
+            client.dagStats().catch(() => null),
+          ]);
+
+          const contentTriples = memResult.matches;
+          const totalMemories = memResult.total;
+
+          // Category distribution
+          const categoryMap = new Map<string, number>();
+          for (const cat of catResult.matches) {
+            const catName = typeof cat.object === "string" ? cat.object : "unknown";
+            categoryMap.set(catName, (categoryMap.get(catName) ?? 0) + 1);
+          }
+
+          // Sort by recency
+          const sorted = [...contentTriples].sort((a, b) => {
+            const ta = a.created_at ?? "";
+            const tb = b.created_at ?? "";
+            return tb.localeCompare(ta);
+          });
+
+          if (opts.json) {
+            defaultRuntime.log(
+              JSON.stringify(
+                {
+                  totalMemories,
+                  graphTriples: graphStats?.graph?.triple_count ?? null,
+                  uniqueSubjects: graphStats?.graph?.subject_count ?? null,
+                  dagActions: dagStats?.action_count ?? null,
+                  dagTips: dagStats?.tip_count ?? null,
+                  categories: Object.fromEntries(categoryMap),
+                  recentMemories: sorted.slice(0, limit).map((m) => ({
+                    subject: m.subject,
+                    content: typeof m.object === "string" ? m.object : JSON.stringify(m.object),
+                    created_at: m.created_at,
+                  })),
+                },
+                null,
+                2,
+              ),
+            );
+            return;
+          }
+
+          const rich = isRich();
+          const lines: string[] = [];
+          lines.push(colorize(rich, theme.heading, "Memory Digest"));
+          lines.push("");
+          lines.push(
+            `${colorize(rich, theme.muted, "Total memories:")} ${colorize(rich, theme.info, String(totalMemories))}`,
+          );
+
+          if (graphStats) {
+            lines.push(
+              `${colorize(rich, theme.muted, "Graph triples:")} ${colorize(rich, theme.info, String(graphStats.graph.triple_count))}`,
+            );
+            lines.push(
+              `${colorize(rich, theme.muted, "Unique subjects:")} ${colorize(rich, theme.info, String(graphStats.graph.subject_count))}`,
+            );
+          }
+
+          if (dagStats) {
+            lines.push(
+              `${colorize(rich, theme.muted, "DAG actions:")} ${colorize(rich, theme.info, `${dagStats.action_count} (${dagStats.tip_count} tips)`)}`,
+            );
+          }
+
+          if (categoryMap.size > 0) {
+            lines.push("");
+            lines.push(colorize(rich, theme.heading, "Categories:"));
+            const sortedCats = [...categoryMap.entries()].sort((a, b) => b[1] - a[1]);
+            for (const [cat, count] of sortedCats) {
+              lines.push(
+                `  ${colorize(rich, theme.accent, cat)}: ${colorize(rich, theme.info, String(count))}`,
+              );
+            }
+          }
+
+          if (sorted.length > 0) {
+            lines.push("");
+            lines.push(
+              colorize(
+                rich,
+                theme.heading,
+                `Recent Memories (${Math.min(limit, sorted.length)} of ${totalMemories}):`,
+              ),
+            );
+            for (const mem of sorted.slice(0, limit)) {
+              const content =
+                typeof mem.object === "string" ? mem.object : JSON.stringify(mem.object);
+              const preview = content.slice(0, 100) + (content.length > 100 ? "..." : "");
+              const date = mem.created_at
+                ? colorize(
+                    rich,
+                    theme.muted,
+                    ` [${mem.created_at.split("T")[0] ?? mem.created_at}]`,
+                  )
+                : "";
+              lines.push(`  - ${preview}${date}`);
+            }
+          } else {
+            lines.push("");
+            lines.push(colorize(rich, theme.muted, "No memories stored yet."));
+          }
+
+          defaultRuntime.log(lines.join("\n"));
+        } catch (err) {
+          if (err instanceof CortexError) {
+            if (err.code === "CONNECTION_ERROR") {
+              defaultRuntime.error(
+                "Cortex is not running. Start it with `mayros cortex start` or check --cortex-host/--cortex-port.",
+              );
+            } else {
+              defaultRuntime.error(`Cortex error (${err.status}): ${err.message}`);
+            }
+          } else {
+            defaultRuntime.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          process.exitCode = 1;
+        } finally {
+          client.destroy();
+        }
       },
     );
 }
