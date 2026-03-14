@@ -118,7 +118,7 @@ describe("DAG MCP Tools", () => {
   });
 
   // 8
-  it("mayros_dag_verify valid signature", async () => {
+  it("mayros_dag_verify valid signature (POST body)", async () => {
     globalThis.fetch = mockFetch({
       valid: true,
       action_hash: "abc123",
@@ -129,6 +129,13 @@ describe("DAG MCP Tools", () => {
     const result = await tool.execute("id", { hash: "abc123", public_key: "ed25519_key" });
     expect(result.content[0]!.text).toContain("VALID");
     expect(result.content[0]!.text).toContain("Signature valid");
+
+    const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const url = callArgs[0] as string;
+    const opts = callArgs[1] as RequestInit;
+    expect(url).not.toContain("public_key");
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body as string)).toEqual({ public_key: "ed25519_key" });
   });
 
   // 9

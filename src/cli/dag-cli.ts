@@ -350,7 +350,9 @@ export function registerDagCli(program: Command) {
       "--policy <policy>",
       "Prune policy: keep_all, keep_since, keep_last, or keep_depth",
     )
-    .option("--value <n>", "Policy value (timestamp, count, or depth)", parseInt)
+    .option("--value <n>", "Policy value (timestamp, count, or depth)", (v: string) =>
+      parseInt(v, 10),
+    )
     .option("--checkpoint", "Create checkpoint before pruning")
     .option("--yes", "Skip confirmation prompt")
     .action(

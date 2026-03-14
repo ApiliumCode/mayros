@@ -854,10 +854,10 @@ export class CortexClient implements CortexClientLike, CortexLike {
   }
 
   async dagVerify(hash: string, publicKey: string): Promise<DagVerifyResponse> {
-    const qs = this.queryString({ public_key: publicKey });
     return this.request<DagVerifyResponse>(
-      "GET",
-      `/api/v1/dag/verify/${encodeURIComponent(hash)}${qs}`,
+      "POST",
+      `/api/v1/dag/verify/${encodeURIComponent(hash)}`,
+      { public_key: publicKey },
     );
   }
 }
