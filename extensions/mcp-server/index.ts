@@ -205,6 +205,12 @@ const mcpServerPlugin = {
             ...createCortexTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
           ];
 
+          // Memory health tools
+          const { createMemoryHealthTools } = await import("./memory-health-tools.js");
+          mcpTools.push(
+            ...createMemoryHealthTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
+          );
+
           // DAG tools — enabled by default, opt-out via cortex.dag.enabled = false
           if (cfg.cortex?.dag?.enabled !== false) {
             const { createDagTools } = await import("./dag-tools.js");
