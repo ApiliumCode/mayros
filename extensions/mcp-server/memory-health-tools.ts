@@ -113,7 +113,7 @@ export function createMemoryHealthTools(deps: MemoryHealthToolDeps): AdaptableTo
             method: "POST",
             headers: postHeaders,
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-            body: JSON.stringify({ limit }),
+            body: JSON.stringify({ subject_prefix: `${namespace}:`, limit }),
           });
           if (res.ok) {
             const data = (await res.json()) as { matches: GraphTriple[] };
