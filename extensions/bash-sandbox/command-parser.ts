@@ -180,7 +180,8 @@ function tokenize(segment: string): string[] {
 
 /**
  * Detect whether a raw command segment contains subshell syntax.
- * Checks for `$(...)` and backtick-wrapped `` `...` `` patterns.
+ * Checks for `$(...)`, backtick-wrapped `` `...` ``, and process
+ * substitution `<(...)` / `>(...)` patterns.
  */
 function detectSubshell(raw: string): boolean {
   // Check for $(...) outside quotes
@@ -213,12 +214,17 @@ function detectSubshell(raw: string): boolean {
 
     if (inSingle) continue;
 
-    // $( detected outside single quotes
+    // $( detected outside single quotes (expands inside double quotes)
     if (ch === "$" && i + 1 < raw.length && raw[i + 1] === "(") {
       return true;
     }
 
-    // Backtick detected outside single quotes
+    // Process substitution: <(...) and >(...) — only outside ALL quotes
+    if (!inDouble && (ch === "<" || ch === ">") && i + 1 < raw.length && raw[i + 1] === "(") {
+      return true;
+    }
+
+    // Backtick detected outside single quotes (expands inside double quotes)
     if (ch === "`") {
       return true;
     }

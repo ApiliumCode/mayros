@@ -97,7 +97,17 @@ function evaluateCommand(command: string, cfg: BashSandboxConfig): SandboxVerdic
     if (match.severity === "warn") warned = true;
   }
 
-  // 5. Check sudo
+  // 5. Check subshell / process substitution
+  for (const cmd of chain.commands) {
+    if (cmd.isSubshell) {
+      const msg = `Subshell or process substitution detected (command: ${cmd.executable})`;
+      reasons.push(msg);
+      matches.push({ pattern: "subshell-detected", severity: "warn", message: msg });
+      warned = true;
+    }
+  }
+
+  // 6. Check sudo
   if (!cfg.allowSudo) {
     for (const cmd of chain.commands) {
       if (cmd.hasSudo) {
@@ -109,7 +119,7 @@ function evaluateCommand(command: string, cfg: BashSandboxConfig): SandboxVerdic
     }
   }
 
-  // 6. Check domains for network commands (curl, wget, etc.)
+  // 7. Check domains for network commands (curl, wget, etc.)
   if (!cfg.allowCurlToArbitraryDomains) {
     const hasNetworkCommand = chain.commands.some((cmd) =>
       NETWORK_COMMANDS.has(cmd.executable.toLowerCase()),

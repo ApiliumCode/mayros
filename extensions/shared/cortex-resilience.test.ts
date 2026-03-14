@@ -282,6 +282,22 @@ describe("resilientFetch", () => {
     expect(breaker.getState()).toBe("closed");
   });
 
+  it("clears timeout on network error", async () => {
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+
+    await expect(
+      resilientFetch(
+        "http://localhost/test",
+        { method: "GET" },
+        { maxRetries: 0, retryDelayMs: 1 },
+      ),
+    ).rejects.toThrow("ECONNREFUSED");
+
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
+  });
+
   it("does not retry on 4xx errors", async () => {
     const err400 = new Response("bad request", { status: 400 });
     globalThis.fetch = vi.fn().mockResolvedValue(err400);

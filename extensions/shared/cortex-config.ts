@@ -164,6 +164,23 @@ export function parseDagConfig(raw: unknown): DagConfig {
   return { enabled: d.enabled !== false };
 }
 
+const MAX_RESILIENCE_MS = 300_000; // 5 minutes — sane upper bound for any timeout/delay
+const MAX_RESILIENCE_COUNT = 20; // sane upper bound for retries/thresholds
+
+function clampPositive(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number = label.endsWith("Ms") ? MAX_RESILIENCE_MS : MAX_RESILIENCE_COUNT,
+): number | undefined {
+  if (typeof value !== "number") return undefined;
+  const n = Math.floor(value);
+  if (!Number.isFinite(n) || n < min || n > max) {
+    throw new Error(`resilience.${label} must be between ${min} and ${max} (got ${value})`);
+  }
+  return n;
+}
+
 function parseResilienceConfig(raw: unknown): ResilienceConfig | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const r = raw as Record<string, unknown>;
@@ -173,11 +190,10 @@ function parseResilienceConfig(raw: unknown): ResilienceConfig | undefined {
     "resilience config",
   );
   return {
-    timeoutMs: typeof r.timeoutMs === "number" ? Math.floor(r.timeoutMs) : undefined,
-    maxRetries: typeof r.maxRetries === "number" ? Math.floor(r.maxRetries) : undefined,
-    retryDelayMs: typeof r.retryDelayMs === "number" ? Math.floor(r.retryDelayMs) : undefined,
-    circuitThreshold:
-      typeof r.circuitThreshold === "number" ? Math.floor(r.circuitThreshold) : undefined,
-    circuitResetMs: typeof r.circuitResetMs === "number" ? Math.floor(r.circuitResetMs) : undefined,
+    timeoutMs: clampPositive(r.timeoutMs, "timeoutMs", 1),
+    maxRetries: clampPositive(r.maxRetries, "maxRetries", 0),
+    retryDelayMs: clampPositive(r.retryDelayMs, "retryDelayMs", 1),
+    circuitThreshold: clampPositive(r.circuitThreshold, "circuitThreshold", 1),
+    circuitResetMs: clampPositive(r.circuitResetMs, "circuitResetMs", 1),
   };
 }

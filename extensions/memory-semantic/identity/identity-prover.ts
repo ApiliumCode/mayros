@@ -8,6 +8,7 @@
  */
 
 import type { CortexClient } from "../cortex-client.js";
+import { generateSchnorrProof, generateMembershipProof } from "../../shared/zk-schnorr.js";
 
 // ============================================================================
 // Types
@@ -49,13 +50,22 @@ export class IdentityProver {
    * The proof commits to the capability hash without revealing all capabilities.
    */
   async proveCapability(agentId: string, capability: string): Promise<CapabilityProof> {
+    const statement = `${this.ns}:agent:${agentId} has capability ${capability}`;
+    const subject = `${this.ns}:agent:${agentId}`;
+    const predicate = `${this.ns}:identity:capability`;
+    const proof = generateSchnorrProof(statement, subject, predicate, capability);
+
     const result = await this.client.submitProof({
-      proof_type: "Knowledge",
+      proof_type: "knowledge",
       proof_data: {
-        statement: `${this.ns}:agent:${agentId} has capability ${capability}`,
-        subject: `${this.ns}:agent:${agentId}`,
-        predicate: `${this.ns}:identity:capability`,
+        type: "Knowledge",
+        statement,
+        subject,
+        predicate,
         object: capability,
+        commitment: proof.commitment,
+        challenge: proof.challenge,
+        response: proof.response,
       },
       metadata: {
         submitter: agentId,
@@ -76,14 +86,23 @@ export class IdentityProver {
    * Create a Membership proof that an agent holds a given permission.
    */
   async provePermission(agentId: string, permission: string): Promise<PermissionProof> {
+    const statement = `${this.ns}:agent:${agentId} has permission ${permission}`;
+    const subject = `${this.ns}:agent:${agentId}`;
+    const predicate = `${this.ns}:identity:permission`;
+    const proof = generateMembershipProof(statement, subject, predicate, permission, "permissions");
+
     const result = await this.client.submitProof({
-      proof_type: "Membership",
+      proof_type: "knowledge",
       proof_data: {
-        statement: `${this.ns}:agent:${agentId} has permission ${permission}`,
-        subject: `${this.ns}:agent:${agentId}`,
-        predicate: `${this.ns}:identity:permission`,
+        type: "Knowledge",
+        statement,
+        subject,
+        predicate,
         object: permission,
         set_type: "permissions",
+        commitment: proof.commitment,
+        challenge: proof.challenge,
+        response: proof.response,
       },
       metadata: {
         submitter: agentId,
@@ -108,7 +127,7 @@ export class IdentityProver {
     return {
       proofId,
       valid: result.valid,
-      verifiedAt: result.details.verified_at,
+      verifiedAt: result.details?.verified_at ?? new Date().toISOString(),
       details: [],
     };
   }

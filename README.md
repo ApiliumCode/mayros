@@ -254,19 +254,44 @@ mayros serve --http
 
 Point any MCP client to `http://127.0.0.1:19100/mcp` (Streamable HTTP) or `http://127.0.0.1:19100/sse` (legacy SSE for older clients).
 
+### Bring persistent memory to any AI coding tool
+
+AI coding CLIs have no memory between sessions. Mayros + [AIngle Cortex](https://github.com/ApiliumCode/aingle) fill that gap: semantic knowledge graph, DAG audit trail, vector search, and ZK proofs — all local-first.
+
+Any MCP-compatible client gets instant access to 21 tools via a single command:
+
+```bash
+claude mcp add mayros -- mayros serve --stdio   # Claude Code
+# Gemini CLI, GitHub Copilot — coming soon
+```
+
+Built on the open [Model Context Protocol](https://modelcontextprotocol.io) standard — no vendor lock-in.
+
 ### Tools
 
-| Tool                  | Description                                           |
-| --------------------- | ----------------------------------------------------- |
-| `mayros_remember`     | Store information in persistent semantic memory       |
-| `mayros_recall`       | Search memory by text, tags, or type                  |
-| `mayros_search`       | Vector similarity search over memory (HNSW)           |
-| `mayros_forget`       | Delete a memory entry                                 |
-| `mayros_budget`       | Check token usage and budget status                   |
-| `mayros_policy_check` | Evaluate actions against governance policies          |
-| `mayros_cortex_query` | Query the knowledge graph by subject/predicate/object |
-| `mayros_cortex_store` | Store RDF triples in the knowledge graph              |
-| `mayros_memory_stats` | STM/LTM/HNSW/graph statistics                         |
+| Tool                      | Description                                            |
+| ------------------------- | ------------------------------------------------------ |
+| `mayros_remember`         | Store information in persistent semantic memory        |
+| `mayros_recall`           | Search memory by text, tags, or type                   |
+| `mayros_search`           | Vector similarity search over memory (HNSW)            |
+| `mayros_forget`           | Delete a memory entry                                  |
+| `mayros_memory_stats`     | STM/LTM/HNSW/graph statistics                          |
+| `mayros_memory_conflicts` | Scan memory for contradictions and duplicates          |
+| `mayros_memory_digest`    | Summary of stored memories, categories, and DAG status |
+| `mayros_cortex_query`     | Query the knowledge graph by subject/predicate/object  |
+| `mayros_cortex_store`     | Store RDF triples in the knowledge graph               |
+| `mayros_budget`           | Check token usage and budget status                    |
+| `mayros_policy_check`     | Evaluate actions against governance policies           |
+| `mayros_dag_tips`         | Get the current DAG tip hashes (frontier)              |
+| `mayros_dag_action`       | Submit a new action to the DAG                         |
+| `mayros_dag_history`      | Query action history for a subject or triple           |
+| `mayros_dag_chain`        | Trace the full chain of ancestors for an action        |
+| `mayros_dag_stats`        | DAG statistics (action count, tip count)               |
+| `mayros_dag_prune`        | Prune old DAG actions by policy                        |
+| `mayros_dag_time_travel`  | View graph state at a specific DAG action              |
+| `mayros_dag_diff`         | Compare graph state between two DAG actions            |
+| `mayros_dag_export`       | Export DAG actions as JSON                             |
+| `mayros_dag_verify`       | Verify Ed25519 signature of a DAG action               |
 
 ---
 
@@ -346,7 +371,7 @@ Both connect to `ws://127.0.0.1:18789`.
 | Transforms    | `hayameru`                | Deterministic code transforms that bypass LLM (0 tokens, sub-ms)          |
 | Rate Limit    | `tomeru-guard`            | Sliding window rate limiter, loop breaker, velocity circuit breaker       |
 | Hooks         | `llm-hooks`               | Markdown-defined hook evaluation with safe condition parser               |
-| MCP Server    | `mcp-server`              | 9 tools exposed via MCP (memory, budget, governance, graph)               |
+| MCP Server    | `mcp-server`              | 21 tools exposed via MCP (memory, graph, DAG, budget, governance)         |
 | MCP Client    | `mcp-client`              | Model Context Protocol client (stdio, SSE, WebSocket, HTTP)               |
 | Economy       | `token-economy`           | Budget tracking, response cache, prompt cache optimization                |
 | Bridge        | `kakeru-bridge`           | Dual-platform coordination (Claude + Codex CLI)                           |

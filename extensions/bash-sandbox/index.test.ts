@@ -274,6 +274,34 @@ describe("evaluateCommand", () => {
     expect(result.action).toBe("warned");
     expect(result.allowed).toBe(true);
   });
+
+  it("warns on subshell / process substitution", async () => {
+    const { evaluateCommand } = await import("./index.js");
+    const cfg = bashSandboxConfigSchema.parse({});
+
+    const result = evaluateCommand("diff <(sort a.txt) <(sort b.txt)", cfg);
+    expect(result.action).toBe("warned");
+    expect(result.allowed).toBe(true);
+    expect(result.reasons.some((r) => r.includes("Subshell"))).toBe(true);
+    expect(result.matches.some((m) => m.pattern === "subshell-detected")).toBe(true);
+  });
+
+  it("warns on $(...) subshell", async () => {
+    const { evaluateCommand } = await import("./index.js");
+    const cfg = bashSandboxConfigSchema.parse({});
+
+    const result = evaluateCommand("echo $(whoami)", cfg);
+    expect(result.action).toBe("warned");
+    expect(result.allowed).toBe(true);
+  });
+
+  it("does not warn on quoted process substitution", async () => {
+    const { evaluateCommand } = await import("./index.js");
+    const cfg = bashSandboxConfigSchema.parse({});
+
+    const result = evaluateCommand("echo '<(not a subshell)'", cfg);
+    expect(result.action).toBe("allowed");
+  });
 });
 
 // ============================================================================

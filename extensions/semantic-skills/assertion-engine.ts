@@ -42,46 +42,53 @@ export class AssertionEngine {
       );
     }
 
-    // Check if this predicate is declared in the manifest
-    const decl = this.declaredAssertions.find((a) => a.predicate === predicate);
-    const needsProof = options?.requireProof ?? decl?.requireProof ?? false;
-
-    // Namespace the subject if not already prefixed
-    const nsSubject = subject.startsWith(`${this.namespace}:`)
-      ? subject
-      : `${this.namespace}:${subject}`;
-    const nsPredicate = predicate.startsWith(`${this.namespace}:`)
-      ? predicate
-      : `${this.namespace}:${predicate}`;
-
-    // Create the triple
-    const triple = await this.client.createTriple({
-      subject: nsSubject,
-      predicate: nsPredicate,
-      object: object as ValueDto,
-    });
-    const hash = triple.id ?? "";
-
-    let proofHash: string | undefined;
-    let verified = true;
-
-    // Request PoL proof if required
-    if (needsProof) {
-      const polResult = await this.proofClient.requestPolProof(nsSubject, nsPredicate, object);
-      verified = polResult.valid;
-      proofHash = polResult.proofHash;
-    }
-
+    // Reserve the slot before any async work to prevent concurrent over-publish
     this.assertionCount++;
 
-    return {
-      subject: nsSubject,
-      predicate: nsPredicate,
-      object,
-      tripleHash: hash,
-      proofHash,
-      verified,
-    };
+    try {
+      // Check if this predicate is declared in the manifest
+      const decl = this.declaredAssertions.find((a) => a.predicate === predicate);
+      const needsProof = options?.requireProof ?? decl?.requireProof ?? false;
+
+      // Namespace the subject if not already prefixed
+      const nsSubject = subject.startsWith(`${this.namespace}:`)
+        ? subject
+        : `${this.namespace}:${subject}`;
+      const nsPredicate = predicate.startsWith(`${this.namespace}:`)
+        ? predicate
+        : `${this.namespace}:${predicate}`;
+
+      // Create the triple
+      const triple = await this.client.createTriple({
+        subject: nsSubject,
+        predicate: nsPredicate,
+        object: object as ValueDto,
+      });
+      const hash = triple.id ?? "";
+
+      let proofHash: string | undefined;
+      let verified = true;
+
+      // Request PoL proof if required
+      if (needsProof) {
+        const polResult = await this.proofClient.requestPolProof(nsSubject, nsPredicate, object);
+        verified = polResult.valid;
+        proofHash = polResult.proofHash;
+      }
+
+      return {
+        subject: nsSubject,
+        predicate: nsPredicate,
+        object,
+        tripleHash: hash,
+        proofHash,
+        verified,
+      };
+    } catch (err) {
+      // Release the slot on failure so it can be retried
+      this.assertionCount--;
+      throw err;
+    }
   }
 
   async verify(

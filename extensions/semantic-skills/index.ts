@@ -514,22 +514,30 @@ const semanticSkillsPlugin = {
             };
           }
 
-          const result = await engine.publish(subject, predicate, obj, {
-            requireProof,
-            proofType,
-          });
+          try {
+            const result = await engine.publish(subject, predicate, obj, {
+              requireProof,
+              proofType,
+            });
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Assertion published: ${result.subject} ${result.predicate} = ${JSON.stringify(result.object)}${
-                  result.proofHash ? ` (proof: ${result.proofHash})` : ""
-                }${result.verified ? " [verified]" : " [unverified]"}`,
-              },
-            ],
-            details: result,
-          };
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Assertion published: ${result.subject} ${result.predicate} = ${JSON.stringify(result.object)}${
+                    result.proofHash ? ` (proof: ${result.proofHash})` : ""
+                  }${result.verified ? " [verified]" : " [unverified]"}`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              content: [{ type: "text", text: `Assertion failed: ${msg}` }],
+              details: { error: "publish_failed", message: msg },
+            };
+          }
         },
       },
       { name: "skill_assert" },
@@ -632,22 +640,30 @@ const semanticSkillsPlugin = {
             };
           }
 
-          const result = await proofClient.requestZkProof({
-            proofType: proofType as "schnorr" | "equality" | "membership" | "range",
-            subject,
-            predicate,
-            metadata,
-          });
+          try {
+            const result = await proofClient.requestZkProof({
+              proofType: proofType as "schnorr" | "equality" | "membership" | "range",
+              subject,
+              predicate,
+              metadata,
+            });
 
-          return {
-            content: [
-              {
-                type: "text",
-                text: `ZK proof requested: ${result.proofId} (${result.proofType}, status: ${result.status})`,
-              },
-            ],
-            details: result,
-          };
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `ZK proof requested: ${result.proofId} (${result.proofType}, status: ${result.status})`,
+                },
+              ],
+              details: result,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+              content: [{ type: "text", text: `ZK proof request failed: ${msg}` }],
+              details: { error: "zk_proof_failed", message: msg },
+            };
+          }
         },
       },
       { name: "skill_request_zk_proof" },

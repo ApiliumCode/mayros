@@ -92,6 +92,7 @@ export class CircuitBreaker {
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 300;
+const MAX_RETRY_DELAY_MS = 60_000;
 
 function isRetryable(err: unknown): boolean {
   if (err instanceof Response) {
@@ -104,9 +105,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Add 0-30% random jitter to prevent thundering herd. */
+/** Add 0-30% random jitter to prevent thundering herd (CSPRNG). */
 function jitter(ms: number): number {
-  return ms + ms * Math.random() * 0.3;
+  const buf = new Uint8Array(2);
+  crypto.getRandomValues(buf);
+  const fraction = ((buf[0]! << 8) | buf[1]!) / 65536; // 0..1 with 16-bit resolution
+  return ms + ms * fraction * 0.3;
 }
 
 export async function resilientFetch(
@@ -126,21 +130,19 @@ export async function resilientFetch(
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    try {
       const res = await fetch(url, {
         ...init,
         signal: controller.signal,
       });
 
-      clearTimeout(timer);
-
       if (res.status >= 500) {
         breaker?.recordFailure();
         if (attempt < maxRetries) {
-          await delay(jitter(retryDelayMs * 2 ** attempt));
+          await delay(jitter(Math.min(retryDelayMs * 2 ** attempt, MAX_RETRY_DELAY_MS)));
           continue;
         }
         return res;
@@ -153,9 +155,11 @@ export async function resilientFetch(
       breaker?.recordFailure();
 
       if (attempt < maxRetries && isRetryable(err)) {
-        await delay(jitter(retryDelayMs * 2 ** attempt));
+        await delay(jitter(Math.min(retryDelayMs * 2 ** attempt, MAX_RETRY_DELAY_MS)));
         continue;
       }
+    } finally {
+      clearTimeout(timer);
     }
   }
 

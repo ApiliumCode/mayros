@@ -257,6 +257,31 @@ describe("parseCommandChain — subshell detection", () => {
     const chain = parseCommandChain("echo '$(not a subshell)'");
     expect(chain.commands[0].isSubshell).toBe(false);
   });
+
+  it("detects <(...) process substitution", () => {
+    const chain = parseCommandChain("diff <(sort a.txt) <(sort b.txt)");
+    expect(chain.commands[0].isSubshell).toBe(true);
+  });
+
+  it("detects >(...) process substitution", () => {
+    const chain = parseCommandChain("tee >(grep error > err.log)");
+    expect(chain.commands[0].isSubshell).toBe(true);
+  });
+
+  it("does not detect <(...) inside single quotes", () => {
+    const chain = parseCommandChain("echo '<(not process sub)'");
+    expect(chain.commands[0].isSubshell).toBe(false);
+  });
+
+  it("does not detect <(...) inside double quotes", () => {
+    const chain = parseCommandChain('echo "<(not process sub)"');
+    expect(chain.commands[0].isSubshell).toBe(false);
+  });
+
+  it("does not detect >(...) inside double quotes", () => {
+    const chain = parseCommandChain('echo ">(not process sub)"');
+    expect(chain.commands[0].isSubshell).toBe(false);
+  });
 });
 
 // ============================================================================
