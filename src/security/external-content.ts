@@ -52,7 +52,7 @@ const EXTERNAL_CONTENT_START_NAME = "EXTERNAL_UNTRUSTED_CONTENT";
 const EXTERNAL_CONTENT_END_NAME = "END_EXTERNAL_UNTRUSTED_CONTENT";
 
 function createExternalContentMarkerId(): string {
-  return randomBytes(8).toString("hex");
+  return randomBytes(16).toString("hex");
 }
 
 function createExternalContentStartMarker(id: string): string {
