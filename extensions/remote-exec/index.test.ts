@@ -44,8 +44,6 @@ import {
   formatPendingList,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
-  ALIAS_NAME_PATTERN,
-  RESERVED_ALIAS_NAMES,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
