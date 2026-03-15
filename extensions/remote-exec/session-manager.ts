@@ -349,4 +349,19 @@ export class SessionManager {
     if (!session) return undefined;
     return session.aliases[name];
   }
+
+  // ---------- Session Reset ----------
+
+  clearSession(channel: string, senderId: string, defaultWorkdir: string): void {
+    const key = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(key);
+    if (session) {
+      session.workdir = defaultWorkdir;
+      session.outputCache = null;
+      session.history = [];
+      session.env = {};
+      session.aliases = {};
+      session.lastActivity = Date.now();
+    }
+  }
 }

@@ -24,6 +24,10 @@
  * - T. Alias management
  * - U. Output masking
  * - V. /run alias, status, masking integration
+ * - W. Config: blockedPatterns
+ * - X. Session clear
+ * - Y. /run clear, config, blocklist integration
+ * - Z. Blocklist & reserved names edge cases
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -44,6 +48,7 @@ import {
   formatPendingList,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
+  RESERVED_ALIAS_NAMES,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
@@ -102,6 +107,7 @@ function makeConfig(overrides: Partial<RemoteExecConfig> = {}): RemoteExecConfig
       maxAliases: 10,
     },
     maskOutput: true,
+    blockedPatterns: [],
     ...overrides,
   };
 }
@@ -3081,5 +3087,447 @@ describe("/run alias, status, masking integration", () => {
     });
     expect(result.text).toContain("alias");
     expect(result.text).toContain("status");
+  });
+});
+
+// ============================================================================
+// W. Config: blockedPatterns (8 tests)
+// ============================================================================
+
+describe("config: blockedPatterns", () => {
+  it("parses default blockedPatterns as empty array", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.blockedPatterns).toEqual([]);
+  });
+
+  it("parses valid regex patterns (string to RegExp)", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      blockedPatterns: ["^sudo\\b", "rm\\s+-rf"],
+    });
+    expect(cfg.blockedPatterns).toHaveLength(2);
+    expect(cfg.blockedPatterns[0]).toBeInstanceOf(RegExp);
+    expect(cfg.blockedPatterns[1]).toBeInstanceOf(RegExp);
+  });
+
+  it("throws on non-array blockedPatterns", () => {
+    expect(() => remoteExecConfigSchema.parse({ blockedPatterns: "not-array" })).toThrow(
+      "blockedPatterns must be an array of regex strings",
+    );
+  });
+
+  it("throws on non-string pattern entry", () => {
+    expect(() => remoteExecConfigSchema.parse({ blockedPatterns: [123] })).toThrow(
+      "blockedPatterns[0] must be a non-empty string",
+    );
+  });
+
+  it("throws on empty string pattern entry", () => {
+    expect(() => remoteExecConfigSchema.parse({ blockedPatterns: [""] })).toThrow(
+      "blockedPatterns[0] must be a non-empty string",
+    );
+  });
+
+  it("throws on invalid regex", () => {
+    expect(() => remoteExecConfigSchema.parse({ blockedPatterns: ["(unclosed"] })).toThrow(
+      "blockedPatterns[0] is not a valid regex",
+    );
+  });
+
+  it("compiled patterns match expected strings (anchored vs unanchored)", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      blockedPatterns: ["^sudo\\b", "rm\\s+-rf"],
+    });
+    expect(cfg.blockedPatterns[0]!.test("sudo reboot")).toBe(true);
+    expect(cfg.blockedPatterns[0]!.test("my-sudo-thing")).toBe(false);
+    expect(cfg.blockedPatterns[1]!.test("rm -rf /")).toBe(true);
+    expect(cfg.blockedPatterns[1]!.test("rm file")).toBe(false);
+  });
+
+  it("blockedPatterns works alongside all other config keys", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      enabled: true,
+      allowedPaths: ["/tmp"],
+      blockedPatterns: ["^curl\\b"],
+      maskOutput: false,
+    });
+    expect(cfg.enabled).toBe(true);
+    expect(cfg.blockedPatterns).toHaveLength(1);
+    expect(cfg.maskOutput).toBe(false);
+  });
+});
+
+// ============================================================================
+// X. Session Clear (6 tests)
+// ============================================================================
+
+describe("SessionManager.clearSession", () => {
+  let sessionMgr: SessionManager;
+  const sessionConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 3_500,
+    outputCacheTtlMs: 300_000,
+    maxHistorySize: 20,
+    maxEnvVars: 20,
+    maxAliases: 10,
+  };
+
+  beforeEach(() => {
+    sessionMgr = new SessionManager(sessionConfig, noopLogger);
+  });
+
+  it("clearSession resets workdir to default", () => {
+    sessionMgr.getOrCreate("ch", "u1", "/original");
+    sessionMgr.setWorkdir("ch", "u1", "/changed");
+    sessionMgr.clearSession("ch", "u1", "/original");
+    expect(sessionMgr.getWorkdir("ch", "u1")).toBe("/original");
+  });
+
+  it("clearSession clears history", () => {
+    sessionMgr.getOrCreate("ch", "u1", "/tmp");
+    sessionMgr.addHistory("ch", "u1", { command: "ls", exitCode: 0, timestamp: Date.now() }, 20);
+    sessionMgr.clearSession("ch", "u1", "/tmp");
+    expect(sessionMgr.getHistory("ch", "u1")).toEqual([]);
+  });
+
+  it("clearSession clears env vars", () => {
+    sessionMgr.getOrCreate("ch", "u1", "/tmp");
+    sessionMgr.setEnv("ch", "u1", "FOO", "bar", 20);
+    sessionMgr.clearSession("ch", "u1", "/tmp");
+    expect(sessionMgr.getEnv("ch", "u1")).toEqual({});
+  });
+
+  it("clearSession clears aliases", () => {
+    sessionMgr.getOrCreate("ch", "u1", "/tmp");
+    sessionMgr.setAlias("ch", "u1", "ll", "ls -la", 10);
+    sessionMgr.clearSession("ch", "u1", "/tmp");
+    expect(sessionMgr.getAliases("ch", "u1")).toEqual({});
+  });
+
+  it("clearSession clears output cache", () => {
+    sessionMgr.getOrCreate("ch", "u1", "/tmp");
+    sessionMgr.cacheOutput("ch", "u1", "some output\npage 2", "ls");
+    sessionMgr.clearSession("ch", "u1", "/tmp");
+    expect(sessionMgr.hasMorePages("ch", "u1")).toBe(false);
+  });
+
+  it("clearSession is idempotent on non-existent session", () => {
+    // Should not throw
+    sessionMgr.clearSession("ch", "nobody", "/tmp");
+    expect(sessionMgr.getHistory("ch", "nobody")).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Y. /run clear, config, blocklist Integration (20 tests)
+// ============================================================================
+
+describe("/run clear, config, blocklist integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    await fs.mkdir(path.join(tmpDir, "subdir"));
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+        blockedPatterns: ["^curl\\b", "rm\\s+-rf"],
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  // --- /run clear ---
+
+  it("/run clear resets session to initial state", async () => {
+    // Set up some state
+    await cmdHandler({ args: "env FOO=bar", senderId: "u1", channel: "ch", config: {} });
+    await cmdHandler({ args: "alias build echo hi", senderId: "u1", channel: "ch", config: {} });
+    await cmdHandler({
+      args: `cd ${path.join(tmpDir, "subdir")}`,
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+
+    const result = await cmdHandler({ args: "clear", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("Session cleared");
+  });
+
+  it("/run clear then /run env shows empty", async () => {
+    await cmdHandler({ args: "env FOO=bar", senderId: "u1", channel: "ch", config: {} });
+    await cmdHandler({ args: "clear", senderId: "u1", channel: "ch", config: {} });
+    const result = await cmdHandler({ args: "env", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("No session environment variables set.");
+  });
+
+  it("/run clear then /run alias shows empty", async () => {
+    await cmdHandler({ args: "alias build echo hi", senderId: "u1", channel: "ch", config: {} });
+    await cmdHandler({ args: "clear", senderId: "u1", channel: "ch", config: {} });
+    const result = await cmdHandler({ args: "alias", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("No aliases defined.");
+  });
+
+  it("/run clear then /run history shows empty", async () => {
+    await cmdHandler({ args: "echo hi", senderId: "u1", channel: "ch", config: {} });
+    await cmdHandler({ args: "clear", senderId: "u1", channel: "ch", config: {} });
+    const result = await cmdHandler({ args: "history", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("No command history.");
+  });
+
+  it("/run clear then /run pwd shows default workdir", async () => {
+    await cmdHandler({
+      args: `cd ${path.join(tmpDir, "subdir")}`,
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    await cmdHandler({ args: "clear", senderId: "u1", channel: "ch", config: {} });
+    const result = await cmdHandler({ args: "pwd", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain(tmpDir);
+    expect(result.text).not.toContain("subdir");
+  });
+
+  it("/run clear without senderId returns error", async () => {
+    const result = await cmdHandler({ args: "clear", channel: "ch", config: {} });
+    expect(result.text).toContain("Session requires a sender identity");
+  });
+
+  it("/run clear on fresh session succeeds", async () => {
+    const result = await cmdHandler({
+      args: "clear",
+      senderId: "fresh-user",
+      channel: "ch",
+      config: {},
+    });
+    expect(result.text).toContain("Session cleared");
+  });
+
+  // --- /run config ---
+
+  it("/run config shows enabled status", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("enabled: true");
+  });
+
+  it("/run config shows allowedPaths count", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("allowedPaths: 1 path(s)");
+  });
+
+  it("/run config shows commandTimeout", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("commandTimeout: 30000ms");
+  });
+
+  it("/run config shows maskOutput status", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("maskOutput: true");
+  });
+
+  it("/run config shows blockedPatterns count", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("blockedPatterns: 2 pattern(s)");
+  });
+
+  it("/run config shows rate limit values", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("maxCallsPerWindow: 10");
+    expect(result.text).toContain("windowMs: 60000ms");
+  });
+
+  it("/run config shows confirmation settings", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("autoApproveMaxRisk: safe");
+    expect(result.text).toContain("approvalTtlMs:");
+    expect(result.text).toContain("showRiskLevel:");
+  });
+
+  it("/run config shows session settings", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("sessionTtlMs:");
+    expect(result.text).toContain("outputPageSize:");
+    expect(result.text).toContain("maxHistorySize:");
+  });
+
+  it("/run config does not show auditLogPath", async () => {
+    const result = await cmdHandler({ args: "config", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).not.toContain("auditLogPath");
+    expect(result.text).not.toContain("audit.jsonl");
+  });
+
+  // --- blocklist ---
+
+  it("blocked pattern prevents command execution", async () => {
+    const result = await cmdHandler({
+      args: "curl http://evil.com",
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    expect(result.text).toContain("Blocked by pattern");
+    expect(result.text).toContain("^curl\\b");
+  });
+
+  it("alias expanding to blocked pattern is rejected", async () => {
+    await cmdHandler({
+      args: "alias fetch curl http://example.com",
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    const result = await cmdHandler({ args: "fetch", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("Blocked by pattern");
+  });
+
+  it("command not matching blocked pattern executes normally", async () => {
+    const result = await cmdHandler({
+      args: "echo hello",
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    expect(result.text).toContain("hello");
+    expect(result.text).not.toContain("Blocked");
+  });
+
+  it("/run help includes clear and config subcommands", async () => {
+    const result = await cmdHandler({ args: "help", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("clear");
+    expect(result.text).toContain("config");
+  });
+});
+
+// ============================================================================
+// Z. Blocklist & Reserved Names Edge Cases (4 tests)
+// ============================================================================
+
+describe("blocklist & reserved names edge cases", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+        blockedPatterns: ["^sudo\\b", "rm\\s+-rf", "^curl\\b"],
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("empty blockedPatterns allows all commands", async () => {
+    // Re-register with empty blockedPatterns
+    const { default: plugin } = await import("./index.js");
+    let handler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+        blockedPatterns: [],
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") handler = cmd.handler;
+      },
+    };
+    await plugin.register(mockApi as any);
+    const result = await handler!({ args: "echo test", senderId: "u1", channel: "ch", config: {} });
+    expect(result.text).toContain("test");
+    expect(result.text).not.toContain("Blocked");
+  });
+
+  it("multiple patterns - first match wins (correct pattern source returned)", async () => {
+    const result = await cmdHandler({
+      args: "sudo rm -rf /",
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    expect(result.text).toContain("Blocked by pattern");
+    // Should match ^sudo\b first since it's first in the array
+    expect(result.text).toContain("^sudo\\b");
+  });
+
+  it("RESERVED_ALIAS_NAMES includes clear and config", () => {
+    expect(RESERVED_ALIAS_NAMES.has("clear")).toBe(true);
+    expect(RESERVED_ALIAS_NAMES.has("config")).toBe(true);
+  });
+
+  it("blocked pattern tested via /run (not direct function call)", async () => {
+    const result = await cmdHandler({
+      args: "curl https://example.com",
+      senderId: "u1",
+      channel: "ch",
+      config: {},
+    });
+    expect(result.text).toContain("Blocked by pattern: /^curl\\b/");
+    expect(result.text).toContain("> curl https://example.com");
   });
 });

@@ -44,6 +44,7 @@ export type RemoteExecConfig = {
   confirmation: ConfirmationConfig;
   session: SessionConfig;
   maskOutput: boolean;
+  blockedPatterns: RegExp[];
 };
 
 // ============================================================================
@@ -88,6 +89,7 @@ const MIN_MAX_ALIASES = 1;
 const MAX_MAX_ALIASES = 50;
 
 const DEFAULT_MASK_OUTPUT = true;
+const DEFAULT_BLOCKED_PATTERNS: RegExp[] = [];
 
 const MIN_SESSION_TTL = 60_000;
 const MAX_SESSION_TTL = 86_400_000;
@@ -228,6 +230,26 @@ function parseSession(raw: unknown): SessionConfig {
   return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars, maxAliases };
 }
 
+function parseBlockedPatterns(raw: unknown): RegExp[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("blockedPatterns must be an array of regex strings");
+  }
+  const patterns: RegExp[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (typeof item !== "string" || !item.trim()) {
+      throw new Error(`blockedPatterns[${i}] must be a non-empty string`);
+    }
+    try {
+      patterns.push(new RegExp(item.trim()));
+    } catch {
+      throw new Error(`blockedPatterns[${i}] is not a valid regex: ${item}`);
+    }
+  }
+  return patterns;
+}
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -242,6 +264,7 @@ const ALLOWED_KEYS = [
   "confirmation",
   "session",
   "maskOutput",
+  "blockedPatterns",
 ];
 
 export const remoteExecConfigSchema = {
@@ -257,6 +280,7 @@ export const remoteExecConfigSchema = {
         confirmation: { ...DEFAULT_CONFIRMATION },
         session: { ...DEFAULT_SESSION },
         maskOutput: DEFAULT_MASK_OUTPUT,
+        blockedPatterns: DEFAULT_BLOCKED_PATTERNS,
       };
     }
 
@@ -271,6 +295,7 @@ export const remoteExecConfigSchema = {
         confirmation: { ...DEFAULT_CONFIRMATION },
         session: { ...DEFAULT_SESSION },
         maskOutput: DEFAULT_MASK_OUTPUT,
+        blockedPatterns: DEFAULT_BLOCKED_PATTERNS,
       };
     }
 
@@ -332,6 +357,7 @@ export const remoteExecConfigSchema = {
     const session = parseSession(cfg.session);
 
     const maskOutput = typeof cfg.maskOutput === "boolean" ? cfg.maskOutput : DEFAULT_MASK_OUTPUT;
+    const blockedPatterns = parseBlockedPatterns(cfg.blockedPatterns);
 
     return {
       enabled,
@@ -343,6 +369,7 @@ export const remoteExecConfigSchema = {
       confirmation,
       session,
       maskOutput,
+      blockedPatterns,
     };
   },
   uiHints: {
@@ -389,6 +416,10 @@ export const remoteExecConfigSchema = {
     maskOutput: {
       label: "Mask Output",
       help: "Redact secrets (API keys, tokens, passwords) from /run output (default: true)",
+    },
+    blockedPatterns: {
+      label: "Blocked Patterns",
+      help: "Array of regex strings. Commands matching any pattern are always rejected.",
     },
   },
 };

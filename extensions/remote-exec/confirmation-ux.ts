@@ -307,6 +307,8 @@ export function formatRunHelp(): string {
     "  /run alias NAME CMD   Define an alias",
     "  /run alias -d NAME    Delete an alias",
     "  /run status           Show session status",
+    "  /run clear            Reset session state",
+    "  /run config           Show active configuration",
     "  /run cd <path>        Change working directory",
     "  /run pwd              Show current working directory",
     "  /run more             Show next page of output",
@@ -411,6 +413,8 @@ export const RESERVED_ALIAS_NAMES = new Set([
   "deny",
   "alias",
   "status",
+  "clear",
+  "config",
 ]);
 
 export function formatAliasList(aliases: Record<string, string>): string {
@@ -479,4 +483,77 @@ export function formatSessionStatus(params: {
     `  Aliases: ${params.aliasCount}/${params.maxAliases}`,
     `  Output masking: ${params.maskOutput ? "on" : "off"}`,
   ].join("\n");
+}
+
+// ============================================================================
+// Clear, Config & Blocklist Formatters
+// ============================================================================
+
+export function formatClearSuccess(): string {
+  return "Session cleared (history, env, aliases, output cache, workdir reset).";
+}
+
+export function formatConfigView(params: {
+  enabled: boolean;
+  allowedPathsCount: number;
+  commandTimeout: number;
+  maxOutputBytes: number;
+  maskOutput: boolean;
+  blockedPatterns: RegExp[];
+  rateLimits: { maxCallsPerWindow: number; windowMs: number };
+  confirmation: {
+    autoApproveMaxRisk: string;
+    approvalTtlMs: number;
+    maxPending: number;
+    showRiskLevel: boolean;
+  };
+  session: {
+    sessionTtlMs: number;
+    outputPageSize: number;
+    maxHistorySize: number;
+    maxEnvVars: number;
+    maxAliases: number;
+  };
+}): string {
+  const lines: string[] = [
+    "Active configuration:",
+    "",
+    "General:",
+    `  enabled: ${params.enabled}`,
+    `  allowedPaths: ${params.allowedPathsCount} path(s)`,
+    `  commandTimeout: ${params.commandTimeout}ms`,
+    `  maxOutputBytes: ${params.maxOutputBytes}`,
+    `  maskOutput: ${params.maskOutput}`,
+    `  blockedPatterns: ${params.blockedPatterns.length} pattern(s)`,
+  ];
+
+  for (const re of params.blockedPatterns) {
+    lines.push(`    - /${re.source}/`);
+  }
+
+  lines.push(
+    "",
+    "Rate limits:",
+    `  maxCallsPerWindow: ${params.rateLimits.maxCallsPerWindow}`,
+    `  windowMs: ${params.rateLimits.windowMs}ms`,
+    "",
+    "Confirmation:",
+    `  autoApproveMaxRisk: ${params.confirmation.autoApproveMaxRisk}`,
+    `  approvalTtlMs: ${params.confirmation.approvalTtlMs}ms`,
+    `  maxPending: ${params.confirmation.maxPending}`,
+    `  showRiskLevel: ${params.confirmation.showRiskLevel}`,
+    "",
+    "Session:",
+    `  sessionTtlMs: ${params.session.sessionTtlMs}ms`,
+    `  outputPageSize: ${params.session.outputPageSize}`,
+    `  maxHistorySize: ${params.session.maxHistorySize}`,
+    `  maxEnvVars: ${params.session.maxEnvVars}`,
+    `  maxAliases: ${params.session.maxAliases}`,
+  );
+
+  return lines.join("\n");
+}
+
+export function formatBlockedCommand(command: string, patternSource: string): string {
+  return `Blocked by pattern: /${patternSource}/\n> ${command}`;
 }

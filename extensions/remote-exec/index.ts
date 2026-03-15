@@ -32,6 +32,9 @@ import {
   formatAliasSet,
   formatAliasDeleted,
   formatSessionStatus,
+  formatClearSuccess,
+  formatConfigView,
+  formatBlockedCommand,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
   ALIAS_NAME_PATTERN,
@@ -542,6 +545,47 @@ function handleStatus(
   };
 }
 
+function handleClear(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  sessionMgr.clearSession(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  return { text: formatClearSuccess() };
+}
+
+function handleConfig(config: RemoteExecConfig): { text: string } {
+  return {
+    text: formatConfigView({
+      enabled: config.enabled,
+      allowedPathsCount: config.allowedPaths.length,
+      commandTimeout: config.commandTimeout,
+      maxOutputBytes: config.maxOutputBytes,
+      maskOutput: config.maskOutput,
+      blockedPatterns: config.blockedPatterns,
+      rateLimits: config.rateLimits,
+      confirmation: config.confirmation,
+      session: config.session,
+    }),
+  };
+}
+
+function checkBlockedPatterns(
+  command: string,
+  patterns: RegExp[],
+): { blocked: true; pattern: string } | { blocked: false } {
+  for (const re of patterns) {
+    if (re.test(command)) {
+      return { blocked: true, pattern: re.source };
+    }
+  }
+  return { blocked: false };
+}
+
 async function handleExec(
   manager: ConfirmationManager,
   service: RemoteExecService,
@@ -550,6 +594,12 @@ async function handleExec(
   ctx: { senderId?: string; channel: string },
   config: RemoteExecConfig,
 ): Promise<{ text: string }> {
+  // Blocklist check (after alias expansion, before risk classification)
+  const blockCheck = checkBlockedPatterns(command, config.blockedPatterns);
+  if (blockCheck.blocked) {
+    return { text: formatBlockedCommand(command, blockCheck.pattern) };
+  }
+
   const workdir = ctx.senderId
     ? sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!).workdir
     : config.allowedPaths[0]!;
@@ -665,6 +715,8 @@ function registerRunCommand(
         if (action === "env") return handleEnv(sessionMgr, rest, ctx, config);
         if (action === "alias") return handleAlias(sessionMgr, rest, ctx, config);
         if (action === "status") return handleStatus(sessionMgr, ctx, config);
+        if (action === "clear") return handleClear(sessionMgr, ctx, config);
+        if (action === "config") return handleConfig(config);
         if (action === "cd") return await handleCd(sessionMgr, service, rest, ctx, config);
         if (action === "pwd") return handlePwd(sessionMgr, ctx, config);
         if (action === "more") return handleMore(sessionMgr, ctx);
