@@ -303,6 +303,10 @@ export function formatRunHelp(): string {
     "  /run env              Show session environment variables",
     "  /run env KEY=VALUE    Set a session env var",
     "  /run env -d KEY       Delete a session env var",
+    "  /run alias            List command aliases",
+    "  /run alias NAME CMD   Define an alias",
+    "  /run alias -d NAME    Delete an alias",
+    "  /run status           Show session status",
     "  /run cd <path>        Change working directory",
     "  /run pwd              Show current working directory",
     "  /run more             Show next page of output",
@@ -387,4 +391,92 @@ export function formatEnvSet(key: string, value: string): string {
 
 export function formatEnvDeleted(key: string): string {
   return `Deleted: ${key}`;
+}
+
+// ============================================================================
+// Alias Constants & Formatters
+// ============================================================================
+
+export const ALIAS_NAME_PATTERN = /^[a-z][a-z0-9-]{0,29}$/;
+
+export const RESERVED_ALIAS_NAMES = new Set([
+  "help",
+  "history",
+  "env",
+  "cd",
+  "pwd",
+  "more",
+  "pending",
+  "approve",
+  "deny",
+  "alias",
+  "status",
+]);
+
+export function formatAliasList(aliases: Record<string, string>): string {
+  const keys = Object.keys(aliases);
+  if (keys.length === 0) {
+    return "No aliases defined.\n\nDefine: /run alias NAME COMMAND...\nDelete: /run alias -d NAME";
+  }
+
+  const lines: string[] = [`Aliases (${keys.length}):`];
+  for (const key of keys) {
+    lines.push(`  ${key} = ${aliases[key]}`);
+  }
+
+  lines.push("");
+  lines.push("Define: /run alias NAME COMMAND...");
+  lines.push("Delete: /run alias -d NAME");
+
+  return lines.join("\n");
+}
+
+export function formatAliasShow(name: string, command: string): string {
+  return `${name} = ${command}`;
+}
+
+export function formatAliasSet(name: string, command: string): string {
+  return `Alias set: ${name} = ${command}`;
+}
+
+export function formatAliasDeleted(name: string): string {
+  return `Alias deleted: ${name}`;
+}
+
+// ============================================================================
+// Session Status Formatter
+// ============================================================================
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return "0s";
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  return `${seconds}s`;
+}
+
+export function formatSessionStatus(params: {
+  workdir: string;
+  ttlRemainingMs: number;
+  historyCount: number;
+  maxHistory: number;
+  envCount: number;
+  maxEnv: number;
+  aliasCount: number;
+  maxAliases: number;
+  maskOutput: boolean;
+}): string {
+  return [
+    "Session status:",
+    `  Working directory: ${params.workdir}`,
+    `  TTL remaining: ${formatDuration(params.ttlRemainingMs)}`,
+    `  History: ${params.historyCount}/${params.maxHistory}`,
+    `  Env vars: ${params.envCount}/${params.maxEnv}`,
+    `  Aliases: ${params.aliasCount}/${params.maxAliases}`,
+    `  Output masking: ${params.maskOutput ? "on" : "off"}`,
+  ].join("\n");
 }

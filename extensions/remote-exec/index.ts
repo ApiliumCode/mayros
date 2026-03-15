@@ -27,9 +27,17 @@ import {
   formatEnvList,
   formatEnvSet,
   formatEnvDeleted,
+  formatAliasList,
+  formatAliasShow,
+  formatAliasSet,
+  formatAliasDeleted,
+  formatSessionStatus,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
+  ALIAS_NAME_PATTERN,
+  RESERVED_ALIAS_NAMES,
 } from "./confirmation-ux.js";
+import { maskSensitiveOutput } from "../../src/security/output-masking.js";
 import { RemoteExecService } from "./exec-service.js";
 import type { DirEntry } from "./exec-service.js";
 import { SessionManager } from "./session-manager.js";
@@ -421,6 +429,119 @@ function handleEnv(
   return { text: `${key} is not set.` };
 }
 
+function handleAlias(
+  sessionMgr: SessionManager,
+  rest: string,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+
+  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+
+  // /run alias -d NAME or /run alias -d
+  if (rest === "-d") {
+    return { text: "Usage: /run alias -d NAME" };
+  }
+  if (rest.startsWith("-d ")) {
+    const name = rest.slice(3).trim();
+    if (!name) {
+      return { text: "Usage: /run alias -d NAME" };
+    }
+    if (!ALIAS_NAME_PATTERN.test(name)) {
+      return {
+        text: `Error: Invalid alias name "${name}". Use lowercase letters, digits, hyphens (a-z start, max 30 chars).`,
+      };
+    }
+    const deleted = sessionMgr.deleteAlias(ctx.channel, ctx.senderId, name);
+    if (!deleted) {
+      return { text: "Alias not found." };
+    }
+    return { text: formatAliasDeleted(name) };
+  }
+
+  // /run alias (no args) — list
+  if (!rest) {
+    const aliases = sessionMgr.getAliases(ctx.channel, ctx.senderId);
+    return { text: formatAliasList(aliases) };
+  }
+
+  // /run alias NAME [COMMAND...]
+  const spaceIdx = rest.indexOf(" ");
+  if (spaceIdx === -1) {
+    // /run alias NAME — show single
+    const name = rest;
+    if (!ALIAS_NAME_PATTERN.test(name)) {
+      return {
+        text: `Error: Invalid alias name "${name}". Use lowercase letters, digits, hyphens (a-z start, max 30 chars).`,
+      };
+    }
+    const command = sessionMgr.getAlias(ctx.channel, ctx.senderId, name);
+    if (!command) {
+      return { text: "Alias not found." };
+    }
+    return { text: formatAliasShow(name, command) };
+  }
+
+  // /run alias NAME COMMAND...
+  const name = rest.slice(0, spaceIdx);
+  const command = rest.slice(spaceIdx + 1).trim();
+
+  if (!ALIAS_NAME_PATTERN.test(name)) {
+    return {
+      text: `Error: Invalid alias name "${name}". Use lowercase letters, digits, hyphens (a-z start, max 30 chars).`,
+    };
+  }
+  if (RESERVED_ALIAS_NAMES.has(name)) {
+    return { text: `Error: "${name}" is a reserved name.` };
+  }
+
+  const ok = sessionMgr.setAlias(
+    ctx.channel,
+    ctx.senderId,
+    name,
+    command,
+    config.session.maxAliases,
+  );
+  if (!ok) {
+    return { text: `Error: Maximum aliases reached (${config.session.maxAliases}).` };
+  }
+  return { text: formatAliasSet(name, command) };
+}
+
+function handleStatus(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+
+  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+
+  const ttlRemainingMs = Math.max(
+    0,
+    config.session.sessionTtlMs - (Date.now() - session.lastActivity),
+  );
+
+  return {
+    text: formatSessionStatus({
+      workdir: session.workdir,
+      ttlRemainingMs,
+      historyCount: session.history.length,
+      maxHistory: config.session.maxHistorySize,
+      envCount: Object.keys(session.env).length,
+      maxEnv: config.session.maxEnvVars,
+      aliasCount: Object.keys(session.aliases).length,
+      maxAliases: config.session.maxAliases,
+      maskOutput: config.maskOutput,
+    }),
+  };
+}
+
 async function handleExec(
   manager: ConfirmationManager,
   service: RemoteExecService,
@@ -444,9 +565,17 @@ async function handleExec(
     const env = resolveSessionEnv(sessionMgr, ctx);
     const execResult = await service.executeCommand({ command, workdir, env });
     recordHistory(sessionMgr, command, execResult.exitCode, ctx, config);
-    const formatted = formatExecOutput(execResult, command);
+    let formatted = formatExecOutput(execResult, command);
+    let maskNote = "";
+    if (config.maskOutput) {
+      const maskResult = maskSensitiveOutput(formatted);
+      if (maskResult.masked) {
+        formatted = maskResult.text;
+        maskNote = `\n[${maskResult.redactions} redaction${maskResult.redactions !== 1 ? "s" : ""} applied]`;
+      }
+    }
     return {
-      text: applyPaging(sessionMgr, formatted, command, ctx, config),
+      text: applyPaging(sessionMgr, formatted, command, ctx, config) + maskNote,
     };
   }
 
@@ -478,9 +607,17 @@ async function handleApprove(
     env,
   });
   recordHistory(sessionMgr, request.command, execResult.exitCode, ctx, config);
-  const formatted = formatExecOutput(execResult, request.command);
+  let formatted = formatExecOutput(execResult, request.command);
+  let maskNote = "";
+  if (config.maskOutput) {
+    const maskResult = maskSensitiveOutput(formatted);
+    if (maskResult.masked) {
+      formatted = maskResult.text;
+      maskNote = `\n[${maskResult.redactions} redaction${maskResult.redactions !== 1 ? "s" : ""} applied]`;
+    }
+  }
   return {
-    text: applyPaging(sessionMgr, formatted, request.command, ctx, config),
+    text: applyPaging(sessionMgr, formatted, request.command, ctx, config) + maskNote,
   };
 }
 
@@ -526,6 +663,8 @@ function registerRunCommand(
         if (action === "help") return { text: formatRunHelp() };
         if (action === "history") return handleHistory(sessionMgr, ctx, config);
         if (action === "env") return handleEnv(sessionMgr, rest, ctx, config);
+        if (action === "alias") return handleAlias(sessionMgr, rest, ctx, config);
+        if (action === "status") return handleStatus(sessionMgr, ctx, config);
         if (action === "cd") return await handleCd(sessionMgr, service, rest, ctx, config);
         if (action === "pwd") return handlePwd(sessionMgr, ctx, config);
         if (action === "more") return handleMore(sessionMgr, ctx);
@@ -546,6 +685,15 @@ function registerRunCommand(
             ctx,
             config,
           );
+
+        // Alias resolution
+        if (ctx.senderId) {
+          const aliasCmd = sessionMgr.getAlias(ctx.channel, ctx.senderId, action);
+          if (aliasCmd) {
+            const expanded = rest ? `${aliasCmd} ${rest}` : aliasCmd;
+            return await handleExec(manager, service, sessionMgr, expanded, ctx, config);
+          }
+        }
 
         // Default: entire args is a command to execute
         return await handleExec(manager, service, sessionMgr, args, ctx, config);

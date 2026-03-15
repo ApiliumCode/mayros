@@ -36,6 +36,7 @@ export type SessionState = {
   lastActivity: number;
   history: HistoryEntry[];
   env: Record<string, string>;
+  aliases: Record<string, string>;
 };
 
 // ============================================================================
@@ -117,6 +118,7 @@ export class SessionManager {
       lastActivity: Date.now(),
       history: [],
       env: {},
+      aliases: {},
     };
     this.sessions.set(key, session);
     return session;
@@ -135,6 +137,7 @@ export class SessionManager {
         lastActivity: Date.now(),
         history: [],
         env: {},
+        aliases: {},
       });
     }
   }
@@ -168,6 +171,7 @@ export class SessionManager {
         lastActivity: Date.now(),
         history: [],
         env: {},
+        aliases: {},
       });
     }
 
@@ -296,5 +300,53 @@ export class SessionManager {
     const session = this.sessions.get(compositeKey);
     if (!session) return {};
     return { ...session.env };
+  }
+
+  // ---------- Aliases ----------
+
+  setAlias(
+    channel: string,
+    senderId: string,
+    name: string,
+    command: string,
+    maxAliases: number,
+  ): boolean {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return false;
+
+    if (!(name in session.aliases) && Object.keys(session.aliases).length >= maxAliases) {
+      return false;
+    }
+
+    session.aliases[name] = command;
+    session.lastActivity = Date.now();
+    return true;
+  }
+
+  deleteAlias(channel: string, senderId: string, name: string): boolean {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return false;
+
+    if (!(name in session.aliases)) return false;
+
+    delete session.aliases[name];
+    session.lastActivity = Date.now();
+    return true;
+  }
+
+  getAliases(channel: string, senderId: string): Record<string, string> {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return {};
+    return { ...session.aliases };
+  }
+
+  getAlias(channel: string, senderId: string, name: string): string | undefined {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return undefined;
+    return session.aliases[name];
   }
 }

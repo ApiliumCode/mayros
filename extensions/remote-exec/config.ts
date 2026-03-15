@@ -31,6 +31,7 @@ export type SessionConfig = {
   outputCacheTtlMs: number;
   maxHistorySize: number;
   maxEnvVars: number;
+  maxAliases: number;
 };
 
 export type RemoteExecConfig = {
@@ -42,6 +43,7 @@ export type RemoteExecConfig = {
   rateLimits: RemoteExecRateLimits;
   confirmation: ConfirmationConfig;
   session: SessionConfig;
+  maskOutput: boolean;
 };
 
 // ============================================================================
@@ -70,6 +72,7 @@ const DEFAULT_SESSION: SessionConfig = {
   outputCacheTtlMs: 300_000,
   maxHistorySize: 20,
   maxEnvVars: 20,
+  maxAliases: 10,
 };
 
 const DEFAULT_MAX_HISTORY_SIZE = 20;
@@ -79,6 +82,12 @@ const MAX_MAX_HISTORY_SIZE = 100;
 const DEFAULT_MAX_ENV_VARS = 20;
 const MIN_MAX_ENV_VARS = 1;
 const MAX_MAX_ENV_VARS = 50;
+
+const DEFAULT_MAX_ALIASES = 10;
+const MIN_MAX_ALIASES = 1;
+const MAX_MAX_ALIASES = 50;
+
+const DEFAULT_MASK_OUTPUT = true;
 
 const MIN_SESSION_TTL = 60_000;
 const MAX_SESSION_TTL = 86_400_000;
@@ -167,7 +176,14 @@ function parseSession(raw: unknown): SessionConfig {
   const obj = raw as Record<string, unknown>;
   assertAllowedKeys(
     obj,
-    ["sessionTtlMs", "outputPageSize", "outputCacheTtlMs", "maxHistorySize", "maxEnvVars"],
+    [
+      "sessionTtlMs",
+      "outputPageSize",
+      "outputCacheTtlMs",
+      "maxHistorySize",
+      "maxEnvVars",
+      "maxAliases",
+    ],
     "session",
   );
 
@@ -202,8 +218,14 @@ function parseSession(raw: unknown): SessionConfig {
     MAX_MAX_ENV_VARS,
     DEFAULT_MAX_ENV_VARS,
   );
+  const maxAliases = clampInt(
+    obj.maxAliases,
+    MIN_MAX_ALIASES,
+    MAX_MAX_ALIASES,
+    DEFAULT_MAX_ALIASES,
+  );
 
-  return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars };
+  return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars, maxAliases };
 }
 
 // ============================================================================
@@ -219,6 +241,7 @@ const ALLOWED_KEYS = [
   "rateLimits",
   "confirmation",
   "session",
+  "maskOutput",
 ];
 
 export const remoteExecConfigSchema = {
@@ -233,6 +256,7 @@ export const remoteExecConfigSchema = {
         rateLimits: { ...DEFAULT_RATE_LIMITS },
         confirmation: { ...DEFAULT_CONFIRMATION },
         session: { ...DEFAULT_SESSION },
+        maskOutput: DEFAULT_MASK_OUTPUT,
       };
     }
 
@@ -246,6 +270,7 @@ export const remoteExecConfigSchema = {
         rateLimits: { ...DEFAULT_RATE_LIMITS },
         confirmation: { ...DEFAULT_CONFIRMATION },
         session: { ...DEFAULT_SESSION },
+        maskOutput: DEFAULT_MASK_OUTPUT,
       };
     }
 
@@ -306,6 +331,8 @@ export const remoteExecConfigSchema = {
     const confirmation = parseConfirmation(cfg.confirmation);
     const session = parseSession(cfg.session);
 
+    const maskOutput = typeof cfg.maskOutput === "boolean" ? cfg.maskOutput : DEFAULT_MASK_OUTPUT;
+
     return {
       enabled,
       allowedPaths,
@@ -315,6 +342,7 @@ export const remoteExecConfigSchema = {
       rateLimits,
       confirmation,
       session,
+      maskOutput,
     };
   },
   uiHints: {
@@ -357,6 +385,10 @@ export const remoteExecConfigSchema = {
       label: "Session Management",
       advanced: true,
       help: "Controls per-sender session state (workdir persistence, output paging)",
+    },
+    maskOutput: {
+      label: "Mask Output",
+      help: "Redact secrets (API keys, tokens, passwords) from /run output (default: true)",
     },
   },
 };

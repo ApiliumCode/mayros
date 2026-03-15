@@ -20,6 +20,10 @@
  * - P. History management
  * - Q. Environment variable management
  * - R. /run history, !!, !N, env integration
+ * - S. Config: maxAliases and maskOutput
+ * - T. Alias management
+ * - U. Output masking
+ * - V. /run alias, status, masking integration
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -40,10 +44,13 @@ import {
   formatPendingList,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
+  ALIAS_NAME_PATTERN,
+  RESERVED_ALIAS_NAMES,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
 import { SessionManager } from "./session-manager.js";
+import { maskSensitiveOutput } from "../../src/security/output-masking.js";
 
 // ============================================================================
 // Test Helpers
@@ -92,7 +99,11 @@ function makeConfig(overrides: Partial<RemoteExecConfig> = {}): RemoteExecConfig
       sessionTtlMs: 1_800_000,
       outputPageSize: 3_500,
       outputCacheTtlMs: 300_000,
+      maxHistorySize: 20,
+      maxEnvVars: 20,
+      maxAliases: 10,
     },
+    maskOutput: true,
     ...overrides,
   };
 }
@@ -1399,6 +1410,7 @@ describe("SessionManager", () => {
     outputCacheTtlMs: 300_000,
     maxHistorySize: 20,
     maxEnvVars: 20,
+    maxAliases: 10,
   };
 
   it("getOrCreate returns new session with default workdir", () => {
@@ -1511,6 +1523,7 @@ describe("output paging", () => {
     outputCacheTtlMs: 300_000,
     maxHistorySize: 20,
     maxEnvVars: 20,
+    maxAliases: 10,
   };
 
   it("cacheOutput splits text into pages respecting line boundaries", () => {
@@ -1879,6 +1892,7 @@ describe("history management", () => {
     outputCacheTtlMs: 300_000,
     maxHistorySize: 5,
     maxEnvVars: 20,
+    maxAliases: 10,
   };
 
   it("addHistory stores entry and getHistory returns it", () => {
@@ -1987,6 +2001,7 @@ describe("environment variable management", () => {
     outputCacheTtlMs: 300_000,
     maxHistorySize: 20,
     maxEnvVars: 3,
+    maxAliases: 10,
   };
 
   it("setEnv and getEnv round-trip", () => {
@@ -2509,5 +2524,564 @@ describe("/run history, !!, !N, env integration", () => {
       config: {},
     });
     expect(result.text).toContain("LD_PRELOAD is a protected variable");
+  });
+});
+
+// ============================================================================
+// S. Config: maxAliases and maskOutput (7 tests)
+// ============================================================================
+
+describe("config: maxAliases and maskOutput", () => {
+  it("parses defaults for maxAliases (10) and maskOutput (true)", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.session.maxAliases).toBe(10);
+    expect(cfg.maskOutput).toBe(true);
+  });
+
+  it("clamps maxAliases to [1, 50]", () => {
+    const low = remoteExecConfigSchema.parse({ session: { maxAliases: 0 } });
+    expect(low.session.maxAliases).toBe(1);
+
+    const high = remoteExecConfigSchema.parse({ session: { maxAliases: 999 } });
+    expect(high.session.maxAliases).toBe(50);
+  });
+
+  it("maxAliases defaults when session section exists without it", () => {
+    const cfg = remoteExecConfigSchema.parse({ session: { sessionTtlMs: 120_000 } });
+    expect(cfg.session.maxAliases).toBe(10);
+  });
+
+  it("maskOutput defaults to true when not specified", () => {
+    const cfg = remoteExecConfigSchema.parse({ enabled: false });
+    expect(cfg.maskOutput).toBe(true);
+  });
+
+  it("maskOutput: false is respected", () => {
+    const cfg = remoteExecConfigSchema.parse({ maskOutput: false });
+    expect(cfg.maskOutput).toBe(false);
+  });
+
+  it("non-boolean maskOutput defaults to true", () => {
+    const cfg = remoteExecConfigSchema.parse({ maskOutput: "yes" });
+    expect(cfg.maskOutput).toBe(true);
+  });
+
+  it("unknown keys in session section still throws (with maxAliases present)", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({ session: { maxAliases: 5, badKey: true } }),
+    ).toThrow("unknown keys");
+  });
+});
+
+// ============================================================================
+// T. Alias Management (10 tests)
+// ============================================================================
+
+describe("alias management", () => {
+  const sessionConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 3_500,
+    outputCacheTtlMs: 300_000,
+    maxHistorySize: 20,
+    maxEnvVars: 20,
+    maxAliases: 3,
+  };
+
+  it("setAlias and getAliases round-trip", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    const ok = mgr.setAlias("wa", "u1", "build", "npm run build", 3);
+    expect(ok).toBe(true);
+    expect(mgr.getAliases("wa", "u1")).toEqual({ build: "npm run build" });
+  });
+
+  it("setAlias returns false when maxAliases reached", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setAlias("wa", "u1", "a", "cmd-a", 3);
+    mgr.setAlias("wa", "u1", "b", "cmd-b", 3);
+    mgr.setAlias("wa", "u1", "c", "cmd-c", 3);
+    const ok = mgr.setAlias("wa", "u1", "d", "cmd-d", 3);
+    expect(ok).toBe(false);
+    expect(mgr.getAliases("wa", "u1")).not.toHaveProperty("d");
+  });
+
+  it("setAlias allows update of existing alias (no count increase)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setAlias("wa", "u1", "a", "cmd-a", 3);
+    mgr.setAlias("wa", "u1", "b", "cmd-b", 3);
+    mgr.setAlias("wa", "u1", "c", "cmd-c", 3);
+    const ok = mgr.setAlias("wa", "u1", "a", "updated", 3);
+    expect(ok).toBe(true);
+    expect(mgr.getAliases("wa", "u1").a).toBe("updated");
+  });
+
+  it("deleteAlias removes alias and returns true", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setAlias("wa", "u1", "build", "npm run build", 3);
+    const ok = mgr.deleteAlias("wa", "u1", "build");
+    expect(ok).toBe(true);
+    expect(mgr.getAliases("wa", "u1")).not.toHaveProperty("build");
+  });
+
+  it("deleteAlias returns false for non-existent alias", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.deleteAlias("wa", "u1", "nope")).toBe(false);
+  });
+
+  it("getAliases returns empty record for new session", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.getAliases("wa", "u1")).toEqual({});
+  });
+
+  it("getAliases returns empty for non-existent session", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    expect(mgr.getAliases("wa", "ghost")).toEqual({});
+  });
+
+  it("getAlias returns command for existing alias", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setAlias("wa", "u1", "build", "npm run build", 3);
+    expect(mgr.getAlias("wa", "u1", "build")).toBe("npm run build");
+  });
+
+  it("getAlias returns undefined for non-existent alias", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.getAlias("wa", "u1", "nope")).toBeUndefined();
+  });
+
+  it("aliases are per-session (different senders isolated)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.getOrCreate("wa", "u2", "/tmp");
+    mgr.setAlias("wa", "u1", "build", "npm run build", 3);
+    mgr.setAlias("wa", "u2", "build", "yarn build", 3);
+    expect(mgr.getAlias("wa", "u1", "build")).toBe("npm run build");
+    expect(mgr.getAlias("wa", "u2", "build")).toBe("yarn build");
+  });
+});
+
+// ============================================================================
+// U. Output Masking (5 tests)
+// ============================================================================
+
+describe("output masking", () => {
+  it("maskSensitiveOutput masks GitHub token pattern", () => {
+    const result = maskSensitiveOutput("token: ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("ghp_***REDACTED***");
+    expect(result.text).not.toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+  });
+
+  it("maskSensitiveOutput returns redaction count", () => {
+    const result = maskSensitiveOutput("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.redactions).toBe(1);
+  });
+
+  it("maskSensitiveOutput with clean text returns 0 redactions", () => {
+    const result = maskSensitiveOutput("hello world, no secrets here");
+    expect(result.masked).toBe(false);
+    expect(result.redactions).toBe(0);
+    expect(result.text).toBe("hello world, no secrets here");
+  });
+
+  it("multiple secret types in same text are all masked", () => {
+    const text = "github: ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY slack: xoxb-FAKEFAKEFAKE-FAKEFAKE";
+    const result = maskSensitiveOutput(text);
+    expect(result.masked).toBe(true);
+    expect(result.redactions).toBe(2);
+    expect(result.text).not.toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.text).not.toContain("xoxb-FAKEFAKEFAKE-FAKEFAKE");
+  });
+
+  it("masking does not alter text without secrets", () => {
+    const text = "exit code: 0\nstdout: all good\n42ms";
+    const result = maskSensitiveOutput(text);
+    expect(result.text).toBe(text);
+  });
+});
+
+// ============================================================================
+// V. /run alias, status, masking Integration (20 tests)
+// ============================================================================
+
+describe("/run alias, status, masking integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    await fs.mkdir(path.join(tmpDir, "subdir"));
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("/run alias with no aliases shows empty", async () => {
+    const result = await cmdHandler({
+      args: "alias",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias",
+      config: {},
+    });
+    expect(result.text).toContain("No aliases defined");
+  });
+
+  it("/run alias NAME COMMAND defines alias", async () => {
+    const result = await cmdHandler({
+      args: "alias build npm run build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias build npm run build",
+      config: {},
+    });
+    expect(result.text).toContain("Alias set: build = npm run build");
+  });
+
+  it("/run alias NAME shows single alias value", async () => {
+    await cmdHandler({
+      args: "alias build npm run build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias build npm run build",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "alias build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias build",
+      config: {},
+    });
+    expect(result.text).toBe("build = npm run build");
+  });
+
+  it("/run alias lists defined aliases", async () => {
+    await cmdHandler({
+      args: "alias build npm run build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias build npm run build",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "alias",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias",
+      config: {},
+    });
+    expect(result.text).toContain("Aliases (1):");
+    expect(result.text).toContain("build = npm run build");
+  });
+
+  it("/run alias -d NAME deletes alias", async () => {
+    await cmdHandler({
+      args: "alias build npm run build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias build npm run build",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "alias -d build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias -d build",
+      config: {},
+    });
+    expect(result.text).toBe("Alias deleted: build");
+  });
+
+  it("/run alias -d nonexistent returns not found", async () => {
+    const result = await cmdHandler({
+      args: "alias -d nope",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias -d nope",
+      config: {},
+    });
+    expect(result.text).toBe("Alias not found.");
+  });
+
+  it("/run alias -d (no name) returns usage", async () => {
+    const result = await cmdHandler({
+      args: "alias -d",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias -d",
+      config: {},
+    });
+    expect(result.text).toBe("Usage: /run alias -d NAME");
+  });
+
+  it("/run alias with invalid name (uppercase) returns error", async () => {
+    const result = await cmdHandler({
+      args: "alias Build npm run build",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias Build npm run build",
+      config: {},
+    });
+    expect(result.text).toContain("Invalid alias name");
+  });
+
+  it("/run alias with reserved name (help) returns error", async () => {
+    const result = await cmdHandler({
+      args: "alias help echo hi",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias help echo hi",
+      config: {},
+    });
+    expect(result.text).toContain("reserved name");
+  });
+
+  it("/run alias with reserved name (status) returns error", async () => {
+    const result = await cmdHandler({
+      args: "alias status echo hi",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias status echo hi",
+      config: {},
+    });
+    expect(result.text).toContain("reserved name");
+  });
+
+  it("alias-name expands and executes aliased command", async () => {
+    await cmdHandler({
+      args: "alias greet echo hello-alias",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias greet echo hello-alias",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "greet",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run greet",
+      config: {},
+    });
+    expect(result.text).toContain("hello-alias");
+  });
+
+  it("alias-name extra-args appends args to aliased command", async () => {
+    await cmdHandler({
+      args: "alias myecho echo",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias myecho echo",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "myecho appended-arg",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run myecho appended-arg",
+      config: {},
+    });
+    expect(result.text).toContain("appended-arg");
+  });
+
+  it("risky aliased command goes through confirmation", async () => {
+    await cmdHandler({
+      args: "alias deploy git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run alias deploy git push origin main",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "deploy",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run deploy",
+      config: {},
+    });
+    expect(result.text).toContain("requires approval");
+  });
+
+  it("/run status shows session info", async () => {
+    const result = await cmdHandler({
+      args: "status",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run status",
+      config: {},
+    });
+    expect(result.text).toContain("Session status:");
+    expect(result.text).toContain("Working directory:");
+    expect(result.text).toContain("TTL remaining:");
+    expect(result.text).toContain("History:");
+    expect(result.text).toContain("Env vars:");
+    expect(result.text).toContain("Aliases:");
+  });
+
+  it("/run status shows masking on/off", async () => {
+    const result = await cmdHandler({
+      args: "status",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run status",
+      config: {},
+    });
+    expect(result.text).toContain("Output masking: on");
+  });
+
+  it("/run with maskOutput: true redacts secrets in output", async () => {
+    const result = await cmdHandler({
+      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      config: {},
+    });
+    expect(result.text).toContain("ghp_***REDACTED***");
+    expect(result.text).toContain("redaction");
+    expect(result.text).toContain("applied]");
+  });
+
+  it("/run with clean output and maskOutput: true shows no redaction note", async () => {
+    const result = await cmdHandler({
+      args: "echo clean-output",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo clean-output",
+      config: {},
+    });
+    expect(result.text).toContain("clean-output");
+    expect(result.text).not.toContain("redaction");
+  });
+
+  it("/run with maskOutput: false passes through unmasked", async () => {
+    // Re-register with maskOutput: false
+    const { default: plugin } = await import("./index.js");
+    let handler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+        maskOutput: false,
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") handler = cmd.handler;
+      },
+    };
+    await plugin.register(mockApi as any);
+
+    const result = await handler!({
+      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      config: {},
+    });
+    expect(result.text).toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.text).not.toContain("REDACTED");
+  });
+
+  it("redaction note shows correct count", async () => {
+    const result = await cmdHandler({
+      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY npm_NOT_REAL_TOKEN_FOR_TESTING_00000001",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo ...",
+      config: {},
+    });
+    expect(result.text).toContain("redactions applied]");
+  });
+
+  it("/run help includes alias and status subcommands", async () => {
+    const result = await cmdHandler({
+      args: "help",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run help",
+      config: {},
+    });
+    expect(result.text).toContain("alias");
+    expect(result.text).toContain("status");
   });
 });
