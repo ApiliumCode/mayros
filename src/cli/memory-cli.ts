@@ -17,8 +17,7 @@ import { shortenHomeInString, shortenHomePath } from "../utils.js";
 import { formatErrorMessage, withManager } from "./cli-utils.js";
 import { formatHelpExamples } from "./help-format.js";
 import { withProgress, withProgressTotals } from "./progress.js";
-import { CortexError } from "../../extensions/shared/cortex-client.js";
-import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
+import { resolveCortexClient, resolveNamespace, CortexError } from "./shared/cortex-resolution.js";
 
 type MemoryCommandOptions = {
   agent?: string;

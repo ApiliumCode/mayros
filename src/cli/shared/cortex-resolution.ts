@@ -10,7 +10,8 @@
  */
 
 import { parseCortexConfig } from "../../../extensions/shared/cortex-config.js";
-import { CortexClient } from "../../../extensions/shared/cortex-client.js";
+import { CortexClient, CortexError } from "../../../extensions/shared/cortex-client.js";
+export { CortexError };
 import { loadConfig } from "../../config/config.js";
 
 export type CortexCliOpts = {
