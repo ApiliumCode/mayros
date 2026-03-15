@@ -230,6 +230,8 @@ function parseSession(raw: unknown): SessionConfig {
   return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars, maxAliases };
 }
 
+const MAX_BLOCKED_PATTERN_LENGTH = 200;
+
 function parseBlockedPatterns(raw: unknown): RegExp[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -241,8 +243,14 @@ function parseBlockedPatterns(raw: unknown): RegExp[] {
     if (typeof item !== "string" || !item.trim()) {
       throw new Error(`blockedPatterns[${i}] must be a non-empty string`);
     }
+    const trimmed = item.trim();
+    if (trimmed.length > MAX_BLOCKED_PATTERN_LENGTH) {
+      throw new Error(
+        `blockedPatterns[${i}] exceeds max length (${MAX_BLOCKED_PATTERN_LENGTH} chars)`,
+      );
+    }
     try {
-      patterns.push(new RegExp(item.trim()));
+      patterns.push(new RegExp(trimmed));
     } catch {
       throw new Error(`blockedPatterns[${i}] is not a valid regex: ${item}`);
     }

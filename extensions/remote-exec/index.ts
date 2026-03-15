@@ -553,7 +553,6 @@ function handleClear(
   if (!ctx.senderId) {
     return { text: "Error: Session requires a sender identity." };
   }
-  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
   sessionMgr.clearSession(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
   return { text: formatClearSuccess() };
 }

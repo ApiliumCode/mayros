@@ -3091,7 +3091,7 @@ describe("/run alias, status, masking integration", () => {
 });
 
 // ============================================================================
-// W. Config: blockedPatterns (8 tests)
+// W. Config: blockedPatterns (10 tests)
 // ============================================================================
 
 describe("config: blockedPatterns", () => {
@@ -3131,6 +3131,18 @@ describe("config: blockedPatterns", () => {
     expect(() => remoteExecConfigSchema.parse({ blockedPatterns: ["(unclosed"] })).toThrow(
       "blockedPatterns[0] is not a valid regex",
     );
+  });
+
+  it("throws on pattern exceeding max length", () => {
+    const longPattern = "a".repeat(201);
+    expect(() => remoteExecConfigSchema.parse({ blockedPatterns: [longPattern] })).toThrow(
+      "exceeds max length (200 chars)",
+    );
+  });
+
+  it("blockedPatterns: null defaults to empty array", () => {
+    const cfg = remoteExecConfigSchema.parse({ blockedPatterns: null });
+    expect(cfg.blockedPatterns).toEqual([]);
   });
 
   it("compiled patterns match expected strings (anchored vs unanchored)", () => {
