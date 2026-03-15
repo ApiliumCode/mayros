@@ -157,11 +157,11 @@ export class RemoteExecService {
     try {
       realPath = await fs.realpath(resolved);
     } catch (err) {
-      const error = err as NodeJS.ErrnoException;
-      if (error.code === "ENOENT") {
-        throw new Error(`Path does not exist: ${resolved}`);
+      const error = err instanceof Error ? (err as NodeJS.ErrnoException) : null;
+      if (error?.code === "ENOENT") {
+        throw new Error(`Path does not exist: ${inputPath}`);
       }
-      throw new Error(`Cannot resolve path: ${resolved}`);
+      throw new Error(`Cannot resolve path: ${inputPath}`);
     }
 
     // Check against all allowed paths (resolve symlinks in allowedPaths too)
@@ -227,7 +227,7 @@ export class RemoteExecService {
   }): Promise<ExecResult> {
     // 1. Background execution blocking
     // Catches: nohup, disown, setsid keywords AND standalone & (not &&, &>, >&)
-    const BG_KEYWORD = /(?:^|\s)(?:nohup|disown|setsid)\b/;
+    const BG_KEYWORD = /(?:^|\s)(?:nohup|disown|setsid|coproc)\b/;
     const BG_AMPERSAND = /(?<![&>])&(?![&>])/;
     if (BG_KEYWORD.test(params.command) || BG_AMPERSAND.test(params.command)) {
       throw new Error("Background execution is not allowed");

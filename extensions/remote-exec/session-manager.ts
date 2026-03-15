@@ -47,6 +47,7 @@ export type SessionState = {
 
 export class SessionManager {
   private readonly sessions = new Map<string, SessionState>();
+  private lastPruneTime = 0;
 
   constructor(
     private readonly config: SessionConfig,
@@ -59,6 +60,9 @@ export class SessionManager {
 
   private prune(): void {
     const now = Date.now();
+    const throttleMs = Math.min(30_000, Math.floor(this.config.sessionTtlMs / 2));
+    if (now - this.lastPruneTime < throttleMs) return;
+    this.lastPruneTime = now;
     for (const [key, session] of this.sessions) {
       if (now - session.lastActivity > this.config.sessionTtlMs) {
         this.sessions.delete(key);
@@ -170,7 +174,7 @@ export class SessionManager {
       session.lastActivity = Date.now();
     } else {
       this.sessions.set(key, {
-        workdir: "",
+        workdir: "/",
         outputCache: cache,
         lastActivity: Date.now(),
         history: [],

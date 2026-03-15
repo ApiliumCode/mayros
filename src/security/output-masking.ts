@@ -123,6 +123,13 @@ const MASK_PATTERNS: MaskPattern[] = [
     pattern: /eyJ[A-Za-z0-9_-]{50,}\.eyJ[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{20,}/g,
     replacement: "***REDACTED_JWT***",
   },
+  // Generic token/api_key fields (must be AFTER specific token patterns to avoid shadowing)
+  {
+    name: "generic-token-field",
+    pattern:
+      /(?<=(api_key|apikey|auth_token|access_token|secret_key)\s*[:=]\s*["']?)[^\s"'\n*]{16,}/gi,
+    replacement: "***REDACTED***",
+  },
   // Private keys (bounded to 16KB to prevent ReDoS on unmatched BEGIN without END)
   {
     name: "private-key",

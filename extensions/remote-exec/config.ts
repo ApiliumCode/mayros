@@ -90,6 +90,9 @@ const MAX_MAX_ALIASES = 50;
 const DEFAULT_MASK_OUTPUT = true;
 const DEFAULT_BLOCKED_PATTERNS: RegExp[] = [];
 
+export const MAX_ENV_VALUE_LENGTH = 4096;
+export const MAX_ALIAS_COMMAND_LENGTH = 1024;
+
 const DEFAULT_PIN: PinConfig = {
   pinHash: null,
   pinLockoutMs: 300_000,
@@ -247,6 +250,9 @@ function parseSession(raw: unknown): SessionConfig {
 const MAX_BLOCKED_PATTERN_LENGTH = 200;
 const MAX_BLOCKED_PATTERNS_COUNT = 50;
 
+// ReDoS safety: reject patterns with nested quantifiers
+const REDOS_PATTERN = /([+*])\)?[+*?]|\(\?[^)]*[+*][^)]*\)[+*?]/;
+
 function parseBlockedPatterns(raw: unknown): RegExp[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -265,6 +271,11 @@ function parseBlockedPatterns(raw: unknown): RegExp[] {
     if (trimmed.length > MAX_BLOCKED_PATTERN_LENGTH) {
       throw new Error(
         `blockedPatterns[${i}] exceeds max length (${MAX_BLOCKED_PATTERN_LENGTH} chars)`,
+      );
+    }
+    if (REDOS_PATTERN.test(trimmed)) {
+      throw new Error(
+        `blockedPatterns[${i}] may cause catastrophic backtracking (nested quantifiers): ${item}`,
       );
     }
     try {
@@ -353,19 +364,7 @@ export const remoteExecConfigSchema = {
     }
 
     if (typeof value !== "object" || Array.isArray(value)) {
-      return {
-        enabled: DEFAULT_ENABLED,
-        allowedPaths: [],
-        commandTimeout: DEFAULT_COMMAND_TIMEOUT,
-        maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
-        auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
-        rateLimits: { ...DEFAULT_RATE_LIMITS },
-        confirmation: { ...DEFAULT_CONFIRMATION },
-        session: { ...DEFAULT_SESSION },
-        maskOutput: DEFAULT_MASK_OUTPUT,
-        blockedPatterns: DEFAULT_BLOCKED_PATTERNS,
-        pin: { ...DEFAULT_PIN },
-      };
+      throw new Error("remote-exec config must be an object");
     }
 
     const cfg = value as Record<string, unknown>;
@@ -491,6 +490,11 @@ export const remoteExecConfigSchema = {
     blockedPatterns: {
       label: "Blocked Patterns",
       help: "Array of regex strings. Commands matching any pattern are always rejected.",
+    },
+    pin: {
+      label: "PIN Authentication",
+      advanced: true,
+      help: "Scrypt-based PIN to lock /run sessions. Set pinHash via hashPin() utility.",
     },
   },
 };

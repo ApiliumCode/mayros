@@ -80,9 +80,23 @@ export class ConfirmationManager {
   }): ConfirmationResult {
     this.pruneExpired();
 
-    const senderCount = params.senderId
-      ? [...this.pending.values()].filter((r) => r.senderId === params.senderId).length
-      : this.pending.size;
+    const MAX_TOTAL_PENDING = 500;
+    if (this.pending.size >= MAX_TOTAL_PENDING) {
+      return {
+        action: "blocked",
+        reason: "Too many total pending requests. Try again later.",
+      };
+    }
+
+    let senderCount: number;
+    if (params.senderId) {
+      senderCount = 0;
+      for (const r of this.pending.values()) {
+        if (r.senderId === params.senderId) senderCount++;
+      }
+    } else {
+      senderCount = this.pending.size;
+    }
     if (senderCount >= this.config.maxPending) {
       return {
         action: "blocked",
@@ -201,6 +215,10 @@ export function formatExecOutput(result: ExecResult, command: string): string {
 
   if (result.stderr.trim()) {
     parts.push(`*stderr:*\n\`\`\`\n${result.stderr.trimEnd()}\n\`\`\``);
+  }
+
+  if (!result.stdout.trim() && !result.stderr.trim()) {
+    parts.push("(no output)");
   }
 
   const meta: string[] = [];
@@ -360,6 +378,18 @@ export const ENV_BLOCKLIST = new Set([
   "PROMPT_COMMAND",
   "PS1",
   "PS4",
+  "BASHOPTS",
+  "SHELLOPTS",
+  "HISTFILE",
+  "HISTCONTROL",
+  "HISTIGNORE",
+  "HISTTIMEFORMAT",
+  "BASH_XTRACEFD",
+  "BASH_LOADABLES_PATH",
+  "MAIL",
+  "MAILCHECK",
+  "TMPDIR",
+  "INPUTRC",
 ]);
 
 export const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -495,7 +525,7 @@ function formatDuration(ms: number): string {
 // ============================================================================
 
 export function formatClearSuccess(): string {
-  return "Session cleared (history, env, aliases, output cache, workdir reset).";
+  return "Session cleared (history, env, aliases, output cache, workdir, PIN auth reset).";
 }
 
 export function formatBlockedCommand(command: string, patternSource: string): string {

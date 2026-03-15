@@ -11,7 +11,12 @@ import { Type } from "@sinclair/typebox";
 import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { ToolInputError } from "../../src/agents/tools/common.js";
 import { AuditTrail } from "../osameru-governance/audit-trail.js";
-import { remoteExecConfigSchema, type RemoteExecConfig } from "./config.js";
+import {
+  remoteExecConfigSchema,
+  type RemoteExecConfig,
+  MAX_ENV_VALUE_LENGTH,
+  MAX_ALIAS_COMMAND_LENGTH,
+} from "./config.js";
 import path from "node:path";
 import {
   ConfirmationManager,
@@ -50,10 +55,28 @@ import { SessionManager } from "./session-manager.js";
 import { checkPinLock, attemptUnlock } from "./pin-auth.js";
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+function defaultWorkdir(config: RemoteExecConfig): string {
+  return config.allowedPaths[0] ?? "/tmp";
+}
+
+function applyToolMasking(text: string, config: RemoteExecConfig): string {
+  if (!config.maskOutput) return text;
+  const result = maskSensitiveOutput(text);
+  return result.masked ? result.text : text;
+}
+
+// ============================================================================
 // Tool Registration
 // ============================================================================
 
-function registerRemoteExec(api: MayrosPluginApi, service: RemoteExecService): void {
+function registerRemoteExec(
+  api: MayrosPluginApi,
+  service: RemoteExecService,
+  config: RemoteExecConfig,
+): void {
   api.registerTool(
     {
       name: "remote_exec",
@@ -100,7 +123,7 @@ function registerRemoteExec(api: MayrosPluginApi, service: RemoteExecService): v
           parts.push("[output was truncated]");
         }
 
-        const text = parts.join("\n\n") || "(no output)";
+        const text = applyToolMasking(parts.join("\n\n") || "(no output)", config);
 
         return {
           content: [{ type: "text" as const, text }],
@@ -117,7 +140,11 @@ function registerRemoteExec(api: MayrosPluginApi, service: RemoteExecService): v
   );
 }
 
-function registerRemoteReadFile(api: MayrosPluginApi, service: RemoteExecService): void {
+function registerRemoteReadFile(
+  api: MayrosPluginApi,
+  service: RemoteExecService,
+  config: RemoteExecConfig,
+): void {
   api.registerTool(
     {
       name: "remote_read_file",
@@ -157,7 +184,7 @@ function registerRemoteReadFile(api: MayrosPluginApi, service: RemoteExecService
         }
 
         return {
-          content: [{ type: "text" as const, text }],
+          content: [{ type: "text" as const, text: applyToolMasking(text, config) }],
           details: {
             path: p.path.trim(),
             binary: result.binary,
@@ -172,7 +199,11 @@ function registerRemoteReadFile(api: MayrosPluginApi, service: RemoteExecService
   );
 }
 
-function registerRemoteLs(api: MayrosPluginApi, service: RemoteExecService): void {
+function registerRemoteLs(
+  api: MayrosPluginApi,
+  service: RemoteExecService,
+  config: RemoteExecConfig,
+): void {
   api.registerTool(
     {
       name: "remote_ls",
@@ -208,7 +239,7 @@ function registerRemoteLs(api: MayrosPluginApi, service: RemoteExecService): voi
         const text = lines.length > 0 ? `${header}\n\n${lines.join("\n")}` : `${header}\n\n(empty)`;
 
         return {
-          content: [{ type: "text" as const, text }],
+          content: [{ type: "text" as const, text: applyToolMasking(text, config) }],
           details: {
             path: result.path,
             count: result.entries.length,
@@ -235,7 +266,7 @@ async function handleCd(
     return { text: "Error: Session requires a sender identity." };
   }
 
-  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
 
   if (!targetPath.trim()) {
     return { text: formatPwdOutput(session.workdir) };
@@ -256,9 +287,9 @@ function handlePwd(
   config: RemoteExecConfig,
 ): { text: string } {
   if (!ctx.senderId) {
-    return { text: formatPwdOutput(config.allowedPaths[0]!) };
+    return { text: formatPwdOutput(defaultWorkdir(config)) };
   }
-  const workdir = sessionMgr.getWorkdir(ctx.channel, ctx.senderId) ?? config.allowedPaths[0]!;
+  const workdir = sessionMgr.getWorkdir(ctx.channel, ctx.senderId) ?? defaultWorkdir(config);
   return { text: formatPwdOutput(workdir) };
 }
 
@@ -374,7 +405,7 @@ function handleEnv(
   }
 
   // Ensure session exists
-  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
 
   // /run env (no args) — list
   if (!rest) {
@@ -415,6 +446,9 @@ function handleEnv(
     if (ENV_BLOCKLIST.has(key)) {
       return { text: `Error: ${key} is a protected variable.` };
     }
+    if (value.length > MAX_ENV_VALUE_LENGTH) {
+      return { text: `Error: Value exceeds max length (${MAX_ENV_VALUE_LENGTH} chars).` };
+    }
     const ok = sessionMgr.setEnv(ctx.channel, ctx.senderId, key, value, config.session.maxEnvVars);
     if (!ok) {
       return {
@@ -446,7 +480,7 @@ function handleAlias(
     return { text: "Error: Session requires a sender identity." };
   }
 
-  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
 
   // /run alias -d NAME or /run alias -d
   if (rest === "-d") {
@@ -504,6 +538,9 @@ function handleAlias(
   if (RESERVED_ALIAS_NAMES.has(name)) {
     return { text: `Error: "${name}" is a reserved name.` };
   }
+  if (command.length > MAX_ALIAS_COMMAND_LENGTH) {
+    return { text: `Error: Alias command exceeds max length (${MAX_ALIAS_COMMAND_LENGTH} chars).` };
+  }
 
   const ok = sessionMgr.setAlias(
     ctx.channel,
@@ -527,7 +564,7 @@ function handleStatus(
     return { text: "Error: Session requires a sender identity." };
   }
 
-  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
 
   const ttlRemainingMs = Math.max(
     0,
@@ -559,7 +596,7 @@ function handleClear(
   if (!ctx.senderId) {
     return { text: "Error: Session requires a sender identity." };
   }
-  sessionMgr.clearSession(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+  sessionMgr.clearSession(ctx.channel, ctx.senderId, defaultWorkdir(config));
   return { text: formatClearSuccess() };
 }
 
@@ -611,8 +648,8 @@ async function handleExec(
   }
 
   const workdir = ctx.senderId
-    ? sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!).workdir
-    : config.allowedPaths[0]!;
+    ? sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config)).workdir
+    : defaultWorkdir(config);
 
   const result = manager.evaluateCommand({
     command,
@@ -623,12 +660,18 @@ async function handleExec(
 
   if (result.action === "auto_approved") {
     const env = resolveSessionEnv(sessionMgr, ctx);
-    const execResult = await service.executeCommand({
-      command,
-      workdir,
-      env,
-      senderId: ctx.senderId,
-    });
+    let execResult;
+    try {
+      execResult = await service.executeCommand({
+        command,
+        workdir,
+        env,
+        senderId: ctx.senderId,
+      });
+    } catch (execErr) {
+      recordHistory(sessionMgr, command, -1, ctx, config);
+      throw execErr;
+    }
     recordHistory(sessionMgr, command, execResult.exitCode, ctx, config);
     let formatted = formatExecOutput(execResult, command);
     let maskNote = "";
@@ -666,12 +709,18 @@ async function handleApprove(
   if (!request) return { text: "Request not found or expired." };
 
   const env = resolveSessionEnv(sessionMgr, ctx);
-  const execResult = await service.executeCommand({
-    command: request.command,
-    workdir: request.workdir,
-    env,
-    senderId: ctx.senderId,
-  });
+  let execResult;
+  try {
+    execResult = await service.executeCommand({
+      command: request.command,
+      workdir: request.workdir,
+      env,
+      senderId: ctx.senderId,
+    });
+  } catch (execErr) {
+    recordHistory(sessionMgr, request.command, -1, ctx, config);
+    throw execErr;
+  }
   recordHistory(sessionMgr, request.command, execResult.exitCode, ctx, config);
   let formatted = formatExecOutput(execResult, request.command);
   let maskNote = "";
@@ -733,19 +782,17 @@ function registerRunCommand(
         if (action === "unlock") {
           if (!ctx.senderId) return { text: "Error: Session requires a sender identity." };
           if (!rest) return { text: "Usage: /run unlock <pin>" };
-          const session = sessionMgr.getOrCreate(
-            ctx.channel,
-            ctx.senderId,
-            config.allowedPaths[0]!,
-          );
+          const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
           const result = await attemptUnlock(rest, session.pin, config.pin);
           if (result.success) {
-            void audit.log("run_command", ctx.senderId, "allow", {
-              action: "pin_unlock",
-            });
+            if (config.pin.pinHash) {
+              await audit.log("run_command", ctx.senderId, "allow", {
+                action: "pin_unlock",
+              });
+            }
             return { text: formatPinUnlocked(result.message) };
           }
-          void audit.log("run_command", ctx.senderId, "deny", {
+          await audit.log("run_command", ctx.senderId, "deny", {
             action: "pin_unlock_failed",
             message: result.message,
           });
@@ -754,11 +801,7 @@ function registerRunCommand(
 
         // PIN gate: check lock status for all commands except help and unlock
         if (config.pin.pinHash && ctx.senderId) {
-          const session = sessionMgr.getOrCreate(
-            ctx.channel,
-            ctx.senderId,
-            config.allowedPaths[0]!,
-          );
+          const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, defaultWorkdir(config));
           const lockCheck = checkPinLock(session.pin, config.pin);
           if (lockCheck.locked) {
             return { text: formatPinLocked(lockCheck.reason) };
@@ -767,12 +810,47 @@ function registerRunCommand(
         }
 
         if (action === "history") return handleHistory(sessionMgr, ctx, config);
-        if (action === "env") return handleEnv(sessionMgr, rest, ctx, config);
-        if (action === "alias") return handleAlias(sessionMgr, rest, ctx, config);
+        if (action === "env") {
+          const envResult = handleEnv(sessionMgr, rest, ctx, config);
+          if (rest && ctx.senderId) {
+            await audit.log("run_command", ctx.senderId, "allow", {
+              action: "env_change",
+              detail: rest.slice(0, 100),
+            });
+          }
+          return envResult;
+        }
+        if (action === "alias") {
+          const aliasResult = handleAlias(sessionMgr, rest, ctx, config);
+          if (rest && ctx.senderId) {
+            await audit.log("run_command", ctx.senderId, "allow", {
+              action: "alias_change",
+              detail: rest.slice(0, 100),
+            });
+          }
+          return aliasResult;
+        }
         if (action === "status") return handleStatus(sessionMgr, ctx, config);
-        if (action === "clear") return handleClear(sessionMgr, ctx, config);
+        if (action === "clear") {
+          const clearResult = handleClear(sessionMgr, ctx, config);
+          if (ctx.senderId) {
+            await audit.log("run_command", ctx.senderId, "allow", {
+              action: "session_clear",
+            });
+          }
+          return clearResult;
+        }
         if (action === "config") return handleConfig(config);
-        if (action === "cd") return await handleCd(sessionMgr, service, rest, ctx, config);
+        if (action === "cd") {
+          const cdResult = await handleCd(sessionMgr, service, rest, ctx, config);
+          if (rest.trim() && ctx.senderId) {
+            await audit.log("run_command", ctx.senderId, "allow", {
+              action: "cd",
+              target: rest.trim(),
+            });
+          }
+          return cdResult;
+        }
         if (action === "pwd") return handlePwd(sessionMgr, ctx, config);
         if (action === "more") return handleMore(sessionMgr, ctx);
         if (action === "pending") return handlePending(manager, ctx);
@@ -780,7 +858,7 @@ function registerRunCommand(
           return await handleApprove(manager, service, sessionMgr, rest, ctx, config);
         if (action === "deny") return handleDeny(manager, rest, ctx);
 
-        // History recall: !! or !N
+        // History recall: !! or !N (block other ! prefixes to prevent bash history expansion)
         if (args === "!!") return await handleRecall(sessionMgr, manager, service, 1, ctx, config);
         const bangMatch = args.match(/^!(\d+)$/);
         if (bangMatch)
@@ -792,6 +870,9 @@ function registerRunCommand(
             ctx,
             config,
           );
+        if (/^![^!]/.test(args) && !bangMatch) {
+          return { text: "Invalid recall syntax. Use !! (last) or !<N> (by number)." };
+        }
 
         // Alias resolution
         if (ctx.senderId) {
@@ -835,9 +916,9 @@ const remoteExecPlugin = {
     const audit = new AuditTrail(cfg.auditLogPath);
     const service = new RemoteExecService(cfg, api.logger, audit);
 
-    registerRemoteExec(api, service);
-    registerRemoteReadFile(api, service);
-    registerRemoteLs(api, service);
+    registerRemoteExec(api, service, cfg);
+    registerRemoteReadFile(api, service, cfg);
+    registerRemoteLs(api, service, cfg);
 
     const manager = new ConfirmationManager(cfg.confirmation, audit, api.logger);
     const sessionMgr = new SessionManager(cfg.session, api.logger);
