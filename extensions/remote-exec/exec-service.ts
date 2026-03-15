@@ -90,6 +90,19 @@ export class RemoteExecService {
     return state;
   }
 
+  private pruneStaleRateLimitEntries(): void {
+    const cutoff = Date.now() - this.config.rateLimits.windowMs;
+    for (const [key, state] of this.rateLimitStates) {
+      // Remove entries whose timestamps are all expired
+      if (
+        state.timestamps.length === 0 ||
+        state.timestamps[state.timestamps.length - 1]! < cutoff
+      ) {
+        this.rateLimitStates.delete(key);
+      }
+    }
+  }
+
   private checkRateLimit(senderId?: string): { allowed: boolean; retryAfterMs?: number } {
     const now = Date.now();
     const { maxCallsPerWindow, windowMs } = this.config.rateLimits;
@@ -99,6 +112,11 @@ export class RemoteExecService {
     // Prune expired timestamps
     while (state.timestamps.length > 0 && state.timestamps[0]! < cutoff) {
       state.timestamps.shift();
+    }
+
+    // Periodically clean up stale sender entries
+    if (this.rateLimitStates.size > 100) {
+      this.pruneStaleRateLimitEntries();
     }
 
     if (state.timestamps.length >= maxCallsPerWindow) {
@@ -321,9 +339,13 @@ export class RemoteExecService {
 
   // ---------- readFile ----------
 
-  async readFile(params: { path: string; lines?: number }): Promise<ReadFileResult> {
-    // 1. Rate limit check
-    const rateCheck = this.checkRateLimit();
+  async readFile(params: {
+    path: string;
+    lines?: number;
+    senderId?: string;
+  }): Promise<ReadFileResult> {
+    // 1. Rate limit check (per-sender)
+    const rateCheck = this.checkRateLimit(params.senderId);
     if (!rateCheck.allowed) {
       await this.audit.log("remote_read_file", undefined, "deny", {
         path: params.path,
@@ -348,7 +370,7 @@ export class RemoteExecService {
       const probe = Buffer.alloc(8192);
       const { bytesRead } = await fd.read(probe, 0, 8192, 0);
       if (this.isBinaryBuffer(probe, bytesRead)) {
-        this.recordRateLimit();
+        this.recordRateLimit(params.senderId);
         await this.audit.log("remote_read_file", undefined, "deny", {
           path: resolvedPath,
           reason: "binary_file",
@@ -384,7 +406,7 @@ export class RemoteExecService {
       outputContent = "(empty)";
     }
 
-    this.recordRateLimit();
+    this.recordRateLimit(params.senderId);
 
     // 6. Audit
     await this.audit.log("remote_read_file", undefined, "allow", {
@@ -405,9 +427,9 @@ export class RemoteExecService {
 
   // ---------- listDirectory ----------
 
-  async listDirectory(params: { path: string }): Promise<ListDirResult> {
-    // 1. Rate limit check
-    const rateCheck = this.checkRateLimit();
+  async listDirectory(params: { path: string; senderId?: string }): Promise<ListDirResult> {
+    // 1. Rate limit check (per-sender)
+    const rateCheck = this.checkRateLimit(params.senderId);
     if (!rateCheck.allowed) {
       await this.audit.log("remote_ls", undefined, "deny", {
         path: params.path,
@@ -466,7 +488,7 @@ export class RemoteExecService {
       return a.name.localeCompare(b.name);
     });
 
-    this.recordRateLimit();
+    this.recordRateLimit(params.senderId);
 
     // 6. Audit
     await this.audit.log("remote_ls", undefined, "allow", {

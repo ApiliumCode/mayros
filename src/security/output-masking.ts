@@ -123,11 +123,11 @@ const MASK_PATTERNS: MaskPattern[] = [
     pattern: /eyJ[A-Za-z0-9_-]{50,}\.eyJ[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{20,}/g,
     replacement: "***REDACTED_JWT***",
   },
-  // Private keys
+  // Private keys (bounded to 16KB to prevent ReDoS on unmatched BEGIN without END)
   {
     name: "private-key",
     pattern:
-      /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
+      /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----[\s\S]{0,16384}?-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
     replacement: "-----BEGIN PRIVATE KEY-----\n***REDACTED***\n-----END PRIVATE KEY-----",
   },
 ];
