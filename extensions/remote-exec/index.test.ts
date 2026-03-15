@@ -2070,8 +2070,19 @@ describe("environment variable management", () => {
     expect(ENV_NAME_PATTERN.test("")).toBe(false);
   });
 
-  it("ENV_BLOCKLIST contains HOME, USER, SHELL, TERM, LOGNAME, HOSTNAME, UID, EUID", () => {
-    for (const key of ["HOME", "USER", "SHELL", "TERM", "LOGNAME", "HOSTNAME", "UID", "EUID"]) {
+  it("ENV_BLOCKLIST contains all protected variables", () => {
+    for (const key of [
+      "HOME",
+      "USER",
+      "SHELL",
+      "TERM",
+      "LOGNAME",
+      "HOSTNAME",
+      "UID",
+      "EUID",
+      "LD_PRELOAD",
+      "DYLD_INSERT_LIBRARIES",
+    ]) {
       expect(ENV_BLOCKLIST.has(key)).toBe(true);
     }
   });
@@ -2418,5 +2429,85 @@ describe("/run history, !!, !N, env integration", () => {
     expect(result.text).toContain("env");
     expect(result.text).toContain("!!");
     expect(result.text).toContain("!<N>");
+  });
+
+  it("/run env KEY shows single variable value", async () => {
+    await cmdHandler({
+      args: "env MY_VAR=hello",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env MY_VAR=hello",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "env MY_VAR",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env MY_VAR",
+      config: {},
+    });
+    expect(result.text).toBe("MY_VAR=hello");
+  });
+
+  it("/run env KEY for unset variable returns not set", async () => {
+    const result = await cmdHandler({
+      args: "env NOPE",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env NOPE",
+      config: {},
+    });
+    expect(result.text).toBe("NOPE is not set.");
+  });
+
+  it("/run env -d without key returns usage", async () => {
+    const result = await cmdHandler({
+      args: "env -d",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env -d",
+      config: {},
+    });
+    expect(result.text).toBe("Usage: /run env -d KEY");
+  });
+
+  it("/run env KEY=VALUE=WITH=EQUALS splits on first = only", async () => {
+    const result = await cmdHandler({
+      args: "env DB_URL=postgres://host:5432/db?opt=val",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env DB_URL=postgres://host:5432/db?opt=val",
+      config: {},
+    });
+    expect(result.text).toBe("Set: DB_URL=postgres://host:5432/db?opt=val");
+
+    // Verify the full value was stored
+    const show = await cmdHandler({
+      args: "env DB_URL",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env DB_URL",
+      config: {},
+    });
+    expect(show.text).toBe("DB_URL=postgres://host:5432/db?opt=val");
+  });
+
+  it("/run env LD_PRELOAD=evil returns protected error", async () => {
+    const result = await cmdHandler({
+      args: "env LD_PRELOAD=/tmp/evil.so",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env LD_PRELOAD=/tmp/evil.so",
+      config: {},
+    });
+    expect(result.text).toContain("LD_PRELOAD is a protected variable");
   });
 });

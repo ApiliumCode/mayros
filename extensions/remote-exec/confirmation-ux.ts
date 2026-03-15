@@ -326,6 +326,8 @@ export const ENV_BLOCKLIST = new Set([
   "HOSTNAME",
   "UID",
   "EUID",
+  "LD_PRELOAD",
+  "DYLD_INSERT_LIBRARIES",
 ]);
 
 export const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
