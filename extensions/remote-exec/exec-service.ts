@@ -245,7 +245,7 @@ export class RemoteExecService {
     }
 
     // 3. Resolve workdir
-    const workdir = params.workdir ?? this.config.allowedPaths[0]!;
+    const workdir = params.workdir ?? this.config.allowedPaths[0] ?? "/tmp";
     const resolvedWorkdir = await this.validatePath(workdir);
 
     // Verify workdir is a directory

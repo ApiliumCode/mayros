@@ -86,18 +86,16 @@ const noopLogger = {
 };
 
 const noopAudit = {
-  log: vi
-    .fn()
-    .mockResolvedValue({
-      seq: 0,
-      timestamp: "",
-      event: "",
-      actor: undefined,
-      decision: "allow" as const,
-      context: {},
-      prevHmac: "",
-      hmac: "",
-    }),
+  log: vi.fn().mockResolvedValue({
+    seq: 0,
+    timestamp: "",
+    event: "",
+    actor: undefined,
+    decision: "allow" as const,
+    context: {},
+    prevHmac: "",
+    hmac: "",
+  }),
   init: vi.fn(),
   verify: vi.fn(),
   query: vi.fn(),
@@ -4178,5 +4176,127 @@ describe("PIN config parsing", () => {
         pin: { unknownKey: true },
       }),
     ).toThrow();
+  });
+});
+
+// ============================================================================
+// AG. Re-Scan Gap Tests (7 tests)
+// ============================================================================
+
+describe("re-scan gap coverage", () => {
+  let localTmpDir: string;
+
+  beforeEach(async () => {
+    localTmpDir = await createTmpDir();
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("rejects coproc commands (background bypass)", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
+    await expect(service.executeCommand({ command: "coproc sleep 100" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("blockedPatterns with nested quantifiers rejected (ReDoS protection)", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        enabled: true,
+        allowedPaths: ["/tmp"],
+        blockedPatterns: ["(a+)+b"],
+      }),
+    ).toThrow("catastrophic backtracking");
+  });
+
+  it("blockedPatterns without nested quantifiers accepted", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      enabled: true,
+      allowedPaths: ["/tmp"],
+      blockedPatterns: ["^sudo\\b", "rm\\s+-rf"],
+    });
+    expect(cfg.blockedPatterns.length).toBe(2);
+  });
+
+  it("generic-token-field pattern masks api_key values", () => {
+    const result = maskSensitiveOutput("api_key=abcdefghijklmnop1234567890");
+    expect(result.masked).toBe(true);
+    expect(result.text).not.toContain("abcdefghijklmnop1234567890");
+  });
+
+  it("env value length enforcement", async () => {
+    const { default: plugin } = await import("./index.js");
+    let handler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [localTmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") handler = cmd.handler;
+      },
+    };
+    await plugin.register(mockApi as any);
+    const longValue = "x".repeat(5000);
+    const result = await handler!({
+      args: `env MYVAR=${longValue}`,
+      senderId: "u1",
+      channel: "ch",
+    });
+    expect(result.text).toContain("exceeds max length");
+  });
+
+  it("alias command length enforcement", async () => {
+    const { default: plugin } = await import("./index.js");
+    let handler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [localTmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") handler = cmd.handler;
+      },
+    };
+    await plugin.register(mockApi as any);
+    const longCmd = "echo " + "x".repeat(1100);
+    const result = await handler!({
+      args: `alias myalias ${longCmd}`,
+      senderId: "u1",
+      channel: "ch",
+    });
+    expect(result.text).toContain("exceeds max length");
+  });
+
+  it("non-object config throws", () => {
+    expect(() => remoteExecConfigSchema.parse(42)).toThrow("must be an object");
+    expect(() => remoteExecConfigSchema.parse([1, 2, 3])).toThrow("must be an object");
   });
 });
