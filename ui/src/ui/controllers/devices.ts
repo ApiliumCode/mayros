@@ -59,7 +59,7 @@ export async function loadDevices(state: DevicesState, opts?: { quiet?: boolean 
   try {
     const res = await state.client.request<{
       pending?: Array<PendingDevice>;
-      paired?: Array<PendingDevice>;
+      paired?: Array<PairedDevice>;
     }>("device.pair.list", {});
     state.devicesList = {
       pending: Array.isArray(res?.pending) ? res.pending : [],
