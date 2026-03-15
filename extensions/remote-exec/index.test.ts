@@ -29,7 +29,6 @@ import {
   formatExecOutput,
   formatApprovalPrompt,
   formatPendingList,
-  formatRunHelp,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";

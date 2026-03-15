@@ -13,7 +13,6 @@ import { randomBytes } from "node:crypto";
 import {
   classifyCommand,
   riskLevelSatisfies,
-  type RiskLevel,
   type IntentClassification,
 } from "../interactive-permissions/intent-classifier.js";
 import type { AuditTrail } from "../osameru-governance/audit-trail.js";
