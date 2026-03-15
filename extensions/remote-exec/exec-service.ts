@@ -208,8 +208,10 @@ export class RemoteExecService {
     senderId?: string;
   }): Promise<ExecResult> {
     // 1. Background execution blocking
-    const BG_PATTERN = /(?:^|\s)(?:nohup|disown|setsid)\b|&\s*$/;
-    if (BG_PATTERN.test(params.command)) {
+    // Catches: nohup, disown, setsid keywords AND standalone & (not &&, &>, >&)
+    const BG_KEYWORD = /(?:^|\s)(?:nohup|disown|setsid)\b/;
+    const BG_AMPERSAND = /(?<![&>])&(?![&>])/;
+    if (BG_KEYWORD.test(params.command) || BG_AMPERSAND.test(params.command)) {
       throw new Error("Background execution is not allowed");
     }
 

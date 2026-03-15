@@ -3641,6 +3641,25 @@ describe("per-sender rate limits and background blocking", () => {
     );
   });
 
+  it("rejects mid-command & (backgrounding)", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    await expect(service.executeCommand({ command: "echo foo & echo bar" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("allows && (logical AND) and &> (redirect)", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    const r1 = await service.executeCommand({ command: "echo a && echo b" });
+    expect(r1.stdout).toContain("a");
+    expect(r1.stdout).toContain("b");
+    // &> redirect should not be blocked
+    const r2 = await service.executeCommand({ command: "echo ok &> /dev/null" });
+    expect(r2.exitCode).toBe(0);
+  });
+
   it("PATH and NODE_OPTIONS are rejected via ENV_BLOCKLIST", () => {
     expect(ENV_BLOCKLIST.has("PATH")).toBe(true);
     expect(ENV_BLOCKLIST.has("NODE_OPTIONS")).toBe(true);
