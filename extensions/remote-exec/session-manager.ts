@@ -6,6 +6,7 @@
  */
 
 import type { SessionConfig } from "./config.js";
+import { createPinState, type PinSessionState } from "./pin-auth.js";
 
 // ============================================================================
 // Types
@@ -37,6 +38,7 @@ export type SessionState = {
   history: HistoryEntry[];
   env: Record<string, string>;
   aliases: Record<string, string>;
+  pin: PinSessionState;
 };
 
 // ============================================================================
@@ -119,6 +121,7 @@ export class SessionManager {
       history: [],
       env: {},
       aliases: {},
+      pin: createPinState(),
     };
     this.sessions.set(key, session);
     return session;
@@ -138,6 +141,7 @@ export class SessionManager {
         history: [],
         env: {},
         aliases: {},
+        pin: createPinState(),
       });
     }
   }
@@ -172,6 +176,7 @@ export class SessionManager {
         history: [],
         env: {},
         aliases: {},
+        pin: createPinState(),
       });
     }
 
@@ -361,7 +366,21 @@ export class SessionManager {
       session.history = [];
       session.env = {};
       session.aliases = {};
+      session.pin = createPinState();
       session.lastActivity = Date.now();
     }
+  }
+
+  updatePinActivity(channel: string, senderId: string): void {
+    const key = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(key);
+    if (session && session.pin.pinUnlocked) {
+      session.pin.pinLastActivity = Date.now();
+    }
+  }
+
+  getPinState(channel: string, senderId: string): PinSessionState | undefined {
+    const key = this.compositeKey(channel, senderId);
+    return this.sessions.get(key)?.pin;
   }
 }
