@@ -17,8 +17,7 @@
 
 import { createInterface } from "node:readline";
 import type { Command } from "commander";
-import { CortexError } from "../../extensions/shared/cortex-client.js";
-import { resolveCortexClient } from "./shared/cortex-resolution.js";
+import { resolveCortexClient, CortexError } from "./shared/cortex-resolution.js";
 
 /** Prompt the user for confirmation on destructive operations. */
 async function confirmAction(message: string): Promise<boolean> {
