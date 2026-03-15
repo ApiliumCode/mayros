@@ -2,20 +2,37 @@
  * Remote Exec Plugin Tests
  *
  * Tests cover:
- * - Configuration parsing (defaults, validation, clamping, error cases)
- * - Path validation (allowedPaths, traversal, symlinks, resolution)
- * - Command execution (stdout/stderr, exit codes, timeout, truncation, binary)
- * - File reading (text, binary, line limits, errors)
- * - Directory listing (sorting, types, empty, errors)
- * - Plugin integration (registration, disabled state)
+ * - A. Configuration parsing (defaults, validation, clamping, error cases)
+ * - B. Path validation (allowedPaths, traversal, symlinks, resolution)
+ * - C. Command execution (stdout/stderr, exit codes, timeout, truncation, binary)
+ * - D. File reading (text, binary, line limits, errors)
+ * - E. Directory listing (sorting, types, empty, errors)
+ * - F. Plugin integration (registration, disabled state)
+ * - G. Confirmation config parsing
+ * - H. ConfirmationManager logic
+ * - I. Output formatting
+ * - J. /run command integration
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { remoteExecConfigSchema, type RemoteExecConfig } from "./config.js";
+import {
+  remoteExecConfigSchema,
+  type RemoteExecConfig,
+  type ConfirmationConfig,
+} from "./config.js";
 import { RemoteExecService } from "./exec-service.js";
+import {
+  ConfirmationManager,
+  formatExecOutput,
+  formatApprovalPrompt,
+  formatPendingList,
+  formatRunHelp,
+  type PendingRequest,
+  type ExecResult,
+} from "./confirmation-ux.js";
 
 // ============================================================================
 // Test Helpers
@@ -627,10 +644,11 @@ describe("plugin integration", () => {
     await cleanupDirs();
   });
 
-  it("registers 3 tools when enabled", async () => {
+  it("registers 3 tools + /run command when enabled", async () => {
     const { default: plugin } = await import("./index.js");
 
     const registeredTools: string[] = [];
+    const registeredCommands: string[] = [];
     const mockApi = {
       pluginConfig: {
         enabled: true,
@@ -648,11 +666,14 @@ describe("plugin integration", () => {
       registerCli: () => {},
       registerService: () => {},
       registerProvider: () => {},
-      registerCommand: () => {},
+      registerCommand: (cmd: { name: string }) => {
+        registeredCommands.push(cmd.name);
+      },
     };
 
     await plugin.register(mockApi as any);
     expect(registeredTools).toEqual(["remote_exec", "remote_read_file", "remote_ls"]);
+    expect(registeredCommands).toEqual(["run"]);
   });
 
   it("registers 0 tools when disabled", async () => {
@@ -701,5 +722,586 @@ describe("plugin integration", () => {
     const lsResult = await service.listDirectory({ path: tmpDir });
     const names = lsResult.entries.map((e) => e.name);
     expect(names).toContain("e2e.txt");
+  });
+});
+
+// ============================================================================
+// G. Confirmation Config (8 tests)
+// ============================================================================
+
+describe("confirmation config", () => {
+  it("parses defaults for confirmation section", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.confirmation.autoApproveMaxRisk).toBe("safe");
+    expect(cfg.confirmation.approvalTtlMs).toBe(120_000);
+    expect(cfg.confirmation.maxPending).toBe(10);
+    expect(cfg.confirmation.showRiskLevel).toBe(true);
+  });
+
+  it("validates autoApproveMaxRisk with valid values", () => {
+    for (const risk of ["safe", "low", "medium", "high", "critical"] as const) {
+      const cfg = remoteExecConfigSchema.parse({
+        confirmation: { autoApproveMaxRisk: risk },
+      });
+      expect(cfg.confirmation.autoApproveMaxRisk).toBe(risk);
+    }
+  });
+
+  it("invalid autoApproveMaxRisk falls back to safe", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      confirmation: { autoApproveMaxRisk: "banana" },
+    });
+    expect(cfg.confirmation.autoApproveMaxRisk).toBe("safe");
+  });
+
+  it("clamps approvalTtlMs to [10_000, 600_000]", () => {
+    const low = remoteExecConfigSchema.parse({
+      confirmation: { approvalTtlMs: 1_000 },
+    });
+    expect(low.confirmation.approvalTtlMs).toBe(10_000);
+
+    const high = remoteExecConfigSchema.parse({
+      confirmation: { approvalTtlMs: 999_999 },
+    });
+    expect(high.confirmation.approvalTtlMs).toBe(600_000);
+  });
+
+  it("clamps maxPending to [1, 100]", () => {
+    const low = remoteExecConfigSchema.parse({
+      confirmation: { maxPending: 0 },
+    });
+    expect(low.confirmation.maxPending).toBe(1);
+
+    const high = remoteExecConfigSchema.parse({
+      confirmation: { maxPending: 999 },
+    });
+    expect(high.confirmation.maxPending).toBe(100);
+  });
+
+  it("unknown keys in confirmation section throws", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        confirmation: { unknownKey: true },
+      }),
+    ).toThrow("unknown keys");
+  });
+
+  it("missing confirmation section uses defaults", () => {
+    const cfg = remoteExecConfigSchema.parse({ enabled: false });
+    expect(cfg.confirmation.autoApproveMaxRisk).toBe("safe");
+    expect(cfg.confirmation.approvalTtlMs).toBe(120_000);
+  });
+
+  it("full confirmation config parses correctly", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      confirmation: {
+        autoApproveMaxRisk: "medium",
+        approvalTtlMs: 60_000,
+        maxPending: 5,
+        showRiskLevel: false,
+      },
+    });
+    expect(cfg.confirmation.autoApproveMaxRisk).toBe("medium");
+    expect(cfg.confirmation.approvalTtlMs).toBe(60_000);
+    expect(cfg.confirmation.maxPending).toBe(5);
+    expect(cfg.confirmation.showRiskLevel).toBe(false);
+  });
+});
+
+// ============================================================================
+// H. ConfirmationManager (12 tests)
+// ============================================================================
+
+describe("ConfirmationManager", () => {
+  const mockAudit = {
+    log: vi.fn().mockResolvedValue({
+      seq: 1,
+      timestamp: "",
+      event: "",
+      actor: undefined,
+      decision: "allow" as const,
+      context: {},
+      prevHmac: "",
+      hmac: "",
+    }),
+    init: vi.fn(),
+    verify: vi.fn(),
+    query: vi.fn(),
+    lastWriteError: null,
+  };
+
+  function makeConfirmConfig(overrides: Partial<ConfirmationConfig> = {}): ConfirmationConfig {
+    return {
+      autoApproveMaxRisk: "safe",
+      approvalTtlMs: 120_000,
+      maxPending: 10,
+      showRiskLevel: true,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("auto-approves safe command when autoApproveMaxRisk is safe", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    // "ls -la" is classified as "safe"
+    const result = mgr.evaluateCommand({ command: "ls -la", channel: "whatsapp" });
+    expect(result.action).toBe("auto_approved");
+  });
+
+  it("auto-approves low command when autoApproveMaxRisk is low", () => {
+    const mgr = new ConfirmationManager(
+      makeConfirmConfig({ autoApproveMaxRisk: "low" }),
+      mockAudit as any,
+      noopLogger,
+    );
+    // "npm install" is classified as "low"
+    const result = mgr.evaluateCommand({ command: "npm install", channel: "telegram" });
+    expect(result.action).toBe("auto_approved");
+  });
+
+  it("queues medium-risk command for approval when autoApproveMaxRisk is safe", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    // "git push origin main" is classified as "medium"
+    const result = mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    expect(result.action).toBe("pending_approval");
+    if (result.action === "pending_approval") {
+      expect(result.request.command).toBe("git push origin main");
+    }
+  });
+
+  it("queues high-risk command for approval", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const result = mgr.evaluateCommand({
+      command: "git push --force origin main",
+      channel: "whatsapp",
+    });
+    expect(result.action).toBe("pending_approval");
+  });
+
+  it("generates unique 6-char hex IDs", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const r1 = mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    const r2 = mgr.evaluateCommand({ command: "git commit -m test", channel: "whatsapp" });
+
+    if (r1.action === "pending_approval" && r2.action === "pending_approval") {
+      expect(r1.request.id).toHaveLength(6);
+      expect(r2.request.id).toHaveLength(6);
+      expect(r1.request.id).not.toBe(r2.request.id);
+    }
+  });
+
+  it("prunes expired requests automatically", () => {
+    const mgr = new ConfirmationManager(
+      makeConfirmConfig({ approvalTtlMs: 1 }),
+      mockAudit as any,
+      noopLogger,
+    );
+    mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+
+    // Wait for expiry
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      // spin
+    }
+
+    const pending = mgr.listPending();
+    expect(pending).toHaveLength(0);
+  });
+
+  it("rejects when maxPending is reached", () => {
+    const mgr = new ConfirmationManager(
+      makeConfirmConfig({ maxPending: 1 }),
+      mockAudit as any,
+      noopLogger,
+    );
+    mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    const result = mgr.evaluateCommand({ command: "git commit -m test", channel: "whatsapp" });
+    expect(result.action).toBe("blocked");
+    if (result.action === "blocked") {
+      expect(result.reason).toContain("Too many pending");
+    }
+  });
+
+  it("approve() returns request and removes from pending", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const result = mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    expect(result.action).toBe("pending_approval");
+    if (result.action !== "pending_approval") return;
+
+    const approved = mgr.approve(result.request.id);
+    expect(approved).not.toBeNull();
+    expect(approved!.command).toBe("git push origin main");
+
+    // Should be removed
+    expect(mgr.getPending(result.request.id)).toBeNull();
+  });
+
+  it("approve() returns null for unknown ID", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const result = mgr.approve("nonexistent");
+    expect(result).toBeNull();
+  });
+
+  it("deny() returns request and removes from pending", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const result = mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    expect(result.action).toBe("pending_approval");
+    if (result.action !== "pending_approval") return;
+
+    const denied = mgr.deny(result.request.id);
+    expect(denied).not.toBeNull();
+    expect(denied!.command).toBe("git push origin main");
+    expect(mgr.getPending(result.request.id)).toBeNull();
+  });
+
+  it("deny() returns null for unknown ID", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    const result = mgr.deny("nonexistent");
+    expect(result).toBeNull();
+  });
+
+  it("listPending() returns only non-expired requests", () => {
+    const mgr = new ConfirmationManager(makeConfirmConfig(), mockAudit as any, noopLogger);
+    mgr.evaluateCommand({ command: "git push origin main", channel: "whatsapp" });
+    mgr.evaluateCommand({ command: "git commit -m test", channel: "whatsapp" });
+
+    const pending = mgr.listPending();
+    expect(pending).toHaveLength(2);
+  });
+});
+
+// ============================================================================
+// I. Output Formatting (6 tests)
+// ============================================================================
+
+describe("output formatting", () => {
+  it("formatExecOutput: stdout only, exit 0 with duration", () => {
+    const result: ExecResult = {
+      stdout: "hello world\n",
+      stderr: "",
+      exitCode: 0,
+      truncated: false,
+      durationMs: 42,
+    };
+    const output = formatExecOutput(result, "echo hello world");
+    expect(output).toContain("> echo hello world");
+    expect(output).toContain("hello world");
+    expect(output).toContain("42ms");
+    expect(output).not.toContain("exit:");
+  });
+
+  it("formatExecOutput: stderr + nonzero exit code", () => {
+    const result: ExecResult = {
+      stdout: "",
+      stderr: "not found\n",
+      exitCode: 1,
+      truncated: false,
+      durationMs: 10,
+    };
+    const output = formatExecOutput(result, "bad-cmd");
+    expect(output).toContain("not found");
+    expect(output).toContain("exit: 1");
+  });
+
+  it("formatExecOutput: truncated output note", () => {
+    const result: ExecResult = {
+      stdout: "lots of data...\n",
+      stderr: "",
+      exitCode: 0,
+      truncated: true,
+      durationMs: 100,
+    };
+    const output = formatExecOutput(result, "cat bigfile");
+    expect(output).toContain("(truncated)");
+  });
+
+  it("formatApprovalPrompt: includes risk level, command, ID, expiry", () => {
+    const request: PendingRequest = {
+      id: "abc123",
+      command: "git push --force origin main",
+      classification: {
+        riskLevel: "high",
+        category: "git",
+        description: "Force push to remote",
+        matchedPatterns: ["git-push-force"],
+      },
+      channel: "whatsapp",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 120_000,
+    };
+    const output = formatApprovalPrompt(request, true);
+    expect(output).toContain("HIGH");
+    expect(output).toContain("git push --force origin main");
+    expect(output).toContain("abc123");
+    expect(output).toContain("/run approve abc123");
+    expect(output).toContain("/run deny abc123");
+    expect(output).toContain("120 seconds");
+  });
+
+  it("formatPendingList: empty list", () => {
+    const output = formatPendingList([]);
+    expect(output).toContain("No pending");
+  });
+
+  it("formatPendingList: multiple entries with IDs and expiry", () => {
+    const now = Date.now();
+    const requests: PendingRequest[] = [
+      {
+        id: "aaa111",
+        command: "git push",
+        classification: {
+          riskLevel: "medium",
+          category: "git",
+          description: "Push",
+          matchedPatterns: ["git-push"],
+        },
+        channel: "whatsapp",
+        createdAt: now,
+        expiresAt: now + 60_000,
+      },
+      {
+        id: "bbb222",
+        command: "rm -rf /tmp/test",
+        classification: {
+          riskLevel: "high",
+          category: "destructive",
+          description: "Recursive deletion",
+          matchedPatterns: ["rm-rf"],
+        },
+        channel: "telegram",
+        createdAt: now,
+        expiresAt: now + 120_000,
+      },
+    ];
+    const output = formatPendingList(requests);
+    expect(output).toContain("aaa111");
+    expect(output).toContain("bbb222");
+    expect(output).toContain("git push");
+    expect(output).toContain("rm -rf /tmp/test");
+    expect(output).toContain("2)");
+  });
+});
+
+// ============================================================================
+// J. /run Command Integration (9 tests)
+// ============================================================================
+
+describe("/run command integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    await fs.writeFile(path.join(tmpDir, "test.txt"), "hello");
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("/run without args returns help text", async () => {
+    const result = await cmdHandler({
+      args: "",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run",
+      config: {},
+    });
+    expect(result.text).toContain("Usage: /run <command>");
+  });
+
+  it("/run help returns help text", async () => {
+    const result = await cmdHandler({
+      args: "help",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run help",
+      config: {},
+    });
+    expect(result.text).toContain("Usage: /run <command>");
+    expect(result.text).toContain("approve");
+    expect(result.text).toContain("deny");
+  });
+
+  it("/run <safe-command> auto-executes, returns formatted output", async () => {
+    const result = await cmdHandler({
+      args: "echo hello-world",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo hello-world",
+      config: {},
+    });
+    expect(result.text).toContain("hello-world");
+  });
+
+  it("/run <risky-command> returns approval prompt with ID", async () => {
+    const result = await cmdHandler({
+      args: "git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run git push origin main",
+      config: {},
+    });
+    expect(result.text).toContain("requires approval");
+    expect(result.text).toContain("/run approve");
+  });
+
+  it("/run approve <valid-id> executes approved command, returns output", async () => {
+    // First create a pending request
+    const pending = await cmdHandler({
+      args: "git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run git push origin main",
+      config: {},
+    });
+
+    // Extract the ID from the approval prompt
+    const idMatch = pending.text.match(/\/run approve (\w+)/);
+    expect(idMatch).not.toBeNull();
+    const id = idMatch![1];
+
+    // Approve it — git push will fail (no git repo) but should attempt execution
+    const result = await cmdHandler({
+      args: `approve ${id}`,
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: `/run approve ${id}`,
+      config: {},
+    });
+    // Should contain output (even if the command fails, it will show exit code)
+    expect(result.text).toBeDefined();
+    expect(typeof result.text).toBe("string");
+  });
+
+  it("/run approve <invalid-id> returns not found", async () => {
+    const result = await cmdHandler({
+      args: "approve zzz999",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run approve zzz999",
+      config: {},
+    });
+    expect(result.text).toContain("not found or expired");
+  });
+
+  it("/run approve <expired-id> returns not found", async () => {
+    // We need a manager with very short TTL — the plugin uses config defaults
+    // Instead, test via ConfirmationManager directly
+    const mockAudit = {
+      log: vi.fn().mockResolvedValue({
+        seq: 1,
+        timestamp: "",
+        event: "",
+        actor: undefined,
+        decision: "allow" as const,
+        context: {},
+        prevHmac: "",
+        hmac: "",
+      }),
+    };
+    const mgr = new ConfirmationManager(
+      { autoApproveMaxRisk: "safe", approvalTtlMs: 1, maxPending: 10, showRiskLevel: true },
+      mockAudit as any,
+      noopLogger,
+    );
+    const evalResult = mgr.evaluateCommand({ command: "git push", channel: "whatsapp" });
+    expect(evalResult.action).toBe("pending_approval");
+    if (evalResult.action !== "pending_approval") return;
+
+    // Wait for expiry
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      // spin
+    }
+
+    const approved = mgr.approve(evalResult.request.id);
+    expect(approved).toBeNull();
+  });
+
+  it("/run deny <id> confirms denial", async () => {
+    // Create pending
+    const pending = await cmdHandler({
+      args: "git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run git push origin main",
+      config: {},
+    });
+
+    const idMatch = pending.text.match(/\/run deny (\w+)/);
+    expect(idMatch).not.toBeNull();
+    const id = idMatch![1];
+
+    const result = await cmdHandler({
+      args: `deny ${id}`,
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: `/run deny ${id}`,
+      config: {},
+    });
+    expect(result.text).toContain("Denied");
+  });
+
+  it("/run pending lists pending requests", async () => {
+    // Create a pending request first
+    await cmdHandler({
+      args: "git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run git push origin main",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "pending",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run pending",
+      config: {},
+    });
+    expect(result.text).toContain("git push origin main");
   });
 });

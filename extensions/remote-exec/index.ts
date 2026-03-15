@@ -10,7 +10,15 @@
 import { Type } from "@sinclair/typebox";
 import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { ToolInputError } from "../../src/agents/tools/common.js";
-import { remoteExecConfigSchema } from "./config.js";
+import { AuditTrail } from "../osameru-governance/audit-trail.js";
+import { remoteExecConfigSchema, type RemoteExecConfig } from "./config.js";
+import {
+  ConfirmationManager,
+  formatExecOutput,
+  formatApprovalPrompt,
+  formatPendingList,
+  formatRunHelp,
+} from "./confirmation-ux.js";
 import { RemoteExecService } from "./exec-service.js";
 import type { DirEntry } from "./exec-service.js";
 
@@ -186,6 +194,108 @@ function registerRemoteLs(api: MayrosPluginApi, service: RemoteExecService): voi
 }
 
 // ============================================================================
+// /run Command Handlers
+// ============================================================================
+
+async function handleExec(
+  manager: ConfirmationManager,
+  service: RemoteExecService,
+  command: string,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): Promise<{ text: string }> {
+  const result = manager.evaluateCommand({
+    command,
+    senderId: ctx.senderId,
+    channel: ctx.channel,
+  });
+
+  if (result.action === "auto_approved") {
+    const execResult = await service.executeCommand({ command });
+    return { text: formatExecOutput(execResult, command) };
+  }
+
+  if (result.action === "pending_approval") {
+    return { text: formatApprovalPrompt(result.request, config.confirmation.showRiskLevel) };
+  }
+
+  // blocked
+  return { text: `Blocked: ${result.reason}` };
+}
+
+async function handleApprove(
+  manager: ConfirmationManager,
+  service: RemoteExecService,
+  id: string,
+  ctx: { senderId?: string },
+  _config: RemoteExecConfig,
+): Promise<{ text: string }> {
+  if (!id) return { text: "Usage: /run approve <id>" };
+
+  const request = manager.approve(id.trim(), ctx.senderId);
+  if (!request) return { text: "Request not found or expired." };
+
+  const execResult = await service.executeCommand({
+    command: request.command,
+    workdir: request.workdir,
+  });
+  return { text: formatExecOutput(execResult, request.command) };
+}
+
+function handleDeny(
+  manager: ConfirmationManager,
+  id: string,
+  ctx: { senderId?: string },
+): { text: string } {
+  if (!id) return { text: "Usage: /run deny <id>" };
+
+  const request = manager.deny(id.trim(), ctx.senderId);
+  if (!request) return { text: "Request not found or expired." };
+
+  return { text: `Denied: ${request.command}` };
+}
+
+function handlePending(manager: ConfirmationManager, ctx: { senderId?: string }): { text: string } {
+  const requests = manager.listPending(ctx.senderId);
+  return { text: formatPendingList(requests) };
+}
+
+function registerRunCommand(
+  api: MayrosPluginApi,
+  service: RemoteExecService,
+  manager: ConfirmationManager,
+  config: RemoteExecConfig,
+): void {
+  api.registerCommand({
+    name: "run",
+    description: "Execute commands remotely. Usage: /run <command>",
+    acceptsArgs: true,
+    requireAuth: true,
+    handler: async (ctx) => {
+      const args = ctx.args?.trim() ?? "";
+      if (!args) return { text: formatRunHelp() };
+
+      const firstSpace = args.indexOf(" ");
+      const action = (firstSpace === -1 ? args : args.slice(0, firstSpace)).toLowerCase();
+      const rest = firstSpace === -1 ? "" : args.slice(firstSpace + 1).trim();
+
+      try {
+        if (action === "help") return { text: formatRunHelp() };
+        if (action === "pending") return handlePending(manager, ctx);
+        if (action === "approve") return handleApprove(manager, service, rest, ctx, config);
+        if (action === "deny") return handleDeny(manager, rest, ctx);
+
+        // Default: entire args is a command to execute
+        return await handleExec(manager, service, args, ctx, config);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { text: `Error: ${message}` };
+      }
+    },
+  });
+}
+
+// ============================================================================
 // Plugin Definition
 // ============================================================================
 
@@ -211,8 +321,12 @@ const remoteExecPlugin = {
     registerRemoteReadFile(api, service);
     registerRemoteLs(api, service);
 
+    const audit = new AuditTrail(cfg.auditLogPath);
+    const manager = new ConfirmationManager(cfg.confirmation, audit, api.logger);
+    registerRunCommand(api, service, manager, cfg);
+
     api.logger.info(
-      `remote-exec: registered 3 tools (allowedPaths: ${cfg.allowedPaths.join(", ")})`,
+      `remote-exec: registered 3 tools + /run command (allowedPaths: ${cfg.allowedPaths.join(", ")})`,
     );
   },
 };

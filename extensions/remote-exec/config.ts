@@ -7,6 +7,7 @@
 
 import os from "node:os";
 import { assertAllowedKeys } from "../shared/cortex-config.js";
+import type { RiskLevel } from "../interactive-permissions/intent-classifier.js";
 
 // ============================================================================
 // Types
@@ -17,6 +18,13 @@ export type RemoteExecRateLimits = {
   windowMs: number;
 };
 
+export type ConfirmationConfig = {
+  autoApproveMaxRisk: RiskLevel;
+  approvalTtlMs: number;
+  maxPending: number;
+  showRiskLevel: boolean;
+};
+
 export type RemoteExecConfig = {
   enabled: boolean;
   allowedPaths: string[];
@@ -24,6 +32,7 @@ export type RemoteExecConfig = {
   maxOutputBytes: number;
   auditLogPath: string;
   rateLimits: RemoteExecRateLimits;
+  confirmation: ConfirmationConfig;
 };
 
 // ============================================================================
@@ -38,6 +47,15 @@ const DEFAULT_RATE_LIMITS: RemoteExecRateLimits = {
   maxCallsPerWindow: 10,
   windowMs: 60_000,
 };
+
+const DEFAULT_CONFIRMATION: ConfirmationConfig = {
+  autoApproveMaxRisk: "safe",
+  approvalTtlMs: 120_000,
+  maxPending: 10,
+  showRiskLevel: true,
+};
+
+const VALID_RISK_LEVELS: RiskLevel[] = ["safe", "low", "medium", "high", "critical"];
 
 const MIN_COMMAND_TIMEOUT = 1_000;
 const MAX_COMMAND_TIMEOUT = 120_000;
@@ -78,6 +96,38 @@ function parseRateLimits(raw: unknown): RemoteExecRateLimits {
   return { maxCallsPerWindow, windowMs };
 }
 
+function parseConfirmation(raw: unknown): ConfirmationConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_CONFIRMATION };
+  }
+  const obj = raw as Record<string, unknown>;
+  assertAllowedKeys(
+    obj,
+    ["autoApproveMaxRisk", "approvalTtlMs", "maxPending", "showRiskLevel"],
+    "confirmation",
+  );
+
+  const autoApproveMaxRisk =
+    typeof obj.autoApproveMaxRisk === "string" &&
+    VALID_RISK_LEVELS.includes(obj.autoApproveMaxRisk as RiskLevel)
+      ? (obj.autoApproveMaxRisk as RiskLevel)
+      : DEFAULT_CONFIRMATION.autoApproveMaxRisk;
+
+  const approvalTtlMs = clampInt(
+    obj.approvalTtlMs,
+    10_000,
+    600_000,
+    DEFAULT_CONFIRMATION.approvalTtlMs,
+  );
+
+  const maxPending = clampInt(obj.maxPending, 1, 100, DEFAULT_CONFIRMATION.maxPending);
+
+  const showRiskLevel =
+    typeof obj.showRiskLevel === "boolean" ? obj.showRiskLevel : DEFAULT_CONFIRMATION.showRiskLevel;
+
+  return { autoApproveMaxRisk, approvalTtlMs, maxPending, showRiskLevel };
+}
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -89,6 +139,7 @@ const ALLOWED_KEYS = [
   "maxOutputBytes",
   "auditLogPath",
   "rateLimits",
+  "confirmation",
 ];
 
 export const remoteExecConfigSchema = {
@@ -101,6 +152,7 @@ export const remoteExecConfigSchema = {
         maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
         auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
         rateLimits: { ...DEFAULT_RATE_LIMITS },
+        confirmation: { ...DEFAULT_CONFIRMATION },
       };
     }
 
@@ -112,6 +164,7 @@ export const remoteExecConfigSchema = {
         maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
         auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
         rateLimits: { ...DEFAULT_RATE_LIMITS },
+        confirmation: { ...DEFAULT_CONFIRMATION },
       };
     }
 
@@ -169,6 +222,7 @@ export const remoteExecConfigSchema = {
         : DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir());
 
     const rateLimits = parseRateLimits(cfg.rateLimits);
+    const confirmation = parseConfirmation(cfg.confirmation);
 
     return {
       enabled,
@@ -177,6 +231,7 @@ export const remoteExecConfigSchema = {
       maxOutputBytes,
       auditLogPath,
       rateLimits,
+      confirmation,
     };
   },
   uiHints: {
@@ -209,6 +264,11 @@ export const remoteExecConfigSchema = {
       label: "Rate Limits",
       advanced: true,
       help: "Sliding window rate limit for all remote-exec tools",
+    },
+    confirmation: {
+      label: "Confirmation UX",
+      advanced: true,
+      help: "Controls /run command approval thresholds and pending request limits",
     },
   },
 };
