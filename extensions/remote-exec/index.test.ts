@@ -3810,7 +3810,6 @@ import {
   checkPinLock,
   attemptUnlock,
   type PinConfig,
-  type PinSessionState,
 } from "./pin-auth.js";
 
 describe("pin-auth", () => {
