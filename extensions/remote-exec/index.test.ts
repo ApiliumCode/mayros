@@ -38,16 +38,12 @@ import {
   formatExecOutput,
   formatApprovalPrompt,
   formatPendingList,
-  formatHistoryList,
-  formatEnvList,
-  formatEnvSet,
-  formatEnvDeleted,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
-import { SessionManager, type HistoryEntry } from "./session-manager.js";
+import { SessionManager } from "./session-manager.js";
 
 // ============================================================================
 // Test Helpers
@@ -1414,7 +1410,7 @@ describe("SessionManager", () => {
 
   it("getOrCreate returns existing session on second call", () => {
     const mgr = new SessionManager(defaultSessionConfig, noopLogger);
-    const s1 = mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
     mgr.setWorkdir("whatsapp", "user1", "/home/changed");
     const s2 = mgr.getOrCreate("whatsapp", "user1", "/home/default");
     expect(s2.workdir).toBe("/home/changed");
