@@ -35,6 +35,9 @@ import {
   formatClearSuccess,
   formatConfigView,
   formatBlockedCommand,
+  formatPinLocked,
+  formatPinUnlocked,
+  formatPinFailed,
   ENV_BLOCKLIST,
   ENV_NAME_PATTERN,
   ALIAS_NAME_PATTERN,
@@ -44,6 +47,7 @@ import { maskSensitiveOutput } from "../../src/security/output-masking.js";
 import { RemoteExecService } from "./exec-service.js";
 import type { DirEntry } from "./exec-service.js";
 import { SessionManager } from "./session-manager.js";
+import { checkPinLock, attemptUnlock } from "./pin-auth.js";
 
 // ============================================================================
 // Tool Registration
@@ -541,6 +545,8 @@ function handleStatus(
       aliasCount: Object.keys(session.aliases).length,
       maxAliases: config.session.maxAliases,
       maskOutput: config.maskOutput,
+      pinConfigured: !!config.pin.pinHash,
+      pinUnlocked: session.pin.pinUnlocked,
     }),
   };
 }
@@ -569,6 +575,11 @@ function handleConfig(config: RemoteExecConfig): { text: string } {
       rateLimits: config.rateLimits,
       confirmation: config.confirmation,
       session: config.session,
+      pin: {
+        configured: !!config.pin.pinHash,
+        pinAutoLockMs: config.pin.pinAutoLockMs,
+        pinMaxAttempts: config.pin.pinMaxAttempts,
+      },
     }),
   };
 }
@@ -612,7 +623,12 @@ async function handleExec(
 
   if (result.action === "auto_approved") {
     const env = resolveSessionEnv(sessionMgr, ctx);
-    const execResult = await service.executeCommand({ command, workdir, env });
+    const execResult = await service.executeCommand({
+      command,
+      workdir,
+      env,
+      senderId: ctx.senderId,
+    });
     recordHistory(sessionMgr, command, execResult.exitCode, ctx, config);
     let formatted = formatExecOutput(execResult, command);
     let maskNote = "";
@@ -654,6 +670,7 @@ async function handleApprove(
     command: request.command,
     workdir: request.workdir,
     env,
+    senderId: ctx.senderId,
   });
   recordHistory(sessionMgr, request.command, execResult.exitCode, ctx, config);
   let formatted = formatExecOutput(execResult, request.command);
@@ -694,6 +711,7 @@ function registerRunCommand(
   manager: ConfirmationManager,
   sessionMgr: SessionManager,
   config: RemoteExecConfig,
+  audit: AuditTrail,
 ): void {
   api.registerCommand({
     name: "run",
@@ -710,6 +728,44 @@ function registerRunCommand(
 
       try {
         if (action === "help") return { text: formatRunHelp() };
+
+        // Unlock handler (always accessible)
+        if (action === "unlock") {
+          if (!ctx.senderId) return { text: "Error: Session requires a sender identity." };
+          if (!rest) return { text: "Usage: /run unlock <pin>" };
+          const session = sessionMgr.getOrCreate(
+            ctx.channel,
+            ctx.senderId,
+            config.allowedPaths[0]!,
+          );
+          const result = await attemptUnlock(rest, session.pin, config.pin);
+          if (result.success) {
+            void audit.log("run_command", ctx.senderId, "allow", {
+              action: "pin_unlock",
+            });
+            return { text: formatPinUnlocked(result.message) };
+          }
+          void audit.log("run_command", ctx.senderId, "deny", {
+            action: "pin_unlock_failed",
+            message: result.message,
+          });
+          return { text: formatPinFailed(result.message) };
+        }
+
+        // PIN gate: check lock status for all commands except help and unlock
+        if (config.pin.pinHash && ctx.senderId) {
+          const session = sessionMgr.getOrCreate(
+            ctx.channel,
+            ctx.senderId,
+            config.allowedPaths[0]!,
+          );
+          const lockCheck = checkPinLock(session.pin, config.pin);
+          if (lockCheck.locked) {
+            return { text: formatPinLocked(lockCheck.reason) };
+          }
+          sessionMgr.updatePinActivity(ctx.channel, ctx.senderId);
+        }
+
         if (action === "history") return handleHistory(sessionMgr, ctx, config);
         if (action === "env") return handleEnv(sessionMgr, rest, ctx, config);
         if (action === "alias") return handleAlias(sessionMgr, rest, ctx, config);
@@ -776,16 +832,16 @@ const remoteExecPlugin = {
       return;
     }
 
-    const service = new RemoteExecService(cfg, api.logger);
+    const audit = new AuditTrail(cfg.auditLogPath);
+    const service = new RemoteExecService(cfg, api.logger, audit);
 
     registerRemoteExec(api, service);
     registerRemoteReadFile(api, service);
     registerRemoteLs(api, service);
 
-    const audit = new AuditTrail(cfg.auditLogPath);
     const manager = new ConfirmationManager(cfg.confirmation, audit, api.logger);
     const sessionMgr = new SessionManager(cfg.session, api.logger);
-    registerRunCommand(api, service, manager, sessionMgr, cfg);
+    registerRunCommand(api, service, manager, sessionMgr, cfg, audit);
 
     api.logger.info(
       `remote-exec: registered 3 tools + /run command (allowedPaths: ${cfg.allowedPaths.join(", ")})`,

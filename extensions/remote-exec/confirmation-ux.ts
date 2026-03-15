@@ -61,6 +61,11 @@ export class ConfirmationManager {
     const now = Date.now();
     for (const [id, req] of this.pending) {
       if (now > req.expiresAt) {
+        void this.audit.log("run_command", req.senderId, "expired", {
+          command: req.command,
+          risk: req.classification.riskLevel,
+          requestId: id,
+        });
         this.pending.delete(id);
       }
     }
@@ -74,7 +79,10 @@ export class ConfirmationManager {
   }): ConfirmationResult {
     this.pruneExpired();
 
-    if (this.pending.size >= this.config.maxPending) {
+    const senderCount = params.senderId
+      ? [...this.pending.values()].filter((r) => r.senderId === params.senderId).length
+      : this.pending.size;
+    if (senderCount >= this.config.maxPending) {
       return {
         action: "blocked",
         reason: `Too many pending requests (max: ${this.config.maxPending}). Approve or deny existing requests first.`,
@@ -315,6 +323,7 @@ export function formatRunHelp(): string {
     "  /run approve <id>     Approve a pending command",
     "  /run deny <id>        Deny a pending command",
     "  /run pending          List pending requests",
+    "  /run unlock <pin>     Unlock session with PIN",
     "  /run help             Show this help",
   ].join("\n");
 }
@@ -334,6 +343,21 @@ export const ENV_BLOCKLIST = new Set([
   "EUID",
   "LD_PRELOAD",
   "DYLD_INSERT_LIBRARIES",
+  "BASH_ENV",
+  "ENV",
+  "PATH",
+  "NODE_OPTIONS",
+  "NODE_PATH",
+  "PYTHONPATH",
+  "PYTHONSTARTUP",
+  "RUBYLIB",
+  "PERL5LIB",
+  "CLASSPATH",
+  "CDPATH",
+  "IFS",
+  "GLOBIGNORE",
+  "PROMPT_COMMAND",
+  "PS1",
 ]);
 
 export const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
@@ -415,6 +439,7 @@ export const RESERVED_ALIAS_NAMES = new Set([
   "status",
   "clear",
   "config",
+  "unlock",
 ]);
 
 export function formatAliasList(aliases: Record<string, string>): string {
@@ -463,6 +488,35 @@ function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+// ============================================================================
+// Clear, Config & Blocklist Formatters
+// ============================================================================
+
+export function formatClearSuccess(): string {
+  return "Session cleared (history, env, aliases, output cache, workdir reset).";
+}
+
+export function formatBlockedCommand(command: string, patternSource: string): string {
+  const escaped = patternSource.replace(/\//g, "\\/");
+  return `Blocked by pattern: /${escaped}/\n> ${command}`;
+}
+
+// ============================================================================
+// PIN Authentication Formatters
+// ============================================================================
+
+export function formatPinLocked(reason: string): string {
+  return reason;
+}
+
+export function formatPinUnlocked(message: string): string {
+  return message;
+}
+
+export function formatPinFailed(message: string): string {
+  return message;
+}
+
 export function formatSessionStatus(params: {
   workdir: string;
   ttlRemainingMs: number;
@@ -473,8 +527,10 @@ export function formatSessionStatus(params: {
   aliasCount: number;
   maxAliases: number;
   maskOutput: boolean;
+  pinConfigured?: boolean;
+  pinUnlocked?: boolean;
 }): string {
-  return [
+  const lines = [
     "Session status:",
     `  Working directory: ${params.workdir}`,
     `  TTL remaining: ${formatDuration(params.ttlRemainingMs)}`,
@@ -482,15 +538,13 @@ export function formatSessionStatus(params: {
     `  Env vars: ${params.envCount}/${params.maxEnv}`,
     `  Aliases: ${params.aliasCount}/${params.maxAliases}`,
     `  Output masking: ${params.maskOutput ? "on" : "off"}`,
-  ].join("\n");
-}
-
-// ============================================================================
-// Clear, Config & Blocklist Formatters
-// ============================================================================
-
-export function formatClearSuccess(): string {
-  return "Session cleared (history, env, aliases, output cache, workdir reset).";
+  ];
+  if (params.pinConfigured !== undefined) {
+    lines.push(
+      `  PIN: ${params.pinConfigured ? (params.pinUnlocked ? "unlocked" : "locked") : "not configured"}`,
+    );
+  }
+  return lines.join("\n");
 }
 
 export function formatConfigView(params: {
@@ -513,6 +567,11 @@ export function formatConfigView(params: {
     maxHistorySize: number;
     maxEnvVars: number;
     maxAliases: number;
+  };
+  pin?: {
+    configured: boolean;
+    pinAutoLockMs: number;
+    pinMaxAttempts: number;
   };
 }): string {
   const lines: string[] = [
@@ -551,9 +610,15 @@ export function formatConfigView(params: {
     `  maxAliases: ${params.session.maxAliases}`,
   );
 
-  return lines.join("\n");
-}
+  if (params.pin) {
+    lines.push(
+      "",
+      "PIN:",
+      `  configured: ${params.pin.configured ? "yes" : "no"}`,
+      `  autoLockMs: ${params.pin.pinAutoLockMs}ms`,
+      `  maxAttempts: ${params.pin.pinMaxAttempts}`,
+    );
+  }
 
-export function formatBlockedCommand(command: string, patternSource: string): string {
-  return `Blocked by pattern: /${patternSource}/\n> ${command}`;
+  return lines.join("\n");
 }

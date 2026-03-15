@@ -60,13 +60,17 @@ type RateLimitState = {
 export class RemoteExecService {
   private readonly audit: AuditTrail;
   private readonly sandboxConfig: BashSandboxConfig;
-  private readonly rateLimitState: RateLimitState = { timestamps: [] };
+  private readonly rateLimitStates = new Map<string, RateLimitState>();
 
   constructor(
     private readonly config: RemoteExecConfig,
     private readonly logger: { info: (msg: string) => void; warn: (msg: string) => void },
+    audit?: AuditTrail,
   ) {
-    this.audit = new AuditTrail(config.auditLogPath);
+    this.audit = audit ?? new AuditTrail(config.auditLogPath);
+    if (!config.allowedPaths.length) {
+      throw new Error("RemoteExecService requires at least one allowedPath");
+    }
     // Create a sandbox config that always enforces: no sudo, enforce mode
     this.sandboxConfig = bashSandboxConfigSchema.parse({
       mode: "enforce",
@@ -76,21 +80,29 @@ export class RemoteExecService {
 
   // ---------- Rate Limiting ----------
 
-  private checkRateLimit(): { allowed: boolean; retryAfterMs?: number } {
+  private getRateLimitState(senderId?: string): RateLimitState {
+    const key = senderId ?? "__global__";
+    let state = this.rateLimitStates.get(key);
+    if (!state) {
+      state = { timestamps: [] };
+      this.rateLimitStates.set(key, state);
+    }
+    return state;
+  }
+
+  private checkRateLimit(senderId?: string): { allowed: boolean; retryAfterMs?: number } {
     const now = Date.now();
     const { maxCallsPerWindow, windowMs } = this.config.rateLimits;
     const cutoff = now - windowMs;
+    const state = this.getRateLimitState(senderId);
 
     // Prune expired timestamps
-    while (
-      this.rateLimitState.timestamps.length > 0 &&
-      this.rateLimitState.timestamps[0]! < cutoff
-    ) {
-      this.rateLimitState.timestamps.shift();
+    while (state.timestamps.length > 0 && state.timestamps[0]! < cutoff) {
+      state.timestamps.shift();
     }
 
-    if (this.rateLimitState.timestamps.length >= maxCallsPerWindow) {
-      const oldest = this.rateLimitState.timestamps[0]!;
+    if (state.timestamps.length >= maxCallsPerWindow) {
+      const oldest = state.timestamps[0]!;
       const retryAfterMs = Math.max(0, oldest + windowMs - now);
       return { allowed: false, retryAfterMs };
     }
@@ -98,8 +110,8 @@ export class RemoteExecService {
     return { allowed: true };
   }
 
-  private recordRateLimit(): void {
-    this.rateLimitState.timestamps.push(Date.now());
+  private recordRateLimit(senderId?: string): void {
+    this.getRateLimitState(senderId).timestamps.push(Date.now());
   }
 
   // ---------- Path Validation ----------
@@ -193,9 +205,16 @@ export class RemoteExecService {
     workdir?: string;
     timeout?: number;
     env?: Record<string, string>;
+    senderId?: string;
   }): Promise<ExecResult> {
-    // 1. Rate limit check
-    const rateCheck = this.checkRateLimit();
+    // 1. Background execution blocking
+    const BG_PATTERN = /(?:^|\s)(?:nohup|disown|setsid)\b|&\s*$/;
+    if (BG_PATTERN.test(params.command)) {
+      throw new Error("Background execution is not allowed");
+    }
+
+    // 2. Rate limit check (per-sender)
+    const rateCheck = this.checkRateLimit(params.senderId);
     if (!rateCheck.allowed) {
       await this.audit.log("remote_exec", undefined, "deny", {
         command: params.command,
@@ -205,7 +224,7 @@ export class RemoteExecService {
       throw new Error(`Rate limit exceeded. Retry after ${rateCheck.retryAfterMs}ms`);
     }
 
-    // 2. Resolve workdir
+    // 3. Resolve workdir
     const workdir = params.workdir ?? this.config.allowedPaths[0]!;
     const resolvedWorkdir = await this.validatePath(workdir);
 
@@ -215,7 +234,7 @@ export class RemoteExecService {
       throw new Error(`Working directory is not a directory: ${workdir}`);
     }
 
-    // 3. Sandbox evaluation
+    // 4. Sandbox evaluation
     const verdict = evaluateCommand(params.command, this.sandboxConfig);
     if (!verdict.allowed) {
       await this.audit.log("remote_exec", undefined, "deny", {
@@ -228,13 +247,13 @@ export class RemoteExecService {
       throw new Error(`Command blocked by sandbox: ${reasons}`);
     }
 
-    // 4. Audit pre-execution
+    // 5. Audit pre-execution
     await this.audit.log("remote_exec", undefined, "allow", {
       command: params.command,
       workdir: resolvedWorkdir,
     });
 
-    // 5. Execute
+    // 6. Execute
     const timeout = params.timeout
       ? Math.max(1000, Math.min(params.timeout, this.config.commandTimeout))
       : this.config.commandTimeout;
@@ -274,10 +293,10 @@ export class RemoteExecService {
 
     const durationMs = Date.now() - startTime;
 
-    // 6. Record rate limit
-    this.recordRateLimit();
+    // 7. Record rate limit (per-sender)
+    this.recordRateLimit(params.senderId);
 
-    // 7. Output processing
+    // 8. Output processing
     let truncated = false;
 
     // Binary detection
@@ -286,9 +305,11 @@ export class RemoteExecService {
       stdout = `[binary output, ${byteLen} bytes]`;
     }
 
-    // Truncate if needed
+    // Truncate if needed (byte-accurate for multi-byte chars)
     if (Buffer.byteLength(stdout) > this.config.maxOutputBytes) {
-      stdout = stdout.slice(0, this.config.maxOutputBytes);
+      stdout = Buffer.from(stdout, "utf-8")
+        .subarray(0, this.config.maxOutputBytes)
+        .toString("utf-8");
       truncated = true;
       stdout += "\n[output truncated]";
     }

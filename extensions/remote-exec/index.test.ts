@@ -108,6 +108,7 @@ function makeConfig(overrides: Partial<RemoteExecConfig> = {}): RemoteExecConfig
     },
     maskOutput: true,
     blockedPatterns: [],
+    pin: { pinHash: null, pinLockoutMs: 300_000, pinMaxAttempts: 3, pinAutoLockMs: 300_000 },
     ...overrides,
   };
 }
@@ -2101,6 +2102,21 @@ describe("environment variable management", () => {
       "EUID",
       "LD_PRELOAD",
       "DYLD_INSERT_LIBRARIES",
+      "BASH_ENV",
+      "ENV",
+      "PATH",
+      "NODE_OPTIONS",
+      "NODE_PATH",
+      "PYTHONPATH",
+      "PYTHONSTARTUP",
+      "RUBYLIB",
+      "PERL5LIB",
+      "CLASSPATH",
+      "CDPATH",
+      "IFS",
+      "GLOBIGNORE",
+      "PROMPT_COMMAND",
+      "PS1",
     ]) {
       expect(ENV_BLOCKLIST.has(key)).toBe(true);
     }
@@ -3541,5 +3557,546 @@ describe("blocklist & reserved names edge cases", () => {
     });
     expect(result.text).toContain("Blocked by pattern: /^curl\\b/");
     expect(result.text).toContain("> curl https://example.com");
+  });
+});
+
+// ============================================================================
+// AA. Security Hardening: Per-Sender Rate Limits & BG Blocking (8 tests)
+// ============================================================================
+
+describe("per-sender rate limits and background blocking", () => {
+  let localTmpDir: string;
+
+  beforeEach(async () => {
+    localTmpDir = await createTmpDir();
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("sender A hits rate limit, sender B still executes", async () => {
+    const cfg = makeConfig({
+      allowedPaths: [localTmpDir],
+      rateLimits: { maxCallsPerWindow: 2, windowMs: 60_000 },
+    });
+    const service = new RemoteExecService(cfg, noopLogger);
+
+    // Sender A: 2 calls
+    await service.executeCommand({ command: "echo a1", senderId: "senderA" });
+    await service.executeCommand({ command: "echo a2", senderId: "senderA" });
+
+    // Sender A: 3rd call should fail
+    await expect(
+      service.executeCommand({ command: "echo a3", senderId: "senderA" }),
+    ).rejects.toThrow("Rate limit exceeded");
+
+    // Sender B: should still work
+    const result = await service.executeCommand({ command: "echo b1", senderId: "senderB" });
+    expect(result.stdout.trim()).toBe("b1");
+  });
+
+  it("global fallback works when no senderId provided", async () => {
+    const cfg = makeConfig({
+      allowedPaths: [localTmpDir],
+      rateLimits: { maxCallsPerWindow: 1, windowMs: 60_000 },
+    });
+    const service = new RemoteExecService(cfg, noopLogger);
+
+    await service.executeCommand({ command: "echo g1" });
+    await expect(service.executeCommand({ command: "echo g2" })).rejects.toThrow(
+      "Rate limit exceeded",
+    );
+  });
+
+  it("rejects nohup commands", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    await expect(service.executeCommand({ command: "nohup sleep 100" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("rejects trailing & (background)", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    await expect(service.executeCommand({ command: "sleep 100 &" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("rejects disown commands", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    await expect(service.executeCommand({ command: "sleep 100 & disown" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("rejects setsid commands", async () => {
+    const cfg = makeConfig({ allowedPaths: [localTmpDir] });
+    const service = new RemoteExecService(cfg, noopLogger);
+    await expect(service.executeCommand({ command: "setsid sleep 100" })).rejects.toThrow(
+      "Background execution is not allowed",
+    );
+  });
+
+  it("PATH and NODE_OPTIONS are rejected via ENV_BLOCKLIST", () => {
+    expect(ENV_BLOCKLIST.has("PATH")).toBe(true);
+    expect(ENV_BLOCKLIST.has("NODE_OPTIONS")).toBe(true);
+  });
+
+  it("constructor rejects empty allowedPaths", () => {
+    const cfg = makeConfig({ allowedPaths: [] });
+    expect(() => new RemoteExecService(cfg, noopLogger)).toThrow(
+      "requires at least one allowedPath",
+    );
+  });
+});
+
+// ============================================================================
+// AB. Per-Sender Pending Limits & Byte-Accurate Truncation (6 tests)
+// ============================================================================
+
+describe("per-sender pending limits and byte-accurate truncation", () => {
+  const mockAudit = {
+    log: vi.fn().mockResolvedValue({
+      seq: 1,
+      timestamp: "",
+      event: "",
+      actor: undefined,
+      decision: "allow" as const,
+      context: {},
+      prevHmac: "",
+      hmac: "",
+    }),
+    init: vi.fn(),
+    verify: vi.fn(),
+    query: vi.fn(),
+    lastWriteError: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("per-sender pending: sender A blocked, sender B still gets through", () => {
+    const mgr = new ConfirmationManager(
+      { autoApproveMaxRisk: "safe", approvalTtlMs: 120_000, maxPending: 1, showRiskLevel: true },
+      mockAudit as any,
+      noopLogger,
+    );
+    // "rm -rf /" is high risk, will be pending
+    const r1 = mgr.evaluateCommand({ command: "rm -rf /", senderId: "A", channel: "ch" });
+    expect(r1.action).toBe("pending_approval");
+
+    // Sender A: second high-risk should be blocked
+    const r2 = mgr.evaluateCommand({ command: "rm -rf /tmp", senderId: "A", channel: "ch" });
+    expect(r2.action).toBe("blocked");
+
+    // Sender B: should still get through
+    const r3 = mgr.evaluateCommand({ command: "rm -rf /tmp", senderId: "B", channel: "ch" });
+    expect(r3.action).toBe("pending_approval");
+  });
+
+  it("expired requests are audited", async () => {
+    const mgr = new ConfirmationManager(
+      { autoApproveMaxRisk: "safe", approvalTtlMs: 10, maxPending: 10, showRiskLevel: true },
+      mockAudit as any,
+      noopLogger,
+    );
+
+    // Create a pending request
+    mgr.evaluateCommand({ command: "rm -rf /", senderId: "u1", channel: "ch" });
+    mockAudit.log.mockClear();
+
+    // Wait for expiry naturally
+    await new Promise((r) => setTimeout(r, 20));
+    // Force prune via listing
+    const pending = mgr.listPending();
+    expect(pending.length).toBe(0);
+    // audit.log should have been called with "expired"
+    expect(mockAudit.log).toHaveBeenCalledWith(
+      "run_command",
+      "u1",
+      "expired",
+      expect.objectContaining({ command: "rm -rf /" }),
+    );
+  });
+
+  it("byte-accurate truncation preserves multi-byte chars", async () => {
+    const localTmpDir = await createTmpDir();
+    // 4-byte emoji repeated
+    const cfg = makeConfig({
+      allowedPaths: [localTmpDir],
+      maxOutputBytes: 10,
+    });
+    const service = new RemoteExecService(cfg, noopLogger);
+    // Create file with multi-byte chars and cat it
+    const testFile = path.join(localTmpDir, "mb.txt");
+    // "aaaa" is 4 bytes, emoji adds multi-byte
+    await fs.writeFile(testFile, "a".repeat(20));
+    const result = await service.executeCommand({ command: `cat ${testFile}` });
+    expect(result.truncated).toBe(true);
+    // output should be valid UTF-8, no broken chars
+    expect(Buffer.from(result.stdout, "utf-8").toString("utf-8")).toBe(result.stdout);
+  });
+
+  it("no senderId uses global pending limit", () => {
+    const mgr = new ConfirmationManager(
+      { autoApproveMaxRisk: "safe", approvalTtlMs: 120_000, maxPending: 1, showRiskLevel: true },
+      mockAudit as any,
+      noopLogger,
+    );
+    const r1 = mgr.evaluateCommand({ command: "rm -rf /", channel: "ch" });
+    expect(r1.action).toBe("pending_approval");
+    const r2 = mgr.evaluateCommand({ command: "rm -rf /tmp", channel: "ch" });
+    expect(r2.action).toBe("blocked");
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+});
+
+// ============================================================================
+// AC. Hardening: Pattern Count Cap & Slash Escape (4 tests)
+// ============================================================================
+
+describe("hardening: pattern cap, slash escape, dedup", () => {
+  it("rejects more than 50 blocked patterns", () => {
+    const tooMany = Array.from({ length: 51 }, (_, i) => `pattern${i}`);
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        enabled: true,
+        allowedPaths: ["/tmp"],
+        blockedPatterns: tooMany,
+      }),
+    ).toThrow("exceeds max count");
+  });
+
+  it("exactly 50 blocked patterns accepted", () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => `pattern${i}`);
+    const cfg = remoteExecConfigSchema.parse({
+      enabled: true,
+      allowedPaths: ["/tmp"],
+      blockedPatterns: fifty,
+    });
+    expect(cfg.blockedPatterns.length).toBe(50);
+  });
+
+  it("formatBlockedCommand escapes forward slashes in pattern source", async () => {
+    const { formatBlockedCommand } = await import("./confirmation-ux.js");
+    const result = formatBlockedCommand("test/cmd", "test/pattern");
+    expect(result).toContain("/test\\/pattern/");
+  });
+
+  it("deduplicated defaults: session defaults used directly", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.session.maxHistorySize).toBe(20);
+    expect(cfg.session.maxEnvVars).toBe(20);
+    expect(cfg.session.maxAliases).toBe(10);
+  });
+});
+
+// ============================================================================
+// AD. pin-auth.ts Unit Tests (12 tests)
+// ============================================================================
+
+import {
+  hashPin,
+  verifyPin,
+  createPinState,
+  checkPinLock,
+  attemptUnlock,
+  type PinConfig,
+  type PinSessionState,
+} from "./pin-auth.js";
+
+describe("pin-auth", () => {
+  it("hashPin produces scrypt:<b64>:<b64> format", async () => {
+    const hash = await hashPin("1234");
+    expect(hash).toMatch(/^scrypt:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/);
+  });
+
+  it("verifyPin returns true for correct PIN", async () => {
+    const hash = await hashPin("mypin");
+    expect(await verifyPin("mypin", hash)).toBe(true);
+  });
+
+  it("verifyPin returns false for wrong PIN", async () => {
+    const hash = await hashPin("mypin");
+    expect(await verifyPin("wrongpin", hash)).toBe(false);
+  });
+
+  it("createPinState returns unlocked=false defaults", () => {
+    const state = createPinState();
+    expect(state.pinUnlocked).toBe(false);
+    expect(state.pinFailures).toBe(0);
+    expect(state.pinLockedUntil).toBeNull();
+    expect(state.pinLastActivity).toBe(0);
+  });
+
+  it("checkPinLock: disabled (no pinHash) returns not locked", () => {
+    const state = createPinState();
+    const cfg: PinConfig = {
+      pinHash: null,
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    expect(checkPinLock(state, cfg).locked).toBe(false);
+  });
+
+  it("checkPinLock: locked when not unlocked", () => {
+    const state = createPinState();
+    const cfg: PinConfig = {
+      pinHash: "scrypt:abc:def",
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    const result = checkPinLock(state, cfg);
+    expect(result.locked).toBe(true);
+  });
+
+  it("checkPinLock: unlocked returns false", () => {
+    const state = createPinState();
+    state.pinUnlocked = true;
+    state.pinLastActivity = Date.now();
+    const cfg: PinConfig = {
+      pinHash: "scrypt:abc:def",
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    expect(checkPinLock(state, cfg).locked).toBe(false);
+  });
+
+  it("checkPinLock: auto-locks after inactivity", () => {
+    const state = createPinState();
+    state.pinUnlocked = true;
+    state.pinLastActivity = Date.now() - 400_000; // 400s ago
+    const cfg: PinConfig = {
+      pinHash: "scrypt:abc:def",
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    const result = checkPinLock(state, cfg);
+    expect(result.locked).toBe(true);
+    expect(state.pinUnlocked).toBe(false);
+  });
+
+  it("checkPinLock: lockout active", () => {
+    const state = createPinState();
+    state.pinLockedUntil = Date.now() + 60_000;
+    const cfg: PinConfig = {
+      pinHash: "scrypt:abc:def",
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    const result = checkPinLock(state, cfg);
+    expect(result.locked).toBe(true);
+    if (result.locked) expect(result.reason).toContain("Locked out");
+  });
+
+  it("checkPinLock: lockout expired resets failures", () => {
+    const state = createPinState();
+    state.pinLockedUntil = Date.now() - 1000; // expired
+    state.pinFailures = 3;
+    const cfg: PinConfig = {
+      pinHash: "scrypt:abc:def",
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    const result = checkPinLock(state, cfg);
+    expect(result.locked).toBe(true); // still locked (not unlocked)
+    expect(state.pinFailures).toBe(0);
+    expect(state.pinLockedUntil).toBeNull();
+  });
+
+  it("attemptUnlock: success resets state", async () => {
+    const hash = await hashPin("1234");
+    const state = createPinState();
+    const cfg: PinConfig = {
+      pinHash: hash,
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 3,
+      pinAutoLockMs: 300_000,
+    };
+    const result = await attemptUnlock("1234", state, cfg);
+    expect(result.success).toBe(true);
+    expect(state.pinUnlocked).toBe(true);
+    expect(state.pinFailures).toBe(0);
+  });
+
+  it("attemptUnlock: failure increments count and triggers lockout", async () => {
+    const hash = await hashPin("1234");
+    const state = createPinState();
+    const cfg: PinConfig = {
+      pinHash: hash,
+      pinLockoutMs: 300_000,
+      pinMaxAttempts: 2,
+      pinAutoLockMs: 300_000,
+    };
+
+    const r1 = await attemptUnlock("wrong", state, cfg);
+    expect(r1.success).toBe(false);
+    expect(r1.message).toContain("1 attempt");
+
+    const r2 = await attemptUnlock("wrong2", state, cfg);
+    expect(r2.success).toBe(false);
+    expect(r2.message).toContain("Locked out");
+    expect(state.pinLockedUntil).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// AE. /run PIN Integration Tests (8 tests)
+// ============================================================================
+
+describe("/run PIN integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+  let pinHash: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    pinHash = await hashPin("9999");
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+        pin: { pinHash, pinLockoutMs: 60_000, pinMaxAttempts: 3, pinAutoLockMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") capturedHandler = cmd.handler;
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("/run ls when locked returns locked message", async () => {
+    const result = await cmdHandler({ args: "echo hello", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("locked");
+  });
+
+  it("/run help works even when locked", async () => {
+    const result = await cmdHandler({ args: "help", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("Usage: /run");
+  });
+
+  it("/run unlock with correct PIN succeeds", async () => {
+    const result = await cmdHandler({ args: "unlock 9999", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("Unlocked");
+  });
+
+  it("/run unlock with wrong PIN shows remaining attempts", async () => {
+    const result = await cmdHandler({ args: "unlock wrong", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("Incorrect PIN");
+    expect(result.text).toContain("attempt");
+  });
+
+  it("3 failures triggers lockout", async () => {
+    await cmdHandler({ args: "unlock wrong1", senderId: "u1", channel: "ch" });
+    await cmdHandler({ args: "unlock wrong2", senderId: "u1", channel: "ch" });
+    const result = await cmdHandler({ args: "unlock wrong3", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("Locked out");
+  });
+
+  it("after unlock, commands work", async () => {
+    await cmdHandler({ args: "unlock 9999", senderId: "u1", channel: "ch" });
+    const result = await cmdHandler({ args: "echo hello", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("hello");
+  });
+
+  it("/run clear resets PIN state", async () => {
+    // Unlock first
+    await cmdHandler({ args: "unlock 9999", senderId: "u1", channel: "ch" });
+    // Clear session
+    await cmdHandler({ args: "clear", senderId: "u1", channel: "ch" });
+    // Should be locked again
+    const result = await cmdHandler({ args: "echo hello", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("locked");
+  });
+
+  it("/run unlock without pin shows usage", async () => {
+    const result = await cmdHandler({ args: "unlock", senderId: "u1", channel: "ch" });
+    expect(result.text).toContain("Usage:");
+  });
+});
+
+// ============================================================================
+// AF. PIN Config Parsing (5 tests)
+// ============================================================================
+
+describe("PIN config parsing", () => {
+  it("default PIN config is all nulls/defaults", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.pin.pinHash).toBeNull();
+    expect(cfg.pin.pinLockoutMs).toBe(300_000);
+    expect(cfg.pin.pinMaxAttempts).toBe(3);
+    expect(cfg.pin.pinAutoLockMs).toBe(300_000);
+  });
+
+  it("valid pinHash accepted", async () => {
+    const hash = await hashPin("test");
+    const cfg = remoteExecConfigSchema.parse({
+      enabled: true,
+      allowedPaths: ["/tmp"],
+      pin: { pinHash: hash },
+    });
+    expect(cfg.pin.pinHash).toBe(hash);
+  });
+
+  it("invalid pinHash format throws", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        enabled: true,
+        allowedPaths: ["/tmp"],
+        pin: { pinHash: "not-a-valid-hash" },
+      }),
+    ).toThrow("pinHash must match format");
+  });
+
+  it("numeric values clamped", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      pin: { pinLockoutMs: 10, pinMaxAttempts: 100, pinAutoLockMs: 10 },
+    });
+    expect(cfg.pin.pinLockoutMs).toBe(60_000);
+    expect(cfg.pin.pinMaxAttempts).toBe(10);
+    expect(cfg.pin.pinAutoLockMs).toBe(60_000);
+  });
+
+  it("unknown keys in pin section throws", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        pin: { unknownKey: true },
+      }),
+    ).toThrow();
   });
 });
