@@ -65,9 +65,9 @@ export class RemoteExecService {
   constructor(
     private readonly config: RemoteExecConfig,
     private readonly logger: { info: (msg: string) => void; warn: (msg: string) => void },
-    audit?: AuditTrail,
+    audit: AuditTrail,
   ) {
-    this.audit = audit ?? new AuditTrail(config.auditLogPath);
+    this.audit = audit;
     if (!config.allowedPaths.length) {
       throw new Error("RemoteExecService requires at least one allowedPath");
     }

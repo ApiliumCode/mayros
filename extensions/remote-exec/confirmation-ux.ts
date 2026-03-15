@@ -61,9 +61,10 @@ export class ConfirmationManager {
     const now = Date.now();
     for (const [id, req] of this.pending) {
       if (now > req.expiresAt) {
-        void this.audit.log("run_command", req.senderId, "expired", {
+        void this.audit.log("run_command", req.senderId, "deny", {
           command: req.command,
           risk: req.classification.riskLevel,
+          action: "expired",
           requestId: id,
         });
         this.pending.delete(id);
@@ -358,6 +359,7 @@ export const ENV_BLOCKLIST = new Set([
   "GLOBIGNORE",
   "PROMPT_COMMAND",
   "PS1",
+  "PS4",
 ]);
 
 export const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;

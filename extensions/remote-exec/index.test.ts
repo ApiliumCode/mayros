@@ -54,6 +54,7 @@ import {
 } from "./confirmation-ux.js";
 import { SessionManager } from "./session-manager.js";
 import { maskSensitiveOutput } from "../../src/security/output-masking.js";
+import { AuditTrail } from "../osameru-governance/audit-trail.js";
 
 // ============================================================================
 // Test Helpers
@@ -83,6 +84,25 @@ const noopLogger = {
   info: (_msg: string) => {},
   warn: (_msg: string) => {},
 };
+
+const noopAudit = {
+  log: vi
+    .fn()
+    .mockResolvedValue({
+      seq: 0,
+      timestamp: "",
+      event: "",
+      actor: undefined,
+      decision: "allow" as const,
+      context: {},
+      prevHmac: "",
+      hmac: "",
+    }),
+  init: vi.fn(),
+  verify: vi.fn(),
+  query: vi.fn(),
+  lastWriteError: null,
+} as any;
 
 function makeConfig(overrides: Partial<RemoteExecConfig> = {}): RemoteExecConfig {
   return {
@@ -261,21 +281,25 @@ describe("path validation", () => {
   });
 
   it("allows path within allowedPaths", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: tmpDir });
     expect(result.entries.length).toBeGreaterThan(0);
   });
 
   it("denies path outside all allowedPaths", async () => {
     const otherDir = await createTmpDir();
-    const service = new RemoteExecService(makeConfig({ allowedPaths: [tmpDir] }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ allowedPaths: [tmpDir] }),
+      noopLogger,
+      noopAudit,
+    );
     await expect(service.listDirectory({ path: otherDir })).rejects.toThrow(
       "outside allowed directories",
     );
   });
 
   it("denies path traversal ../../etc/passwd", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: path.join(tmpDir, "../../etc/passwd") })).rejects.toThrow(
       /outside allowed directories|does not exist/,
     );
@@ -288,7 +312,11 @@ describe("path validation", () => {
     const symlinkPath = path.join(tmpDir, "escape-link");
     await fs.symlink(outsideDir, symlinkPath);
 
-    const service = new RemoteExecService(makeConfig({ allowedPaths: [tmpDir] }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ allowedPaths: [tmpDir] }),
+      noopLogger,
+      noopAudit,
+    );
 
     await expect(service.listDirectory({ path: symlinkPath })).rejects.toThrow(
       "outside allowed directories",
@@ -302,25 +330,26 @@ describe("path validation", () => {
     const service = new RemoteExecService(
       makeConfig({ allowedPaths: [tmpDir, otherDir] }),
       noopLogger,
+      noopAudit,
     );
     const result = await service.listDirectory({ path: otherDir });
     expect(result.entries.length).toBeGreaterThan(0);
   });
 
   it("rejects relative path", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: "relative/path.txt" })).rejects.toThrow(
       "Path must be absolute",
     );
   });
 
   it("errors on empty path", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: "" })).rejects.toThrow("Path is required");
   });
 
   it("provides clear error for nonexistent path", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: path.join(tmpDir, "nonexistent.txt") })).rejects.toThrow(
       "does not exist",
     );
@@ -331,7 +360,7 @@ describe("path validation", () => {
     await fs.mkdir(spacedDir, { recursive: true });
     await fs.writeFile(path.join(spacedDir, "file.txt"), "content");
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: spacedDir });
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0]!.name).toBe("file.txt");
@@ -340,7 +369,11 @@ describe("path validation", () => {
   it("resolves ~ to home directory", async () => {
     // We cannot guarantee homedir files exist within allowedPaths,
     // so we just verify ~ expansion + the path validation itself rejects it
-    const service = new RemoteExecService(makeConfig({ allowedPaths: [tmpDir] }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ allowedPaths: [tmpDir] }),
+      noopLogger,
+      noopAudit,
+    );
     await expect(service.readFile({ path: "~/some-file.txt" })).rejects.toThrow(
       /outside allowed directories|does not exist/,
     );
@@ -363,7 +396,7 @@ describe("command execution", () => {
   });
 
   it("echo hello returns stdout and exit 0", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "echo hello",
       workdir: tmpDir,
@@ -374,7 +407,7 @@ describe("command execution", () => {
   });
 
   it("captures stderr", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "echo error >&2",
       workdir: tmpDir,
@@ -383,7 +416,7 @@ describe("command execution", () => {
   });
 
   it("captures nonzero exit code", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "exit 42",
       workdir: tmpDir,
@@ -392,7 +425,11 @@ describe("command execution", () => {
   });
 
   it("kills command on timeout", async () => {
-    const service = new RemoteExecService(makeConfig({ commandTimeout: 2_000 }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ commandTimeout: 2_000 }),
+      noopLogger,
+      noopAudit,
+    );
     const result = await service.executeCommand({
       command: "sleep 60",
       workdir: tmpDir,
@@ -403,7 +440,11 @@ describe("command execution", () => {
   });
 
   it("truncates output exceeding maxOutputBytes", async () => {
-    const service = new RemoteExecService(makeConfig({ maxOutputBytes: 100 }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ maxOutputBytes: 100 }),
+      noopLogger,
+      noopAudit,
+    );
     const result = await service.executeCommand({
       command: "yes | head -n 1000",
       workdir: tmpDir,
@@ -412,7 +453,7 @@ describe("command execution", () => {
   });
 
   it("detects binary output", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "printf '\\x00\\x01\\x02'",
       workdir: tmpDir,
@@ -421,7 +462,7 @@ describe("command execution", () => {
   });
 
   it("blocks dangerous command (rm -rf /)", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(
       service.executeCommand({
         command: "rm -rf /",
@@ -434,6 +475,7 @@ describe("command execution", () => {
     const service = new RemoteExecService(
       makeConfig({ rateLimits: { maxCallsPerWindow: 2, windowMs: 60_000 } }),
       noopLogger,
+      noopAudit,
     );
     await service.executeCommand({ command: "echo 1", workdir: tmpDir });
     await service.executeCommand({ command: "echo 2", workdir: tmpDir });
@@ -444,7 +486,12 @@ describe("command execution", () => {
 
   it("creates audit log for allowed execution", async () => {
     const auditPath = path.join(tmpDir, "audit.jsonl");
-    const service = new RemoteExecService(makeConfig({ auditLogPath: auditPath }), noopLogger);
+    const realAudit = new AuditTrail(auditPath);
+    const service = new RemoteExecService(
+      makeConfig({ auditLogPath: auditPath }),
+      noopLogger,
+      realAudit,
+    );
     await service.executeCommand({ command: "echo hi", workdir: tmpDir });
 
     const content = await fs.readFile(auditPath, "utf-8");
@@ -457,7 +504,12 @@ describe("command execution", () => {
 
   it("creates audit log for denied execution", async () => {
     const auditPath = path.join(tmpDir, "audit.jsonl");
-    const service = new RemoteExecService(makeConfig({ auditLogPath: auditPath }), noopLogger);
+    const realAudit = new AuditTrail(auditPath);
+    const service = new RemoteExecService(
+      makeConfig({ auditLogPath: auditPath }),
+      noopLogger,
+      realAudit,
+    );
     try {
       await service.executeCommand({ command: "rm -rf /", workdir: tmpDir });
     } catch {
@@ -477,7 +529,7 @@ describe("command execution", () => {
     const subdir = path.join(tmpDir, "subdir");
     await fs.writeFile(path.join(subdir, "marker.txt"), "found");
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "cat marker.txt",
       workdir: subdir,
@@ -486,7 +538,7 @@ describe("command execution", () => {
   });
 
   it("handles piped commands", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.executeCommand({
       command: "echo foo | grep foo",
       workdir: tmpDir,
@@ -513,7 +565,7 @@ describe("file read", () => {
   });
 
   it("reads text file with correct content", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.readFile({ path: path.join(tmpDir, "readme.txt") });
     expect(result.content).toContain("line1");
     expect(result.content).toContain("line5");
@@ -522,7 +574,7 @@ describe("file read", () => {
   });
 
   it("applies line limit", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.readFile({ path: path.join(tmpDir, "readme.txt"), lines: 2 });
     expect(result.linesShown).toBe(2);
     expect(result.content).toContain("line1");
@@ -538,21 +590,21 @@ describe("file read", () => {
     buf[2] = 0x02;
     await fs.writeFile(binPath, buf);
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.readFile({ path: binPath });
     expect(result.binary).toBe(true);
     expect(result.size).toBe(256);
   });
 
   it("errors on file not found", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: path.join(tmpDir, "nope.txt") })).rejects.toThrow(
       "does not exist",
     );
   });
 
   it("errors when path is a directory", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.readFile({ path: path.join(tmpDir, "adir") })).rejects.toThrow(
       "Not a file",
     );
@@ -562,14 +614,18 @@ describe("file read", () => {
     const outsideDir = await createTmpDir();
     await fs.writeFile(path.join(outsideDir, "secret.txt"), "nope");
 
-    const service = new RemoteExecService(makeConfig({ allowedPaths: [tmpDir] }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ allowedPaths: [tmpDir] }),
+      noopLogger,
+      noopAudit,
+    );
     await expect(service.readFile({ path: path.join(outsideDir, "secret.txt") })).rejects.toThrow(
       "outside allowed directories",
     );
   });
 
   it("handles empty file", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.readFile({ path: path.join(tmpDir, "empty.txt") });
     expect(result.content).toBe("(empty)");
     expect(result.size).toBe(0);
@@ -579,7 +635,7 @@ describe("file read", () => {
     const lines = Array.from({ length: 1000 }, (_, i) => `line ${i + 1}`).join("\n");
     await fs.writeFile(path.join(tmpDir, "large.txt"), lines);
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.readFile({ path: path.join(tmpDir, "large.txt"), lines: 10 });
     expect(result.linesShown).toBe(10);
     expect(result.totalLines).toBe(1000);
@@ -604,7 +660,7 @@ describe("directory listing", () => {
     await fs.writeFile(path.join(tmpDir, "fileB.txt"), "content");
     await fs.writeFile(path.join(tmpDir, "fileA.txt"), "content");
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: tmpDir });
     expect(result.entries.length).toBe(3);
   });
@@ -615,7 +671,7 @@ describe("directory listing", () => {
     await fs.writeFile(path.join(tmpDir, "zfile.txt"), "z");
     await fs.writeFile(path.join(tmpDir, "afile.txt"), "a");
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: tmpDir });
 
     const names = result.entries.map((e) => e.name);
@@ -626,7 +682,7 @@ describe("directory listing", () => {
     await fs.writeFile(path.join(tmpDir, "target.txt"), "content");
     await fs.symlink(path.join(tmpDir, "target.txt"), path.join(tmpDir, "link.txt"));
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: tmpDir });
     const symlink = result.entries.find((e) => e.name === "link.txt");
     expect(symlink).toBeDefined();
@@ -635,14 +691,18 @@ describe("directory listing", () => {
 
   it("denies path outside allowed", async () => {
     const outsideDir = await createTmpDir();
-    const service = new RemoteExecService(makeConfig({ allowedPaths: [tmpDir] }), noopLogger);
+    const service = new RemoteExecService(
+      makeConfig({ allowedPaths: [tmpDir] }),
+      noopLogger,
+      noopAudit,
+    );
     await expect(service.listDirectory({ path: outsideDir })).rejects.toThrow(
       "outside allowed directories",
     );
   });
 
   it("errors on nonexistent directory", async () => {
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     await expect(service.listDirectory({ path: path.join(tmpDir, "nope") })).rejects.toThrow(
       "does not exist",
     );
@@ -652,7 +712,7 @@ describe("directory listing", () => {
     const emptyDir = path.join(tmpDir, "empty");
     await fs.mkdir(emptyDir);
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: emptyDir });
     expect(result.entries).toHaveLength(0);
   });
@@ -661,7 +721,7 @@ describe("directory listing", () => {
     await fs.writeFile(path.join(tmpDir, ".gitignore"), "node_modules/");
     await fs.writeFile(path.join(tmpDir, "visible.txt"), "content");
 
-    const service = new RemoteExecService(makeConfig(), noopLogger);
+    const service = new RemoteExecService(makeConfig(), noopLogger, noopAudit);
     const result = await service.listDirectory({ path: tmpDir });
     const names = result.entries.map((e) => e.name);
     expect(names).toContain(".gitignore");
@@ -745,6 +805,7 @@ describe("plugin integration", () => {
     const service = new RemoteExecService(
       makeConfig({ auditLogPath: path.join(tmpDir, "e2e-audit.jsonl") }),
       noopLogger,
+      noopAudit,
     );
 
     const execResult = await service.executeCommand({
@@ -2117,6 +2178,7 @@ describe("environment variable management", () => {
       "GLOBIGNORE",
       "PROMPT_COMMAND",
       "PS1",
+      "PS4",
     ]) {
       expect(ENV_BLOCKLIST.has(key)).toBe(true);
     }
@@ -3580,7 +3642,7 @@ describe("per-sender rate limits and background blocking", () => {
       allowedPaths: [localTmpDir],
       rateLimits: { maxCallsPerWindow: 2, windowMs: 60_000 },
     });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
 
     // Sender A: 2 calls
     await service.executeCommand({ command: "echo a1", senderId: "senderA" });
@@ -3601,7 +3663,7 @@ describe("per-sender rate limits and background blocking", () => {
       allowedPaths: [localTmpDir],
       rateLimits: { maxCallsPerWindow: 1, windowMs: 60_000 },
     });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
 
     await service.executeCommand({ command: "echo g1" });
     await expect(service.executeCommand({ command: "echo g2" })).rejects.toThrow(
@@ -3611,7 +3673,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("rejects nohup commands", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     await expect(service.executeCommand({ command: "nohup sleep 100" })).rejects.toThrow(
       "Background execution is not allowed",
     );
@@ -3619,7 +3681,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("rejects trailing & (background)", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     await expect(service.executeCommand({ command: "sleep 100 &" })).rejects.toThrow(
       "Background execution is not allowed",
     );
@@ -3627,7 +3689,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("rejects disown commands", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     await expect(service.executeCommand({ command: "sleep 100 & disown" })).rejects.toThrow(
       "Background execution is not allowed",
     );
@@ -3635,7 +3697,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("rejects setsid commands", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     await expect(service.executeCommand({ command: "setsid sleep 100" })).rejects.toThrow(
       "Background execution is not allowed",
     );
@@ -3643,7 +3705,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("rejects mid-command & (backgrounding)", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     await expect(service.executeCommand({ command: "echo foo & echo bar" })).rejects.toThrow(
       "Background execution is not allowed",
     );
@@ -3651,7 +3713,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("allows && (logical AND) and &> (redirect)", async () => {
     const cfg = makeConfig({ allowedPaths: [localTmpDir] });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     const r1 = await service.executeCommand({ command: "echo a && echo b" });
     expect(r1.stdout).toContain("a");
     expect(r1.stdout).toContain("b");
@@ -3667,7 +3729,7 @@ describe("per-sender rate limits and background blocking", () => {
 
   it("constructor rejects empty allowedPaths", () => {
     const cfg = makeConfig({ allowedPaths: [] });
-    expect(() => new RemoteExecService(cfg, noopLogger)).toThrow(
+    expect(() => new RemoteExecService(cfg, noopLogger, noopAudit)).toThrow(
       "requires at least one allowedPath",
     );
   });
@@ -3734,12 +3796,12 @@ describe("per-sender pending limits and byte-accurate truncation", () => {
     // Force prune via listing
     const pending = mgr.listPending();
     expect(pending.length).toBe(0);
-    // audit.log should have been called with "expired"
+    // audit.log should have been called with "deny" decision and "expired" action
     expect(mockAudit.log).toHaveBeenCalledWith(
       "run_command",
       "u1",
-      "expired",
-      expect.objectContaining({ command: "rm -rf /" }),
+      "deny",
+      expect.objectContaining({ command: "rm -rf /", action: "expired" }),
     );
   });
 
@@ -3750,7 +3812,7 @@ describe("per-sender pending limits and byte-accurate truncation", () => {
       allowedPaths: [localTmpDir],
       maxOutputBytes: 10,
     });
-    const service = new RemoteExecService(cfg, noopLogger);
+    const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     // Create file with multi-byte chars and cat it
     const testFile = path.join(localTmpDir, "mb.txt");
     // "aaaa" is 4 bytes, emoji adds multi-byte
