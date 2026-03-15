@@ -93,6 +93,36 @@ const MASK_PATTERNS: MaskPattern[] = [
     pattern: /(?<=:\/\/[^:]+:)[^@\s]{8,}(?=@)/g,
     replacement: "***REDACTED***",
   },
+  // Stripe keys
+  {
+    name: "stripe-key",
+    pattern: /\b[sr]k_live_[A-Za-z0-9]{24,}\b/g,
+    replacement: "***REDACTED_STRIPE***",
+  },
+  // SendGrid keys
+  {
+    name: "sendgrid-key",
+    pattern: /\bSG\.[A-Za-z0-9_-]{22,}\.[A-Za-z0-9_-]{22,}\b/g,
+    replacement: "SG.***REDACTED***",
+  },
+  // Azure storage keys
+  {
+    name: "azure-key",
+    pattern: /AccountKey=[A-Za-z0-9+/=]{44,}/g,
+    replacement: "AccountKey=***REDACTED***",
+  },
+  // Discord bot tokens
+  {
+    name: "discord-token",
+    pattern: /[A-Za-z0-9]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}/g,
+    replacement: "***REDACTED_DISCORD***",
+  },
+  // JWT tokens
+  {
+    name: "jwt-token",
+    pattern: /eyJ[A-Za-z0-9_-]{50,}\.eyJ[A-Za-z0-9_-]{50,}\.[A-Za-z0-9_-]{20,}/g,
+    replacement: "***REDACTED_JWT***",
+  },
   // Private keys
   {
     name: "private-key",

@@ -8,6 +8,7 @@
 import os from "node:os";
 import { assertAllowedKeys } from "../shared/cortex-config.js";
 import type { RiskLevel } from "../interactive-permissions/intent-classifier.js";
+import type { PinConfig } from "./pin-auth.js";
 
 // ============================================================================
 // Types
@@ -45,6 +46,7 @@ export type RemoteExecConfig = {
   session: SessionConfig;
   maskOutput: boolean;
   blockedPatterns: RegExp[];
+  pin: PinConfig;
 };
 
 // ============================================================================
@@ -76,20 +78,32 @@ const DEFAULT_SESSION: SessionConfig = {
   maxAliases: 10,
 };
 
-const DEFAULT_MAX_HISTORY_SIZE = 20;
 const MIN_MAX_HISTORY_SIZE = 1;
 const MAX_MAX_HISTORY_SIZE = 100;
 
-const DEFAULT_MAX_ENV_VARS = 20;
 const MIN_MAX_ENV_VARS = 1;
 const MAX_MAX_ENV_VARS = 50;
 
-const DEFAULT_MAX_ALIASES = 10;
 const MIN_MAX_ALIASES = 1;
 const MAX_MAX_ALIASES = 50;
 
 const DEFAULT_MASK_OUTPUT = true;
 const DEFAULT_BLOCKED_PATTERNS: RegExp[] = [];
+
+const DEFAULT_PIN: PinConfig = {
+  pinHash: null,
+  pinLockoutMs: 300_000,
+  pinMaxAttempts: 3,
+  pinAutoLockMs: 300_000,
+};
+
+const MIN_PIN_LOCKOUT_MS = 60_000;
+const MAX_PIN_LOCKOUT_MS = 900_000;
+const MIN_PIN_MAX_ATTEMPTS = 1;
+const MAX_PIN_MAX_ATTEMPTS = 10;
+const MIN_PIN_AUTO_LOCK_MS = 60_000;
+const MAX_PIN_AUTO_LOCK_MS = 3_600_000;
+const PIN_HASH_PATTERN = /^scrypt:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+$/;
 
 const MIN_SESSION_TTL = 60_000;
 const MAX_SESSION_TTL = 86_400_000;
@@ -212,30 +226,34 @@ function parseSession(raw: unknown): SessionConfig {
     obj.maxHistorySize,
     MIN_MAX_HISTORY_SIZE,
     MAX_MAX_HISTORY_SIZE,
-    DEFAULT_MAX_HISTORY_SIZE,
+    DEFAULT_SESSION.maxHistorySize,
   );
   const maxEnvVars = clampInt(
     obj.maxEnvVars,
     MIN_MAX_ENV_VARS,
     MAX_MAX_ENV_VARS,
-    DEFAULT_MAX_ENV_VARS,
+    DEFAULT_SESSION.maxEnvVars,
   );
   const maxAliases = clampInt(
     obj.maxAliases,
     MIN_MAX_ALIASES,
     MAX_MAX_ALIASES,
-    DEFAULT_MAX_ALIASES,
+    DEFAULT_SESSION.maxAliases,
   );
 
   return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars, maxAliases };
 }
 
 const MAX_BLOCKED_PATTERN_LENGTH = 200;
+const MAX_BLOCKED_PATTERNS_COUNT = 50;
 
 function parseBlockedPatterns(raw: unknown): RegExp[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
     throw new Error("blockedPatterns must be an array of regex strings");
+  }
+  if (raw.length > MAX_BLOCKED_PATTERNS_COUNT) {
+    throw new Error(`blockedPatterns exceeds max count (${MAX_BLOCKED_PATTERNS_COUNT})`);
   }
   const patterns: RegExp[] = [];
   for (let i = 0; i < raw.length; i++) {
@@ -258,6 +276,46 @@ function parseBlockedPatterns(raw: unknown): RegExp[] {
   return patterns;
 }
 
+function parsePin(raw: unknown): PinConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_PIN };
+  }
+  const obj = raw as Record<string, unknown>;
+  assertAllowedKeys(obj, ["pinHash", "pinLockoutMs", "pinMaxAttempts", "pinAutoLockMs"], "pin");
+
+  let pinHash: string | null = null;
+  if (obj.pinHash !== undefined && obj.pinHash !== null) {
+    if (typeof obj.pinHash !== "string") {
+      throw new Error("pin.pinHash must be a string or null");
+    }
+    if (!PIN_HASH_PATTERN.test(obj.pinHash)) {
+      throw new Error("pin.pinHash must match format: scrypt:<base64salt>:<base64hash>");
+    }
+    pinHash = obj.pinHash;
+  }
+
+  const pinLockoutMs = clampInt(
+    obj.pinLockoutMs,
+    MIN_PIN_LOCKOUT_MS,
+    MAX_PIN_LOCKOUT_MS,
+    DEFAULT_PIN.pinLockoutMs,
+  );
+  const pinMaxAttempts = clampInt(
+    obj.pinMaxAttempts,
+    MIN_PIN_MAX_ATTEMPTS,
+    MAX_PIN_MAX_ATTEMPTS,
+    DEFAULT_PIN.pinMaxAttempts,
+  );
+  const pinAutoLockMs = clampInt(
+    obj.pinAutoLockMs,
+    MIN_PIN_AUTO_LOCK_MS,
+    MAX_PIN_AUTO_LOCK_MS,
+    DEFAULT_PIN.pinAutoLockMs,
+  );
+
+  return { pinHash, pinLockoutMs, pinMaxAttempts, pinAutoLockMs };
+}
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -273,6 +331,7 @@ const ALLOWED_KEYS = [
   "session",
   "maskOutput",
   "blockedPatterns",
+  "pin",
 ];
 
 export const remoteExecConfigSchema = {
@@ -289,6 +348,7 @@ export const remoteExecConfigSchema = {
         session: { ...DEFAULT_SESSION },
         maskOutput: DEFAULT_MASK_OUTPUT,
         blockedPatterns: DEFAULT_BLOCKED_PATTERNS,
+        pin: { ...DEFAULT_PIN },
       };
     }
 
@@ -304,6 +364,7 @@ export const remoteExecConfigSchema = {
         session: { ...DEFAULT_SESSION },
         maskOutput: DEFAULT_MASK_OUTPUT,
         blockedPatterns: DEFAULT_BLOCKED_PATTERNS,
+        pin: { ...DEFAULT_PIN },
       };
     }
 
@@ -366,6 +427,7 @@ export const remoteExecConfigSchema = {
 
     const maskOutput = typeof cfg.maskOutput === "boolean" ? cfg.maskOutput : DEFAULT_MASK_OUTPUT;
     const blockedPatterns = parseBlockedPatterns(cfg.blockedPatterns);
+    const pin = parsePin(cfg.pin);
 
     return {
       enabled,
@@ -378,6 +440,7 @@ export const remoteExecConfigSchema = {
       session,
       maskOutput,
       blockedPatterns,
+      pin,
     };
   },
   uiHints: {

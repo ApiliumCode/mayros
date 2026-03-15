@@ -119,4 +119,48 @@ describe("Output Masking", () => {
     expect(result.masked).toBe(true);
     expect(result.text).not.toContain("FAKE_test_password_123");
   });
+
+  // 16
+  it("masks Stripe live keys", () => {
+    const result = maskSensitiveOutput("STRIPE_KEY=sk_live_NOT_REAL_FOR_TESTING_XX");
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("***REDACTED_STRIPE***");
+    expect(result.text).not.toContain("sk_live_NOT_REAL_FOR_TESTING_XX");
+  });
+
+  // 17
+  it("masks SendGrid API keys", () => {
+    const result = maskSensitiveOutput("SG.FAKEFAKEFAKEFAKEFAKEFK.FAKEFAKEFAKEFAKEFAKEFK1234");
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("SG.***REDACTED***");
+  });
+
+  // 18
+  it("masks Azure storage account keys", () => {
+    const result = maskSensitiveOutput(
+      "AccountKey=FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE+/==",
+    );
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("AccountKey=***REDACTED***");
+  });
+
+  // 19
+  it("masks Discord bot tokens", () => {
+    const token = "FAKEFAKEFAKEFAKEFAKEFAKEFK.FAKEfk.FAKEFAKEFAKEFAKEFAKEFAKEFAKEfak";
+    const result = maskSensitiveOutput(`DISCORD_TOKEN=${token}`);
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("***REDACTED_DISCORD***");
+  });
+
+  // 20
+  it("masks JWT tokens", () => {
+    // Realistic JWT header + payload + signature
+    const header = "eyJGQUtFIjoiRkFLRSIsInR5cCI6IkZBS0UifQFAKEFAKEFAKEFAKEFAKEFAKE";
+    const payload = "eyJGQUtFIjoiRkFLRSIsIm5hbWUiOiJGQUtFIiwiaWF0IjowfQFAKEFAKEFAKEFAKE";
+    const sig = "FAKEFAKEFAKEFAKEFAKEFAKE";
+    const jwt = `${header}.${payload}.${sig}`;
+    const result = maskSensitiveOutput(`Authorization: ${jwt}`);
+    expect(result.masked).toBe(true);
+    expect(result.text).toContain("***REDACTED_JWT***");
+  });
 });
