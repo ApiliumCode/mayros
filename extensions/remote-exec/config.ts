@@ -29,6 +29,8 @@ export type SessionConfig = {
   sessionTtlMs: number;
   outputPageSize: number;
   outputCacheTtlMs: number;
+  maxHistorySize: number;
+  maxEnvVars: number;
 };
 
 export type RemoteExecConfig = {
@@ -66,7 +68,17 @@ const DEFAULT_SESSION: SessionConfig = {
   sessionTtlMs: 1_800_000,
   outputPageSize: 3_500,
   outputCacheTtlMs: 300_000,
+  maxHistorySize: 20,
+  maxEnvVars: 20,
 };
+
+const DEFAULT_MAX_HISTORY_SIZE = 20;
+const MIN_MAX_HISTORY_SIZE = 1;
+const MAX_MAX_HISTORY_SIZE = 100;
+
+const DEFAULT_MAX_ENV_VARS = 20;
+const MIN_MAX_ENV_VARS = 1;
+const MAX_MAX_ENV_VARS = 50;
 
 const MIN_SESSION_TTL = 60_000;
 const MAX_SESSION_TTL = 86_400_000;
@@ -153,7 +165,11 @@ function parseSession(raw: unknown): SessionConfig {
     return { ...DEFAULT_SESSION };
   }
   const obj = raw as Record<string, unknown>;
-  assertAllowedKeys(obj, ["sessionTtlMs", "outputPageSize", "outputCacheTtlMs"], "session");
+  assertAllowedKeys(
+    obj,
+    ["sessionTtlMs", "outputPageSize", "outputCacheTtlMs", "maxHistorySize", "maxEnvVars"],
+    "session",
+  );
 
   const sessionTtlMs = clampInt(
     obj.sessionTtlMs,
@@ -174,7 +190,20 @@ function parseSession(raw: unknown): SessionConfig {
     DEFAULT_SESSION.outputCacheTtlMs,
   );
 
-  return { sessionTtlMs, outputPageSize, outputCacheTtlMs };
+  const maxHistorySize = clampInt(
+    obj.maxHistorySize,
+    MIN_MAX_HISTORY_SIZE,
+    MAX_MAX_HISTORY_SIZE,
+    DEFAULT_MAX_HISTORY_SIZE,
+  );
+  const maxEnvVars = clampInt(
+    obj.maxEnvVars,
+    MIN_MAX_ENV_VARS,
+    MAX_MAX_ENV_VARS,
+    DEFAULT_MAX_ENV_VARS,
+  );
+
+  return { sessionTtlMs, outputPageSize, outputCacheTtlMs, maxHistorySize, maxEnvVars };
 }
 
 // ============================================================================

@@ -24,10 +24,18 @@ export type OutputCache = {
   cachedAt: number;
 };
 
+export type HistoryEntry = {
+  command: string;
+  exitCode: number;
+  timestamp: number;
+};
+
 export type SessionState = {
   workdir: string;
   outputCache: OutputCache | null;
   lastActivity: number;
+  history: HistoryEntry[];
+  env: Record<string, string>;
 };
 
 // ============================================================================
@@ -107,6 +115,8 @@ export class SessionManager {
       workdir: defaultWorkdir,
       outputCache: null,
       lastActivity: Date.now(),
+      history: [],
+      env: {},
     };
     this.sessions.set(key, session);
     return session;
@@ -123,6 +133,8 @@ export class SessionManager {
         workdir: newWorkdir,
         outputCache: null,
         lastActivity: Date.now(),
+        history: [],
+        env: {},
       });
     }
   }
@@ -154,6 +166,8 @@ export class SessionManager {
         workdir: "",
         outputCache: cache,
         lastActivity: Date.now(),
+        history: [],
+        env: {},
       });
     }
 
@@ -212,5 +226,75 @@ export class SessionManager {
     if (session) {
       session.outputCache = null;
     }
+  }
+
+  // ---------- History ----------
+
+  addHistory(channel: string, senderId: string, entry: HistoryEntry, maxHistorySize: number): void {
+    const key = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(key);
+    if (!session) return;
+
+    session.history.push(entry);
+    while (session.history.length > maxHistorySize) {
+      session.history.shift();
+    }
+    session.lastActivity = Date.now();
+  }
+
+  getHistory(channel: string, senderId: string): HistoryEntry[] {
+    const key = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(key);
+    if (!session) return [];
+    return [...session.history].reverse();
+  }
+
+  getHistoryEntry(channel: string, senderId: string, index: number): HistoryEntry | null {
+    if (index < 1) return null;
+    const reversed = this.getHistory(channel, senderId);
+    if (index > reversed.length) return null;
+    return reversed[index - 1]!;
+  }
+
+  // ---------- Environment Variables ----------
+
+  setEnv(
+    channel: string,
+    senderId: string,
+    key: string,
+    value: string,
+    maxEnvVars: number,
+  ): boolean {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return false;
+
+    // Allow updating existing keys without counting toward max
+    if (!(key in session.env) && Object.keys(session.env).length >= maxEnvVars) {
+      return false;
+    }
+
+    session.env[key] = value;
+    session.lastActivity = Date.now();
+    return true;
+  }
+
+  deleteEnv(channel: string, senderId: string, key: string): boolean {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return false;
+
+    if (!(key in session.env)) return false;
+
+    delete session.env[key];
+    session.lastActivity = Date.now();
+    return true;
+  }
+
+  getEnv(channel: string, senderId: string): Record<string, string> {
+    const compositeKey = this.compositeKey(channel, senderId);
+    const session = this.sessions.get(compositeKey);
+    if (!session) return {};
+    return { ...session.env };
   }
 }

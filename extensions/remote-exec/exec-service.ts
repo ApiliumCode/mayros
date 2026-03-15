@@ -192,6 +192,7 @@ export class RemoteExecService {
     command: string;
     workdir?: string;
     timeout?: number;
+    env?: Record<string, string>;
   }): Promise<ExecResult> {
     // 1. Rate limit check
     const rateCheck = this.checkRateLimit();
@@ -248,7 +249,7 @@ export class RemoteExecService {
         cwd: resolvedWorkdir,
         timeout,
         maxBuffer: this.config.maxOutputBytes + 1024, // slight margin for truncation detection
-        env: { ...process.env, TERM: "dumb" },
+        env: { ...process.env, ...params.env, TERM: "dumb" },
       });
       stdout = result.stdout;
       stderr = result.stderr;

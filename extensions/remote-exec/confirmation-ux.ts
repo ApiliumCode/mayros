@@ -18,6 +18,7 @@ import {
 import type { AuditTrail } from "../osameru-governance/audit-trail.js";
 import type { ExecResult } from "./exec-service.js";
 import type { ConfirmationConfig } from "./config.js";
+import type { HistoryEntry } from "./session-manager.js";
 
 // ============================================================================
 // Types
@@ -296,6 +297,12 @@ export function formatRunHelp(): string {
     "",
     "Subcommands:",
     "  /run <command>        Execute a command",
+    "  /run !!               Re-run last command",
+    "  /run !<N>             Re-run command #N from history",
+    "  /run history          Show command history",
+    "  /run env              Show session environment variables",
+    "  /run env KEY=VALUE    Set a session env var",
+    "  /run env -d KEY       Delete a session env var",
     "  /run cd <path>        Change working directory",
     "  /run pwd              Show current working directory",
     "  /run more             Show next page of output",
@@ -304,4 +311,78 @@ export function formatRunHelp(): string {
     "  /run pending          List pending requests",
     "  /run help             Show this help",
   ].join("\n");
+}
+
+// ============================================================================
+// Environment Variable Constants
+// ============================================================================
+
+export const ENV_BLOCKLIST = new Set([
+  "HOME",
+  "USER",
+  "SHELL",
+  "TERM",
+  "LOGNAME",
+  "HOSTNAME",
+  "UID",
+  "EUID",
+]);
+
+export const ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
+
+// ============================================================================
+// History & Env Formatters
+// ============================================================================
+
+function formatRelativeTime(timestamp: number): string {
+  const diff = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
+}
+
+export function formatHistoryList(entries: HistoryEntry[], maxShown: number): string {
+  if (entries.length === 0) {
+    return "No command history.";
+  }
+
+  const shown = entries.slice(0, maxShown);
+  const lines: string[] = [`Command history (${shown.length}/${entries.length}):`];
+
+  for (let i = 0; i < shown.length; i++) {
+    const entry = shown[i]!;
+    const status = entry.exitCode === 0 ? "[ok]" : `[exit:${entry.exitCode}]`;
+    lines.push(`  ${i + 1}. ${status} ${entry.command}  (${formatRelativeTime(entry.timestamp)})`);
+  }
+
+  lines.push("");
+  lines.push("Re-run: /run !! (last) or /run !<N>");
+
+  return lines.join("\n");
+}
+
+export function formatEnvList(env: Record<string, string>): string {
+  const keys = Object.keys(env);
+  if (keys.length === 0) {
+    return "No session environment variables set.";
+  }
+
+  const lines: string[] = [`Session env (${keys.length}):`];
+  for (const key of keys) {
+    lines.push(`  ${key}=${env[key]}`);
+  }
+
+  lines.push("");
+  lines.push("Set: /run env KEY=VALUE");
+  lines.push("Delete: /run env -d KEY");
+
+  return lines.join("\n");
+}
+
+export function formatEnvSet(key: string, value: string): string {
+  return `Set: ${key}=${value}`;
+}
+
+export function formatEnvDeleted(key: string): string {
+  return `Deleted: ${key}`;
 }

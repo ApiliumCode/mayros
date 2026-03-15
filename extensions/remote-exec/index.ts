@@ -23,6 +23,12 @@ import {
   formatMorePage,
   formatCdSuccess,
   formatPwdOutput,
+  formatHistoryList,
+  formatEnvList,
+  formatEnvSet,
+  formatEnvDeleted,
+  ENV_BLOCKLIST,
+  ENV_NAME_PATTERN,
 } from "./confirmation-ux.js";
 import { RemoteExecService } from "./exec-service.js";
 import type { DirEntry } from "./exec-service.js";
@@ -284,6 +290,137 @@ function applyPaging(
   return formatPagedOutput(firstPage.content, cache.pages.length, remainingLines);
 }
 
+function recordHistory(
+  sessionMgr: SessionManager,
+  command: string,
+  exitCode: number,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): void {
+  if (!ctx.senderId) return;
+  sessionMgr.addHistory(
+    ctx.channel,
+    ctx.senderId,
+    {
+      command,
+      exitCode,
+      timestamp: Date.now(),
+    },
+    config.session.maxHistorySize,
+  );
+}
+
+function resolveSessionEnv(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+): Record<string, string> {
+  if (!ctx.senderId) return {};
+  return sessionMgr.getEnv(ctx.channel, ctx.senderId);
+}
+
+function handleHistory(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "No command history." };
+  }
+  const entries = sessionMgr.getHistory(ctx.channel, ctx.senderId);
+  return { text: formatHistoryList(entries, config.session.maxHistorySize) };
+}
+
+async function handleRecall(
+  sessionMgr: SessionManager,
+  manager: ConfirmationManager,
+  service: RemoteExecService,
+  index: number,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): Promise<{ text: string }> {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+  const entry = sessionMgr.getHistoryEntry(ctx.channel, ctx.senderId, index);
+  if (!entry) {
+    return { text: `No command at history position ${index}.` };
+  }
+  return handleExec(manager, service, sessionMgr, entry.command, ctx, config);
+}
+
+function handleEnv(
+  sessionMgr: SessionManager,
+  rest: string,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+
+  // Ensure session exists
+  sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+
+  // /run env (no args) — list
+  if (!rest) {
+    const env = sessionMgr.getEnv(ctx.channel, ctx.senderId);
+    return { text: formatEnvList(env) };
+  }
+
+  // /run env -d KEY — delete
+  if (rest.startsWith("-d ")) {
+    const key = rest.slice(3).trim();
+    if (!key) {
+      return { text: "Usage: /run env -d KEY" };
+    }
+    if (!ENV_NAME_PATTERN.test(key)) {
+      return { text: `Error: Invalid variable name "${key}". Use UPPER_CASE format.` };
+    }
+    const deleted = sessionMgr.deleteEnv(ctx.channel, ctx.senderId, key);
+    if (!deleted) {
+      return { text: `${key} is not set.` };
+    }
+    return { text: formatEnvDeleted(key) };
+  }
+
+  // /run env -d (no key)
+  if (rest === "-d") {
+    return { text: "Usage: /run env -d KEY" };
+  }
+
+  // /run env KEY=VALUE — set
+  const eqIdx = rest.indexOf("=");
+  if (eqIdx !== -1) {
+    const key = rest.slice(0, eqIdx);
+    const value = rest.slice(eqIdx + 1);
+
+    if (!ENV_NAME_PATTERN.test(key)) {
+      return { text: `Error: Invalid variable name "${key}". Use UPPER_CASE format.` };
+    }
+    if (ENV_BLOCKLIST.has(key)) {
+      return { text: `Error: ${key} is a protected variable.` };
+    }
+    const ok = sessionMgr.setEnv(ctx.channel, ctx.senderId, key, value, config.session.maxEnvVars);
+    if (!ok) {
+      return {
+        text: `Error: Maximum environment variables reached (${config.session.maxEnvVars}).`,
+      };
+    }
+    return { text: formatEnvSet(key, value) };
+  }
+
+  // /run env KEY (no =) — show single
+  const key = rest.trim();
+  if (!ENV_NAME_PATTERN.test(key)) {
+    return { text: `Error: Invalid variable name "${key}". Use UPPER_CASE format.` };
+  }
+  const env = sessionMgr.getEnv(ctx.channel, ctx.senderId);
+  if (key in env) {
+    return { text: `${key}=${env[key]}` };
+  }
+  return { text: `${key} is not set.` };
+}
+
 async function handleExec(
   manager: ConfirmationManager,
   service: RemoteExecService,
@@ -304,7 +441,9 @@ async function handleExec(
   });
 
   if (result.action === "auto_approved") {
-    const execResult = await service.executeCommand({ command, workdir });
+    const env = resolveSessionEnv(sessionMgr, ctx);
+    const execResult = await service.executeCommand({ command, workdir, env });
+    recordHistory(sessionMgr, command, execResult.exitCode, ctx, config);
     const formatted = formatExecOutput(execResult, command);
     return {
       text: applyPaging(sessionMgr, formatted, command, ctx, config),
@@ -332,10 +471,13 @@ async function handleApprove(
   const request = manager.approve(id.trim(), ctx.senderId);
   if (!request) return { text: "Request not found or expired." };
 
+  const env = resolveSessionEnv(sessionMgr, ctx);
   const execResult = await service.executeCommand({
     command: request.command,
     workdir: request.workdir,
+    env,
   });
+  recordHistory(sessionMgr, request.command, execResult.exitCode, ctx, config);
   const formatted = formatExecOutput(execResult, request.command);
   return {
     text: applyPaging(sessionMgr, formatted, request.command, ctx, config),
@@ -382,6 +524,8 @@ function registerRunCommand(
 
       try {
         if (action === "help") return { text: formatRunHelp() };
+        if (action === "history") return handleHistory(sessionMgr, ctx, config);
+        if (action === "env") return handleEnv(sessionMgr, rest, ctx, config);
         if (action === "cd") return await handleCd(sessionMgr, service, rest, ctx, config);
         if (action === "pwd") return handlePwd(sessionMgr, ctx, config);
         if (action === "more") return handleMore(sessionMgr, ctx);
@@ -389,6 +533,19 @@ function registerRunCommand(
         if (action === "approve")
           return await handleApprove(manager, service, sessionMgr, rest, ctx, config);
         if (action === "deny") return handleDeny(manager, rest, ctx);
+
+        // History recall: !! or !N
+        if (args === "!!") return await handleRecall(sessionMgr, manager, service, 1, ctx, config);
+        const bangMatch = args.match(/^!(\d+)$/);
+        if (bangMatch)
+          return await handleRecall(
+            sessionMgr,
+            manager,
+            service,
+            parseInt(bangMatch[1]!, 10),
+            ctx,
+            config,
+          );
 
         // Default: entire args is a command to execute
         return await handleExec(manager, service, sessionMgr, args, ctx, config);

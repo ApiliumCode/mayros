@@ -16,6 +16,10 @@
  * - L. SessionManager logic
  * - M. Output paging
  * - N. /run cd, pwd, more integration
+ * - O. Session config: maxHistorySize and maxEnvVars
+ * - P. History management
+ * - Q. Environment variable management
+ * - R. /run history, !!, !N, env integration
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -34,10 +38,16 @@ import {
   formatExecOutput,
   formatApprovalPrompt,
   formatPendingList,
+  formatHistoryList,
+  formatEnvList,
+  formatEnvSet,
+  formatEnvDeleted,
+  ENV_BLOCKLIST,
+  ENV_NAME_PATTERN,
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
-import { SessionManager } from "./session-manager.js";
+import { SessionManager, type HistoryEntry } from "./session-manager.js";
 
 // ============================================================================
 // Test Helpers
@@ -1391,6 +1401,8 @@ describe("SessionManager", () => {
     sessionTtlMs: 1_800_000,
     outputPageSize: 3_500,
     outputCacheTtlMs: 300_000,
+    maxHistorySize: 20,
+    maxEnvVars: 20,
   };
 
   it("getOrCreate returns new session with default workdir", () => {
@@ -1501,6 +1513,8 @@ describe("output paging", () => {
     sessionTtlMs: 1_800_000,
     outputPageSize: 50,
     outputCacheTtlMs: 300_000,
+    maxHistorySize: 20,
+    maxEnvVars: 20,
   };
 
   it("cacheOutput splits text into pages respecting line boundaries", () => {
@@ -1783,5 +1797,630 @@ describe("/run cd, pwd, more integration", () => {
     expect(result.text).toContain("cd");
     expect(result.text).toContain("pwd");
     expect(result.text).toContain("more");
+  });
+});
+
+// ============================================================================
+// O. Session Config: maxHistorySize and maxEnvVars (7 tests)
+// ============================================================================
+
+describe("session config: maxHistorySize and maxEnvVars", () => {
+  it("parses defaults for maxHistorySize (20) and maxEnvVars (20)", () => {
+    const config = remoteExecConfigSchema.parse(null);
+    expect(config.session.maxHistorySize).toBe(20);
+    expect(config.session.maxEnvVars).toBe(20);
+  });
+
+  it("clamps maxHistorySize to [1, 100]", () => {
+    const low = remoteExecConfigSchema.parse({
+      session: { maxHistorySize: 0 },
+    });
+    expect(low.session.maxHistorySize).toBe(1);
+
+    const high = remoteExecConfigSchema.parse({
+      session: { maxHistorySize: 999 },
+    });
+    expect(high.session.maxHistorySize).toBe(100);
+  });
+
+  it("clamps maxEnvVars to [1, 50]", () => {
+    const low = remoteExecConfigSchema.parse({
+      session: { maxEnvVars: 0 },
+    });
+    expect(low.session.maxEnvVars).toBe(1);
+
+    const high = remoteExecConfigSchema.parse({
+      session: { maxEnvVars: 999 },
+    });
+    expect(high.session.maxEnvVars).toBe(50);
+  });
+
+  it("unknown keys in session section still throws", () => {
+    expect(() =>
+      remoteExecConfigSchema.parse({
+        session: { unknownField: true },
+      }),
+    ).toThrow();
+  });
+
+  it("full session config with new fields parses correctly", () => {
+    const config = remoteExecConfigSchema.parse({
+      session: {
+        sessionTtlMs: 600_000,
+        outputPageSize: 2_000,
+        outputCacheTtlMs: 60_000,
+        maxHistorySize: 50,
+        maxEnvVars: 30,
+      },
+    });
+    expect(config.session.maxHistorySize).toBe(50);
+    expect(config.session.maxEnvVars).toBe(30);
+  });
+
+  it("maxHistorySize defaults when session section exists without it", () => {
+    const config = remoteExecConfigSchema.parse({
+      session: { sessionTtlMs: 600_000 },
+    });
+    expect(config.session.maxHistorySize).toBe(20);
+  });
+
+  it("maxEnvVars defaults when session section exists without it", () => {
+    const config = remoteExecConfigSchema.parse({
+      session: { sessionTtlMs: 600_000 },
+    });
+    expect(config.session.maxEnvVars).toBe(20);
+  });
+});
+
+// ============================================================================
+// P. History Management (10 tests)
+// ============================================================================
+
+describe("history management", () => {
+  const sessionConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 3_500,
+    outputCacheTtlMs: 300_000,
+    maxHistorySize: 5,
+    maxEnvVars: 20,
+  };
+
+  it("addHistory stores entry and getHistory returns it", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "echo hi", exitCode: 0, timestamp: Date.now() }, 5);
+    const history = mgr.getHistory("wa", "u1");
+    expect(history).toHaveLength(1);
+    expect(history[0]!.command).toBe("echo hi");
+  });
+
+  it("getHistory returns entries in reverse chronological order", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "first", exitCode: 0, timestamp: 1000 }, 5);
+    mgr.addHistory("wa", "u1", { command: "second", exitCode: 0, timestamp: 2000 }, 5);
+    mgr.addHistory("wa", "u1", { command: "third", exitCode: 0, timestamp: 3000 }, 5);
+    const history = mgr.getHistory("wa", "u1");
+    expect(history[0]!.command).toBe("third");
+    expect(history[1]!.command).toBe("second");
+    expect(history[2]!.command).toBe("first");
+  });
+
+  it("addHistory prunes oldest when exceeding maxHistorySize", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    for (let i = 0; i < 7; i++) {
+      mgr.addHistory("wa", "u1", { command: `cmd-${i}`, exitCode: 0, timestamp: i }, 5);
+    }
+    const history = mgr.getHistory("wa", "u1");
+    expect(history).toHaveLength(5);
+    // Oldest should be cmd-2 (cmd-0 and cmd-1 pruned)
+    expect(history[history.length - 1]!.command).toBe("cmd-2");
+  });
+
+  it("getHistoryEntry(1) returns most recent command", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "old", exitCode: 0, timestamp: 1000 }, 5);
+    mgr.addHistory("wa", "u1", { command: "latest", exitCode: 0, timestamp: 2000 }, 5);
+    const entry = mgr.getHistoryEntry("wa", "u1", 1);
+    expect(entry).not.toBeNull();
+    expect(entry!.command).toBe("latest");
+  });
+
+  it("getHistoryEntry(N) for N > history.length returns null", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "only", exitCode: 0, timestamp: 1000 }, 5);
+    expect(mgr.getHistoryEntry("wa", "u1", 99)).toBeNull();
+  });
+
+  it("getHistoryEntry(0) returns null (1-based indexing)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "cmd", exitCode: 0, timestamp: 1000 }, 5);
+    expect(mgr.getHistoryEntry("wa", "u1", 0)).toBeNull();
+  });
+
+  it("getHistory for non-existent session returns empty array", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    expect(mgr.getHistory("wa", "ghost")).toEqual([]);
+  });
+
+  it("history is per-session (different senders have separate histories)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.getOrCreate("wa", "u2", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "user1-cmd", exitCode: 0, timestamp: 1000 }, 5);
+    mgr.addHistory("wa", "u2", { command: "user2-cmd", exitCode: 0, timestamp: 1000 }, 5);
+    expect(mgr.getHistory("wa", "u1")[0]!.command).toBe("user1-cmd");
+    expect(mgr.getHistory("wa", "u2")[0]!.command).toBe("user2-cmd");
+  });
+
+  it("history is cleared when session expires (TTL prune)", () => {
+    const mgr = new SessionManager({ ...sessionConfig, sessionTtlMs: 1 }, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.addHistory("wa", "u1", { command: "cmd", exitCode: 0, timestamp: Date.now() }, 5);
+
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      // spin
+    }
+
+    // getOrCreate triggers prune, creating a fresh session
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.getHistory("wa", "u1")).toEqual([]);
+  });
+
+  it("addHistory on non-existent session is a no-op", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    // No session created — should not throw
+    mgr.addHistory("wa", "ghost", { command: "cmd", exitCode: 0, timestamp: 1000 }, 5);
+    expect(mgr.getHistory("wa", "ghost")).toEqual([]);
+  });
+});
+
+// ============================================================================
+// Q. Environment Variable Management (12 tests)
+// ============================================================================
+
+describe("environment variable management", () => {
+  const sessionConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 3_500,
+    outputCacheTtlMs: 300_000,
+    maxHistorySize: 20,
+    maxEnvVars: 3,
+  };
+
+  it("setEnv and getEnv round-trip", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    const ok = mgr.setEnv("wa", "u1", "NODE_ENV", "production", 3);
+    expect(ok).toBe(true);
+    expect(mgr.getEnv("wa", "u1")).toEqual({ NODE_ENV: "production" });
+  });
+
+  it("setEnv returns false when maxEnvVars reached", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setEnv("wa", "u1", "A", "1", 3);
+    mgr.setEnv("wa", "u1", "B", "2", 3);
+    mgr.setEnv("wa", "u1", "C", "3", 3);
+    const ok = mgr.setEnv("wa", "u1", "D", "4", 3);
+    expect(ok).toBe(false);
+    expect(mgr.getEnv("wa", "u1")).not.toHaveProperty("D");
+  });
+
+  it("setEnv allows update of existing key (no count increase)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setEnv("wa", "u1", "A", "1", 3);
+    mgr.setEnv("wa", "u1", "B", "2", 3);
+    mgr.setEnv("wa", "u1", "C", "3", 3);
+    // Update existing key should succeed even at max
+    const ok = mgr.setEnv("wa", "u1", "A", "updated", 3);
+    expect(ok).toBe(true);
+    expect(mgr.getEnv("wa", "u1").A).toBe("updated");
+  });
+
+  it("deleteEnv removes var and returns true", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setEnv("wa", "u1", "NODE_ENV", "test", 3);
+    const ok = mgr.deleteEnv("wa", "u1", "NODE_ENV");
+    expect(ok).toBe(true);
+    expect(mgr.getEnv("wa", "u1")).not.toHaveProperty("NODE_ENV");
+  });
+
+  it("deleteEnv returns false for non-existent key", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.deleteEnv("wa", "u1", "NOPE")).toBe(false);
+  });
+
+  it("getEnv returns empty record for new session", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.getEnv("wa", "u1")).toEqual({});
+  });
+
+  it("getEnv returns empty for non-existent session", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    expect(mgr.getEnv("wa", "ghost")).toEqual({});
+  });
+
+  it("env is per-session (different senders isolated)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.getOrCreate("wa", "u2", "/tmp");
+    mgr.setEnv("wa", "u1", "KEY", "val1", 3);
+    mgr.setEnv("wa", "u2", "KEY", "val2", 3);
+    expect(mgr.getEnv("wa", "u1").KEY).toBe("val1");
+    expect(mgr.getEnv("wa", "u2").KEY).toBe("val2");
+  });
+
+  it("ENV_NAME_PATTERN accepts valid uppercase names", () => {
+    expect(ENV_NAME_PATTERN.test("NODE_ENV")).toBe(true);
+    expect(ENV_NAME_PATTERN.test("MY_VAR_2")).toBe(true);
+    expect(ENV_NAME_PATTERN.test("_VAR")).toBe(true);
+    expect(ENV_NAME_PATTERN.test("A")).toBe(true);
+  });
+
+  it("ENV_NAME_PATTERN rejects invalid names", () => {
+    expect(ENV_NAME_PATTERN.test("lowercase")).toBe(false);
+    expect(ENV_NAME_PATTERN.test("2STARTS_WITH_DIGIT")).toBe(false);
+    expect(ENV_NAME_PATTERN.test("HAS-HYPHEN")).toBe(false);
+    expect(ENV_NAME_PATTERN.test("")).toBe(false);
+  });
+
+  it("ENV_BLOCKLIST contains HOME, USER, SHELL, TERM, LOGNAME, HOSTNAME, UID, EUID", () => {
+    for (const key of ["HOME", "USER", "SHELL", "TERM", "LOGNAME", "HOSTNAME", "UID", "EUID"]) {
+      expect(ENV_BLOCKLIST.has(key)).toBe(true);
+    }
+  });
+
+  it("env values are preserved exactly (spaces, special chars, colons)", () => {
+    const mgr = new SessionManager(sessionConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.setEnv("wa", "u1", "PATH_EXTRA", "/usr/bin:/opt/bin:with spaces", 3);
+    expect(mgr.getEnv("wa", "u1").PATH_EXTRA).toBe("/usr/bin:/opt/bin:with spaces");
+  });
+});
+
+// ============================================================================
+// R. /run history, !!, !N, env Integration (15 tests)
+// ============================================================================
+
+describe("/run history, !!, !N, env integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    await fs.mkdir(path.join(tmpDir, "subdir"));
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 10_000, outputCacheTtlMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("/run history with no prior commands shows empty", async () => {
+    const result = await cmdHandler({
+      args: "history",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run history",
+      config: {},
+    });
+    expect(result.text).toContain("No command history");
+  });
+
+  it("/run <safe-command> then /run history shows it with exit code", async () => {
+    await cmdHandler({
+      args: "echo hello",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo hello",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "history",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run history",
+      config: {},
+    });
+    expect(result.text).toContain("[ok]");
+    expect(result.text).toContain("echo hello");
+  });
+
+  it("history shows exit code for failed commands", async () => {
+    // Use a command that fails but is classified as safe
+    await cmdHandler({
+      args: "ls /nonexistent-path-xyz-999",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run ls /nonexistent-path-xyz-999",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "history",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run history",
+      config: {},
+    });
+    expect(result.text).toContain("[exit:");
+  });
+
+  it("/run !! re-runs last command", async () => {
+    await cmdHandler({
+      args: "echo recall-test",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo recall-test",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "!!",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run !!",
+      config: {},
+    });
+    expect(result.text).toContain("recall-test");
+  });
+
+  it("/run !! with no history returns error", async () => {
+    const result = await cmdHandler({
+      args: "!!",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run !!",
+      config: {},
+    });
+    expect(result.text).toContain("No command at history position 1");
+  });
+
+  it("/run !1 re-runs most recent command", async () => {
+    await cmdHandler({
+      args: "echo bang-one",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo bang-one",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "!1",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run !1",
+      config: {},
+    });
+    expect(result.text).toContain("bang-one");
+  });
+
+  it("/run !2 re-runs second-most-recent command", async () => {
+    await cmdHandler({
+      args: "echo first-cmd",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo first-cmd",
+      config: {},
+    });
+    await cmdHandler({
+      args: "echo second-cmd",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo second-cmd",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "!2",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run !2",
+      config: {},
+    });
+    expect(result.text).toContain("first-cmd");
+  });
+
+  it("/run !999 with short history returns error", async () => {
+    await cmdHandler({
+      args: "echo only-one",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo only-one",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "!999",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run !999",
+      config: {},
+    });
+    expect(result.text).toContain("No command at history position 999");
+  });
+
+  it("recalled risky command goes through confirmation (not auto-approved)", async () => {
+    // First run a safe command to have history
+    await cmdHandler({
+      args: "echo safe",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run echo safe",
+      config: {},
+    });
+
+    // Now run a risky command that will be recorded
+    // We use "git push origin main" which should be risky
+    const riskyResult = await cmdHandler({
+      args: "git push origin main",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run git push origin main",
+      config: {},
+    });
+    // The risky command goes to pending, NOT recorded in history
+    expect(riskyResult.text).toContain("approval");
+
+    // History should only have "echo safe", not the risky pending command
+    const histResult = await cmdHandler({
+      args: "history",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run history",
+      config: {},
+    });
+    expect(histResult.text).toContain("echo safe");
+    expect(histResult.text).not.toContain("git push");
+  });
+
+  it("/run env with no vars shows empty", async () => {
+    const result = await cmdHandler({
+      args: "env",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env",
+      config: {},
+    });
+    expect(result.text).toContain("No session environment variables set");
+  });
+
+  it("/run env NODE_ENV=production sets variable", async () => {
+    const result = await cmdHandler({
+      args: "env NODE_ENV=production",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env NODE_ENV=production",
+      config: {},
+    });
+    expect(result.text).toBe("Set: NODE_ENV=production");
+  });
+
+  it("/run env shows set variables", async () => {
+    await cmdHandler({
+      args: "env NODE_ENV=production",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env NODE_ENV=production",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "env",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env",
+      config: {},
+    });
+    expect(result.text).toContain("NODE_ENV=production");
+  });
+
+  it("/run env -d NODE_ENV deletes variable", async () => {
+    await cmdHandler({
+      args: "env NODE_ENV=production",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env NODE_ENV=production",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "env -d NODE_ENV",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env -d NODE_ENV",
+      config: {},
+    });
+    expect(result.text).toBe("Deleted: NODE_ENV");
+  });
+
+  it("/run env HOME=bad returns protected error", async () => {
+    const result = await cmdHandler({
+      args: "env HOME=/evil",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run env HOME=/evil",
+      config: {},
+    });
+    expect(result.text).toContain("HOME is a protected variable");
+  });
+
+  it("/run help includes history, env, !!, !N subcommands", async () => {
+    const result = await cmdHandler({
+      args: "help",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run help",
+      config: {},
+    });
+    expect(result.text).toContain("history");
+    expect(result.text).toContain("env");
+    expect(result.text).toContain("!!");
+    expect(result.text).toContain("!<N>");
   });
 });
