@@ -12,15 +12,21 @@ import type { MayrosPluginApi } from "mayros/plugin-sdk";
 import { ToolInputError } from "../../src/agents/tools/common.js";
 import { AuditTrail } from "../osameru-governance/audit-trail.js";
 import { remoteExecConfigSchema, type RemoteExecConfig } from "./config.js";
+import path from "node:path";
 import {
   ConfirmationManager,
   formatExecOutput,
   formatApprovalPrompt,
   formatPendingList,
   formatRunHelp,
+  formatPagedOutput,
+  formatMorePage,
+  formatCdSuccess,
+  formatPwdOutput,
 } from "./confirmation-ux.js";
 import { RemoteExecService } from "./exec-service.js";
 import type { DirEntry } from "./exec-service.js";
+import { SessionManager } from "./session-manager.js";
 
 // ============================================================================
 // Tool Registration
@@ -197,22 +203,129 @@ function registerRemoteLs(api: MayrosPluginApi, service: RemoteExecService): voi
 // /run Command Handlers
 // ============================================================================
 
+async function handleCd(
+  sessionMgr: SessionManager,
+  service: RemoteExecService,
+  targetPath: string,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): Promise<{ text: string }> {
+  if (!ctx.senderId) {
+    return { text: "Error: Session requires a sender identity." };
+  }
+
+  const session = sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!);
+
+  if (!targetPath.trim()) {
+    return { text: formatPwdOutput(session.workdir) };
+  }
+
+  const resolved = path.isAbsolute(targetPath)
+    ? targetPath
+    : path.resolve(session.workdir, targetPath);
+
+  const validated = await service.validateWorkdir(resolved);
+  sessionMgr.setWorkdir(ctx.channel, ctx.senderId, validated);
+  return { text: formatCdSuccess(validated) };
+}
+
+function handlePwd(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: formatPwdOutput(config.allowedPaths[0]!) };
+  }
+  const workdir = sessionMgr.getWorkdir(ctx.channel, ctx.senderId) ?? config.allowedPaths[0]!;
+  return { text: formatPwdOutput(workdir) };
+}
+
+function handleMore(
+  sessionMgr: SessionManager,
+  ctx: { senderId?: string; channel: string },
+): { text: string } {
+  if (!ctx.senderId) {
+    return { text: "No more output to show." };
+  }
+  const result = sessionMgr.getNextPage(ctx.channel, ctx.senderId);
+  if (!result) {
+    return { text: "No more output to show." };
+  }
+  return {
+    text: formatMorePage(
+      result.page.content,
+      result.pageNum,
+      result.totalPages,
+      result.remainingLines,
+    ),
+  };
+}
+
+function applyPaging(
+  sessionMgr: SessionManager,
+  formatted: string,
+  command: string,
+  durationMs: number,
+  exitCode: number,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
+): string {
+  if (!ctx.senderId || formatted.length <= config.session.outputPageSize) {
+    return formatted;
+  }
+  const cache = sessionMgr.cacheOutput(ctx.channel, ctx.senderId, formatted, command);
+  if (cache.pages.length <= 1) {
+    return formatted;
+  }
+  const firstPage = cache.pages[0]!;
+  let remainingLines = 0;
+  for (let i = 1; i < cache.pages.length; i++) {
+    remainingLines += cache.pages[i]!.lineCount;
+  }
+  return formatPagedOutput(
+    firstPage.content,
+    command,
+    cache.pages.length,
+    remainingLines,
+    durationMs,
+    exitCode,
+  );
+}
+
 async function handleExec(
   manager: ConfirmationManager,
   service: RemoteExecService,
+  sessionMgr: SessionManager,
   command: string,
   ctx: { senderId?: string; channel: string },
   config: RemoteExecConfig,
 ): Promise<{ text: string }> {
+  const workdir = ctx.senderId
+    ? sessionMgr.getOrCreate(ctx.channel, ctx.senderId, config.allowedPaths[0]!).workdir
+    : config.allowedPaths[0]!;
+
   const result = manager.evaluateCommand({
     command,
+    workdir,
     senderId: ctx.senderId,
     channel: ctx.channel,
   });
 
   if (result.action === "auto_approved") {
-    const execResult = await service.executeCommand({ command });
-    return { text: formatExecOutput(execResult, command) };
+    const execResult = await service.executeCommand({ command, workdir });
+    const formatted = formatExecOutput(execResult, command);
+    return {
+      text: applyPaging(
+        sessionMgr,
+        formatted,
+        command,
+        execResult.durationMs,
+        execResult.exitCode,
+        ctx,
+        config,
+      ),
+    };
   }
 
   if (result.action === "pending_approval") {
@@ -226,9 +339,10 @@ async function handleExec(
 async function handleApprove(
   manager: ConfirmationManager,
   service: RemoteExecService,
+  sessionMgr: SessionManager,
   id: string,
-  ctx: { senderId?: string },
-  _config: RemoteExecConfig,
+  ctx: { senderId?: string; channel: string },
+  config: RemoteExecConfig,
 ): Promise<{ text: string }> {
   if (!id) return { text: "Usage: /run approve <id>" };
 
@@ -239,7 +353,18 @@ async function handleApprove(
     command: request.command,
     workdir: request.workdir,
   });
-  return { text: formatExecOutput(execResult, request.command) };
+  const formatted = formatExecOutput(execResult, request.command);
+  return {
+    text: applyPaging(
+      sessionMgr,
+      formatted,
+      request.command,
+      execResult.durationMs,
+      execResult.exitCode,
+      ctx,
+      config,
+    ),
+  };
 }
 
 function handleDeny(
@@ -264,6 +389,7 @@ function registerRunCommand(
   api: MayrosPluginApi,
   service: RemoteExecService,
   manager: ConfirmationManager,
+  sessionMgr: SessionManager,
   config: RemoteExecConfig,
 ): void {
   api.registerCommand({
@@ -281,12 +407,16 @@ function registerRunCommand(
 
       try {
         if (action === "help") return { text: formatRunHelp() };
+        if (action === "cd") return await handleCd(sessionMgr, service, rest, ctx, config);
+        if (action === "pwd") return handlePwd(sessionMgr, ctx, config);
+        if (action === "more") return handleMore(sessionMgr, ctx);
         if (action === "pending") return handlePending(manager, ctx);
-        if (action === "approve") return handleApprove(manager, service, rest, ctx, config);
+        if (action === "approve")
+          return await handleApprove(manager, service, sessionMgr, rest, ctx, config);
         if (action === "deny") return handleDeny(manager, rest, ctx);
 
         // Default: entire args is a command to execute
-        return await handleExec(manager, service, args, ctx, config);
+        return await handleExec(manager, service, sessionMgr, args, ctx, config);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { text: `Error: ${message}` };
@@ -323,7 +453,8 @@ const remoteExecPlugin = {
 
     const audit = new AuditTrail(cfg.auditLogPath);
     const manager = new ConfirmationManager(cfg.confirmation, audit, api.logger);
-    registerRunCommand(api, service, manager, cfg);
+    const sessionMgr = new SessionManager(cfg.session, api.logger);
+    registerRunCommand(api, service, manager, sessionMgr, cfg);
 
     api.logger.info(
       `remote-exec: registered 3 tools + /run command (allowedPaths: ${cfg.allowedPaths.join(", ")})`,

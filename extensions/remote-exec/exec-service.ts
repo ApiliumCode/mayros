@@ -157,6 +157,17 @@ export class RemoteExecService {
     return realPath;
   }
 
+  // ---------- Public Path Validation ----------
+
+  async validateWorkdir(inputPath: string): Promise<string> {
+    const resolved = await this.validatePath(inputPath);
+    const stat = await fs.stat(resolved);
+    if (!stat.isDirectory()) {
+      throw new Error(`Not a directory: ${inputPath}`);
+    }
+    return resolved;
+  }
+
   // ---------- Binary Detection ----------
 
   private isBinaryBuffer(buffer: Buffer, checkBytes = 1024): boolean {

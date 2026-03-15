@@ -246,6 +246,69 @@ export function formatPendingList(requests: PendingRequest[]): string {
   return lines.join("\n");
 }
 
+export function formatPagedOutput(
+  firstPageContent: string,
+  command: string,
+  totalPages: number,
+  remainingLines: number,
+  durationMs: number,
+  exitCode: number,
+): string {
+  const parts: string[] = [];
+
+  parts.push(`> ${command}`);
+
+  if (firstPageContent.trim()) {
+    parts.push("```");
+    parts.push(firstPageContent.trimEnd());
+    parts.push("```");
+  }
+
+  const meta: string[] = [];
+  if (exitCode !== 0) {
+    meta.push(`exit: ${exitCode}`);
+  }
+  meta.push(`${durationMs}ms`);
+  parts.push(meta.join(" | "));
+
+  parts.push(`Page 1/${totalPages} (${remainingLines} lines remaining). /run more for next.`);
+
+  return parts.join("\n");
+}
+
+export function formatMorePage(
+  pageContent: string,
+  pageNum: number,
+  totalPages: number,
+  remainingLines: number,
+): string {
+  const parts: string[] = [];
+
+  if (pageContent.trim()) {
+    parts.push("```");
+    parts.push(pageContent.trimEnd());
+    parts.push("```");
+  }
+
+  if (pageNum < totalPages) {
+    parts.push(
+      `Page ${pageNum}/${totalPages} (${remainingLines} lines remaining). /run more for next.`,
+    );
+  } else {
+    parts.push(`Page ${pageNum}/${totalPages} (end of output).`);
+  }
+
+  return parts.join("\n");
+}
+
+export function formatCdSuccess(newWorkdir: string): string {
+  return `Working directory: ${newWorkdir}`;
+}
+
+export function formatPwdOutput(workdir: string): string {
+  return `Working directory: ${workdir}`;
+}
+
 export function formatRunHelp(): string {
   return [
     "Usage: /run <command>",
@@ -254,6 +317,9 @@ export function formatRunHelp(): string {
     "",
     "Subcommands:",
     "  /run <command>        Execute a command",
+    "  /run cd <path>        Change working directory",
+    "  /run pwd              Show current working directory",
+    "  /run more             Show next page of output",
     "  /run approve <id>     Approve a pending command",
     "  /run deny <id>        Deny a pending command",
     "  /run pending          List pending requests",

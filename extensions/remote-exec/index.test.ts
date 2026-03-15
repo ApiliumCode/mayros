@@ -12,6 +12,10 @@
  * - H. ConfirmationManager logic
  * - I. Output formatting
  * - J. /run command integration
+ * - K. Session config parsing
+ * - L. SessionManager logic
+ * - M. Output paging
+ * - N. /run cd, pwd, more integration
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -22,6 +26,7 @@ import {
   remoteExecConfigSchema,
   type RemoteExecConfig,
   type ConfirmationConfig,
+  type SessionConfig,
 } from "./config.js";
 import { RemoteExecService } from "./exec-service.js";
 import {
@@ -32,6 +37,7 @@ import {
   type PendingRequest,
   type ExecResult,
 } from "./confirmation-ux.js";
+import { SessionManager } from "./session-manager.js";
 
 // ============================================================================
 // Test Helpers
@@ -70,6 +76,17 @@ function makeConfig(overrides: Partial<RemoteExecConfig> = {}): RemoteExecConfig
     maxOutputBytes: 100_000,
     auditLogPath: path.join(tmpDir, "audit.jsonl"),
     rateLimits: { maxCallsPerWindow: 100, windowMs: 60_000 },
+    confirmation: {
+      autoApproveMaxRisk: "safe",
+      approvalTtlMs: 120_000,
+      maxPending: 10,
+      showRiskLevel: true,
+    },
+    session: {
+      sessionTtlMs: 1_800_000,
+      outputPageSize: 3_500,
+      outputCacheTtlMs: 300_000,
+    },
     ...overrides,
   };
 }
@@ -1302,5 +1319,469 @@ describe("/run command integration", () => {
       config: {},
     });
     expect(result.text).toContain("git push origin main");
+  });
+});
+
+// ============================================================================
+// K. Session Config (7 tests)
+// ============================================================================
+
+describe("session config", () => {
+  it("parses defaults for session section", () => {
+    const cfg = remoteExecConfigSchema.parse({});
+    expect(cfg.session.sessionTtlMs).toBe(1_800_000);
+    expect(cfg.session.outputPageSize).toBe(3_500);
+    expect(cfg.session.outputCacheTtlMs).toBe(300_000);
+  });
+
+  it("clamps sessionTtlMs to [60_000, 86_400_000]", () => {
+    const low = remoteExecConfigSchema.parse({ session: { sessionTtlMs: 100 } });
+    expect(low.session.sessionTtlMs).toBe(60_000);
+    const high = remoteExecConfigSchema.parse({ session: { sessionTtlMs: 100_000_000 } });
+    expect(high.session.sessionTtlMs).toBe(86_400_000);
+  });
+
+  it("clamps outputPageSize to [500, 10_000]", () => {
+    const low = remoteExecConfigSchema.parse({ session: { outputPageSize: 10 } });
+    expect(low.session.outputPageSize).toBe(500);
+    const high = remoteExecConfigSchema.parse({ session: { outputPageSize: 50_000 } });
+    expect(high.session.outputPageSize).toBe(10_000);
+  });
+
+  it("clamps outputCacheTtlMs to [30_000, 3_600_000]", () => {
+    const low = remoteExecConfigSchema.parse({ session: { outputCacheTtlMs: 100 } });
+    expect(low.session.outputCacheTtlMs).toBe(30_000);
+    const high = remoteExecConfigSchema.parse({ session: { outputCacheTtlMs: 10_000_000 } });
+    expect(high.session.outputCacheTtlMs).toBe(3_600_000);
+  });
+
+  it("unknown keys in session section throws", () => {
+    expect(() => remoteExecConfigSchema.parse({ session: { unknownKey: true } })).toThrow(
+      "unknown key",
+    );
+  });
+
+  it("missing session section uses defaults", () => {
+    const cfg = remoteExecConfigSchema.parse({ enabled: false });
+    expect(cfg.session.sessionTtlMs).toBe(1_800_000);
+    expect(cfg.session.outputPageSize).toBe(3_500);
+    expect(cfg.session.outputCacheTtlMs).toBe(300_000);
+  });
+
+  it("full session config parses correctly", () => {
+    const cfg = remoteExecConfigSchema.parse({
+      session: {
+        sessionTtlMs: 600_000,
+        outputPageSize: 2_000,
+        outputCacheTtlMs: 120_000,
+      },
+    });
+    expect(cfg.session.sessionTtlMs).toBe(600_000);
+    expect(cfg.session.outputPageSize).toBe(2_000);
+    expect(cfg.session.outputCacheTtlMs).toBe(120_000);
+  });
+});
+
+// ============================================================================
+// L. SessionManager Logic (10 tests)
+// ============================================================================
+
+describe("SessionManager", () => {
+  const defaultSessionConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 3_500,
+    outputCacheTtlMs: 300_000,
+  };
+
+  it("getOrCreate returns new session with default workdir", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    const session = mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    expect(session.workdir).toBe("/home/default");
+    expect(session.outputCache).toBeNull();
+  });
+
+  it("getOrCreate returns existing session on second call", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    const s1 = mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    mgr.setWorkdir("whatsapp", "user1", "/home/changed");
+    const s2 = mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    expect(s2.workdir).toBe("/home/changed");
+  });
+
+  it("setWorkdir updates session workdir", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    mgr.setWorkdir("whatsapp", "user1", "/home/new");
+    expect(mgr.getWorkdir("whatsapp", "user1")).toBe("/home/new");
+  });
+
+  it("different senders have isolated sessions", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/u1");
+    mgr.getOrCreate("whatsapp", "user2", "/home/u2");
+    expect(mgr.getWorkdir("whatsapp", "user1")).toBe("/home/u1");
+    expect(mgr.getWorkdir("whatsapp", "user2")).toBe("/home/u2");
+  });
+
+  it("different channels with same sender have isolated sessions", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/wa");
+    mgr.getOrCreate("telegram", "user1", "/home/tg");
+    expect(mgr.getWorkdir("whatsapp", "user1")).toBe("/home/wa");
+    expect(mgr.getWorkdir("telegram", "user1")).toBe("/home/tg");
+  });
+
+  it("prune removes expired sessions", () => {
+    const mgr = new SessionManager({ ...defaultSessionConfig, sessionTtlMs: 1 }, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+
+    // Wait for expiry
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      // spin
+    }
+
+    // getOrCreate triggers prune; a new session should be created
+    const session = mgr.getOrCreate("whatsapp", "user1", "/home/fresh");
+    expect(session.workdir).toBe("/home/fresh");
+  });
+
+  it("prune preserves active sessions", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+    mgr.setWorkdir("whatsapp", "user1", "/home/changed");
+
+    // Trigger prune via another getOrCreate
+    mgr.getOrCreate("whatsapp", "user2", "/home/other");
+
+    expect(mgr.getWorkdir("whatsapp", "user1")).toBe("/home/changed");
+  });
+
+  it("getWorkdir returns undefined for non-existent session", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    expect(mgr.getWorkdir("whatsapp", "ghost")).toBeUndefined();
+  });
+
+  it("lastActivity refreshed on getOrCreate", () => {
+    const mgr = new SessionManager({ ...defaultSessionConfig, sessionTtlMs: 50 }, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+
+    // Access before TTL, refreshing lastActivity
+    const start = Date.now();
+    while (Date.now() - start < 30) {
+      // spin
+    }
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+
+    // Wait a bit more but not enough for full TTL from last access
+    const start2 = Date.now();
+    while (Date.now() - start2 < 30) {
+      // spin
+    }
+
+    // Session should still be alive since lastActivity was refreshed
+    expect(mgr.getWorkdir("whatsapp", "user1")).toBe("/home/default");
+  });
+
+  it("composite key format is channel:senderId", () => {
+    const mgr = new SessionManager(defaultSessionConfig, noopLogger);
+    mgr.getOrCreate("whatsapp", "user1", "/home/default");
+
+    // Different composite key should yield different session
+    expect(mgr.getWorkdir("whatsapp:user1", "")).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// M. Output Paging (9 tests)
+// ============================================================================
+
+describe("output paging", () => {
+  const pagingConfig: SessionConfig = {
+    sessionTtlMs: 1_800_000,
+    outputPageSize: 50,
+    outputCacheTtlMs: 300_000,
+  };
+
+  it("cacheOutput splits text into pages respecting line boundaries", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+
+    // Each line is ~10 chars, pageSize is 50, so ~5 lines per page
+    const lines = Array.from({ length: 20 }, (_, i) => `line-${String(i).padStart(4, "0")}`);
+    const text = lines.join("\n");
+
+    const cache = mgr.cacheOutput("wa", "u1", text, "test-cmd");
+    expect(cache.pages.length).toBeGreaterThan(1);
+
+    // Verify no line is split across pages
+    for (const page of cache.pages) {
+      expect(page.content).not.toMatch(/^[^l]/); // each page starts cleanly
+    }
+  });
+
+  it("cacheOutput with short output produces single page", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    const cache = mgr.cacheOutput("wa", "u1", "short", "cmd");
+    expect(cache.pages).toHaveLength(1);
+  });
+
+  it("getNextPage returns pages in sequence", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+
+    const lines = Array.from({ length: 20 }, (_, i) => `line-${String(i).padStart(4, "0")}`);
+    const cache = mgr.cacheOutput("wa", "u1", lines.join("\n"), "cmd");
+
+    // Page 0 shown inline, getNextPage starts from page 1
+    const firstMore = mgr.getNextPage("wa", "u1");
+    expect(firstMore).not.toBeNull();
+    expect(firstMore!.pageNum).toBe(2); // 1-based display, second page
+
+    const secondMore = mgr.getNextPage("wa", "u1");
+    if (cache.pages.length > 2) {
+      expect(secondMore).not.toBeNull();
+      expect(secondMore!.pageNum).toBe(3);
+    }
+  });
+
+  it("getNextPage returns null when no more pages", () => {
+    const mgr = new SessionManager({ ...pagingConfig, outputPageSize: 10_000 }, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    mgr.cacheOutput("wa", "u1", "short text", "cmd");
+
+    // Only 1 page, currentPage starts at 1, so no more
+    const result = mgr.getNextPage("wa", "u1");
+    expect(result).toBeNull();
+  });
+
+  it("getNextPage returns null when no cache exists", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    expect(mgr.getNextPage("wa", "u1")).toBeNull();
+  });
+
+  it("output cache expires after outputCacheTtlMs", () => {
+    const mgr = new SessionManager({ ...pagingConfig, outputCacheTtlMs: 1 }, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    const lines = Array.from({ length: 20 }, (_, i) => `line-${i}`);
+    mgr.cacheOutput("wa", "u1", lines.join("\n"), "cmd");
+
+    const start = Date.now();
+    while (Date.now() - start < 5) {
+      // spin
+    }
+
+    expect(mgr.getNextPage("wa", "u1")).toBeNull();
+  });
+
+  it("new cacheOutput replaces previous cache", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+
+    const lines1 = Array.from({ length: 20 }, (_, i) => `old-${i}`);
+    mgr.cacheOutput("wa", "u1", lines1.join("\n"), "old-cmd");
+
+    const lines2 = Array.from({ length: 20 }, (_, i) => `new-${i}`);
+    mgr.cacheOutput("wa", "u1", lines2.join("\n"), "new-cmd");
+
+    const page = mgr.getNextPage("wa", "u1");
+    expect(page).not.toBeNull();
+    expect(page!.page.content).toContain("new-");
+    expect(page!.page.content).not.toContain("old-");
+  });
+
+  it("single very long line gets its own page", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+
+    const longLine = "x".repeat(200);
+    const cache = mgr.cacheOutput("wa", "u1", longLine, "cmd");
+
+    // The long line should be in its own page (not split)
+    expect(cache.pages[0]!.content).toBe(longLine);
+  });
+
+  it("clearOutputCache removes cached output", () => {
+    const mgr = new SessionManager(pagingConfig, noopLogger);
+    mgr.getOrCreate("wa", "u1", "/tmp");
+    const lines = Array.from({ length: 20 }, (_, i) => `line-${i}`);
+    mgr.cacheOutput("wa", "u1", lines.join("\n"), "cmd");
+
+    mgr.clearOutputCache("wa", "u1");
+    expect(mgr.getNextPage("wa", "u1")).toBeNull();
+  });
+});
+
+// ============================================================================
+// N. /run cd, pwd, more Integration (8 tests)
+// ============================================================================
+
+describe("/run cd, pwd, more integration", () => {
+  let cmdHandler: (ctx: any) => Promise<any>;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    await fs.mkdir(path.join(tmpDir, "subdir"));
+    await fs.writeFile(path.join(tmpDir, "test.txt"), "hello");
+    await fs.writeFile(path.join(tmpDir, "subdir", "nested.txt"), "nested content");
+
+    const { default: plugin } = await import("./index.js");
+
+    let capturedHandler: ((ctx: any) => Promise<any>) | undefined;
+    const mockApi = {
+      pluginConfig: {
+        enabled: true,
+        allowedPaths: [tmpDir],
+        confirmation: { autoApproveMaxRisk: "safe" },
+        session: { outputPageSize: 100, outputCacheTtlMs: 300_000 },
+      },
+      logger: noopLogger,
+      registerTool: () => {},
+      registerHook: () => {},
+      registerHttpHandler: () => {},
+      registerHttpRoute: () => {},
+      registerChannel: () => {},
+      registerGatewayMethod: () => {},
+      registerCli: () => {},
+      registerService: () => {},
+      registerProvider: () => {},
+      registerCommand: (cmd: { name: string; handler: (ctx: any) => Promise<any> }) => {
+        if (cmd.name === "run") {
+          capturedHandler = cmd.handler;
+        }
+      },
+    };
+
+    await plugin.register(mockApi as any);
+    cmdHandler = capturedHandler!;
+  });
+
+  afterEach(async () => {
+    await cleanupDirs();
+  });
+
+  it("/run cd <valid-path> sets workdir and returns confirmation", async () => {
+    const result = await cmdHandler({
+      args: `cd ${path.join(tmpDir, "subdir")}`,
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cd subdir",
+      config: {},
+    });
+    expect(result.text).toContain("Working directory:");
+    expect(result.text).toContain("subdir");
+  });
+
+  it("/run cd <invalid-path> returns error", async () => {
+    const result = await cmdHandler({
+      args: "cd /nonexistent/path/xyz",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cd /nonexistent/path/xyz",
+      config: {},
+    });
+    expect(result.text).toContain("Error:");
+  });
+
+  it("/run cd <outside-allowed> returns path security error", async () => {
+    const result = await cmdHandler({
+      args: "cd /etc",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cd /etc",
+      config: {},
+    });
+    expect(result.text).toContain("Error:");
+    expect(result.text).toContain("outside allowed");
+  });
+
+  it("/run pwd returns current workdir after cd", async () => {
+    // First cd
+    await cmdHandler({
+      args: `cd ${path.join(tmpDir, "subdir")}`,
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cd subdir",
+      config: {},
+    });
+
+    const result = await cmdHandler({
+      args: "pwd",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run pwd",
+      config: {},
+    });
+    expect(result.text).toContain("Working directory:");
+    expect(result.text).toContain("subdir");
+  });
+
+  it("/run pwd with no prior cd returns default workdir", async () => {
+    const result = await cmdHandler({
+      args: "pwd",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run pwd",
+      config: {},
+    });
+    expect(result.text).toContain("Working directory:");
+    expect(result.text).toContain(tmpDir);
+  });
+
+  it("/run <command> uses session workdir", async () => {
+    // cd to subdir
+    await cmdHandler({
+      args: `cd ${path.join(tmpDir, "subdir")}`,
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cd subdir",
+      config: {},
+    });
+
+    // cat the file that only exists in subdir
+    const result = await cmdHandler({
+      args: "cat nested.txt",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run cat nested.txt",
+      config: {},
+    });
+    expect(result.text).toContain("nested content");
+  });
+
+  it("/run more with no prior output returns no more output", async () => {
+    const result = await cmdHandler({
+      args: "more",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run more",
+      config: {},
+    });
+    expect(result.text).toContain("No more output to show.");
+  });
+
+  it("/run help includes cd, pwd, more subcommands", async () => {
+    const result = await cmdHandler({
+      args: "help",
+      senderId: "user1",
+      channel: "whatsapp",
+      isAuthorizedSender: true,
+      commandBody: "/run help",
+      config: {},
+    });
+    expect(result.text).toContain("cd");
+    expect(result.text).toContain("pwd");
+    expect(result.text).toContain("more");
   });
 });

@@ -25,6 +25,12 @@ export type ConfirmationConfig = {
   showRiskLevel: boolean;
 };
 
+export type SessionConfig = {
+  sessionTtlMs: number;
+  outputPageSize: number;
+  outputCacheTtlMs: number;
+};
+
 export type RemoteExecConfig = {
   enabled: boolean;
   allowedPaths: string[];
@@ -33,6 +39,7 @@ export type RemoteExecConfig = {
   auditLogPath: string;
   rateLimits: RemoteExecRateLimits;
   confirmation: ConfirmationConfig;
+  session: SessionConfig;
 };
 
 // ============================================================================
@@ -54,6 +61,19 @@ const DEFAULT_CONFIRMATION: ConfirmationConfig = {
   maxPending: 10,
   showRiskLevel: true,
 };
+
+const DEFAULT_SESSION: SessionConfig = {
+  sessionTtlMs: 1_800_000,
+  outputPageSize: 3_500,
+  outputCacheTtlMs: 300_000,
+};
+
+const MIN_SESSION_TTL = 60_000;
+const MAX_SESSION_TTL = 86_400_000;
+const MIN_OUTPUT_PAGE_SIZE = 500;
+const MAX_OUTPUT_PAGE_SIZE = 10_000;
+const MIN_OUTPUT_CACHE_TTL = 30_000;
+const MAX_OUTPUT_CACHE_TTL = 3_600_000;
 
 const VALID_RISK_LEVELS: RiskLevel[] = ["safe", "low", "medium", "high", "critical"];
 
@@ -128,6 +148,35 @@ function parseConfirmation(raw: unknown): ConfirmationConfig {
   return { autoApproveMaxRisk, approvalTtlMs, maxPending, showRiskLevel };
 }
 
+function parseSession(raw: unknown): SessionConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_SESSION };
+  }
+  const obj = raw as Record<string, unknown>;
+  assertAllowedKeys(obj, ["sessionTtlMs", "outputPageSize", "outputCacheTtlMs"], "session");
+
+  const sessionTtlMs = clampInt(
+    obj.sessionTtlMs,
+    MIN_SESSION_TTL,
+    MAX_SESSION_TTL,
+    DEFAULT_SESSION.sessionTtlMs,
+  );
+  const outputPageSize = clampInt(
+    obj.outputPageSize,
+    MIN_OUTPUT_PAGE_SIZE,
+    MAX_OUTPUT_PAGE_SIZE,
+    DEFAULT_SESSION.outputPageSize,
+  );
+  const outputCacheTtlMs = clampInt(
+    obj.outputCacheTtlMs,
+    MIN_OUTPUT_CACHE_TTL,
+    MAX_OUTPUT_CACHE_TTL,
+    DEFAULT_SESSION.outputCacheTtlMs,
+  );
+
+  return { sessionTtlMs, outputPageSize, outputCacheTtlMs };
+}
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -140,6 +189,7 @@ const ALLOWED_KEYS = [
   "auditLogPath",
   "rateLimits",
   "confirmation",
+  "session",
 ];
 
 export const remoteExecConfigSchema = {
@@ -153,6 +203,7 @@ export const remoteExecConfigSchema = {
         auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
         rateLimits: { ...DEFAULT_RATE_LIMITS },
         confirmation: { ...DEFAULT_CONFIRMATION },
+        session: { ...DEFAULT_SESSION },
       };
     }
 
@@ -165,6 +216,7 @@ export const remoteExecConfigSchema = {
         auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
         rateLimits: { ...DEFAULT_RATE_LIMITS },
         confirmation: { ...DEFAULT_CONFIRMATION },
+        session: { ...DEFAULT_SESSION },
       };
     }
 
@@ -223,6 +275,7 @@ export const remoteExecConfigSchema = {
 
     const rateLimits = parseRateLimits(cfg.rateLimits);
     const confirmation = parseConfirmation(cfg.confirmation);
+    const session = parseSession(cfg.session);
 
     return {
       enabled,
@@ -232,6 +285,7 @@ export const remoteExecConfigSchema = {
       auditLogPath,
       rateLimits,
       confirmation,
+      session,
     };
   },
   uiHints: {
@@ -269,6 +323,11 @@ export const remoteExecConfigSchema = {
       label: "Confirmation UX",
       advanced: true,
       help: "Controls /run command approval thresholds and pending request limits",
+    },
+    session: {
+      label: "Session Management",
+      advanced: true,
+      help: "Controls per-sender session state (workdir persistence, output paging)",
     },
   },
 };
