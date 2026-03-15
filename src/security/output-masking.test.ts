@@ -26,7 +26,7 @@ describe("Output Masking", () => {
 
   // 4
   it("masks Slack tokens", () => {
-    const result = maskSensitiveOutput("xoxb-1234567890-abcdefghij");
+    const result = maskSensitiveOutput("xoxb-FAKEFAKEFAKE-FAKEFAKE");
     expect(result.masked).toBe(true);
     expect(result.text).toContain("xox?-***REDACTED***");
   });
@@ -107,16 +107,16 @@ describe("Output Masking", () => {
   // 14
   it("masks Bearer tokens in headers", () => {
     const result = maskSensitiveOutput(
-      "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature",
+      "Authorization: Bearer FAKEJWTHEADERFAKEFAKEFAKEFAKEFAKEFAKE.payload.signature",
     );
     expect(result.masked).toBe(true);
-    expect(result.text).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
+    expect(result.text).not.toContain("FAKEJWTHEADERFAKEFAKEFAKEFAKEFAKEFAKE");
   });
 
   // 15
   it("masks password fields in config", () => {
-    const result = maskSensitiveOutput('password: "mySuperSecretPass123"');
+    const result = maskSensitiveOutput('password: "FAKE_test_password_123"');
     expect(result.masked).toBe(true);
-    expect(result.text).not.toContain("mySuperSecretPass123");
+    expect(result.text).not.toContain("FAKE_test_password_123");
   });
 });
