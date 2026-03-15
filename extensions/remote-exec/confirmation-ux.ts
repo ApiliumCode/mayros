@@ -248,29 +248,12 @@ export function formatPendingList(requests: PendingRequest[]): string {
 
 export function formatPagedOutput(
   firstPageContent: string,
-  command: string,
   totalPages: number,
   remainingLines: number,
-  durationMs: number,
-  exitCode: number,
 ): string {
   const parts: string[] = [];
 
-  parts.push(`> ${command}`);
-
-  if (firstPageContent.trim()) {
-    parts.push("```");
-    parts.push(firstPageContent.trimEnd());
-    parts.push("```");
-  }
-
-  const meta: string[] = [];
-  if (exitCode !== 0) {
-    meta.push(`exit: ${exitCode}`);
-  }
-  meta.push(`${durationMs}ms`);
-  parts.push(meta.join(" | "));
-
+  parts.push(firstPageContent.trimEnd());
   parts.push(`Page 1/${totalPages} (${remainingLines} lines remaining). /run more for next.`);
 
   return parts.join("\n");
@@ -284,11 +267,7 @@ export function formatMorePage(
 ): string {
   const parts: string[] = [];
 
-  if (pageContent.trim()) {
-    parts.push("```");
-    parts.push(pageContent.trimEnd());
-    parts.push("```");
-  }
+  parts.push(pageContent.trimEnd());
 
   if (pageNum < totalPages) {
     parts.push(

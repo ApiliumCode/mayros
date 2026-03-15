@@ -266,8 +266,6 @@ function applyPaging(
   sessionMgr: SessionManager,
   formatted: string,
   command: string,
-  durationMs: number,
-  exitCode: number,
   ctx: { senderId?: string; channel: string },
   config: RemoteExecConfig,
 ): string {
@@ -283,14 +281,7 @@ function applyPaging(
   for (let i = 1; i < cache.pages.length; i++) {
     remainingLines += cache.pages[i]!.lineCount;
   }
-  return formatPagedOutput(
-    firstPage.content,
-    command,
-    cache.pages.length,
-    remainingLines,
-    durationMs,
-    exitCode,
-  );
+  return formatPagedOutput(firstPage.content, cache.pages.length, remainingLines);
 }
 
 async function handleExec(
@@ -316,15 +307,7 @@ async function handleExec(
     const execResult = await service.executeCommand({ command, workdir });
     const formatted = formatExecOutput(execResult, command);
     return {
-      text: applyPaging(
-        sessionMgr,
-        formatted,
-        command,
-        execResult.durationMs,
-        execResult.exitCode,
-        ctx,
-        config,
-      ),
+      text: applyPaging(sessionMgr, formatted, command, ctx, config),
     };
   }
 
@@ -355,15 +338,7 @@ async function handleApprove(
   });
   const formatted = formatExecOutput(execResult, request.command);
   return {
-    text: applyPaging(
-      sessionMgr,
-      formatted,
-      request.command,
-      execResult.durationMs,
-      execResult.exitCode,
-      ctx,
-      config,
-    ),
+    text: applyPaging(sessionMgr, formatted, request.command, ctx, config),
   };
 }
 
