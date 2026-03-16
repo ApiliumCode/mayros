@@ -17,6 +17,8 @@ import {
   loadCortexSubjects,
   loadCortexPredicates,
 } from "./controllers/cortex.ts";
+import { loadMcpDashboard } from "./controllers/mcp.ts";
+import { loadKaneruDashboard } from "./controllers/kaneru.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronStatus } from "./controllers/cron.ts";
 import { loadDebug } from "./controllers/debug.ts";
@@ -27,6 +29,7 @@ import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { loadSkills } from "./controllers/skills.ts";
+import { loadUsage } from "./controllers/usage.ts";
 import {
   inferBasePathFromPathname,
   normalizeBasePath,
@@ -251,6 +254,15 @@ export async function refreshActiveTab(host: SettingsHost) {
     void loadCortexTriples(host as unknown as MayrosApp);
     void loadCortexSubjects(host as unknown as MayrosApp);
     void loadCortexPredicates(host as unknown as MayrosApp);
+  }
+  if (host.tab === "mcp") {
+    await loadMcpDashboard(host as unknown as MayrosApp);
+  }
+  if (host.tab === "kaneru") {
+    await loadKaneruDashboard(host as unknown as MayrosApp);
+  }
+  if (host.tab === "usage") {
+    await loadUsage(host as unknown as MayrosApp);
   }
   if (host.tab === "logs") {
     host.logsAtBottom = true;

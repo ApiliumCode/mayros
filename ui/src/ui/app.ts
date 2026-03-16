@@ -58,6 +58,8 @@ import type {
   CortexBrowseFilter,
   TripleEntry,
 } from "./controllers/cortex.ts";
+import type { McpDashboardResponse } from "./controllers/mcp.ts";
+import type { KaneruDashboardResponse } from "./controllers/kaneru.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
@@ -213,6 +215,14 @@ export class MayrosApp extends LitElement {
   @state() presenceEntries: PresenceEntry[] = [];
   @state() presenceError: string | null = null;
   @state() presenceStatus: string | null = null;
+
+  @state() mcpLoading = false;
+  @state() mcpError: string | null = null;
+  @state() mcpDashboard: McpDashboardResponse | null = null;
+
+  @state() kaneruLoading = false;
+  @state() kaneruError: string | null = null;
+  @state() kaneruDashboard: KaneruDashboardResponse | null = null;
 
   @state() cortexLoading = false;
   @state() cortexStatus: CortexStatusResponse | null = null;

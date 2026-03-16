@@ -36,6 +36,8 @@ export const en: TranslationMap = {
     debug: "Debug",
     logs: "Logs",
     cortex: "Cortex",
+    mcp: "MCP",
+    kaneru: "Kaneru",
   },
   subtitles: {
     agents: "Manage agent workspaces, tools, and identities.",
@@ -52,6 +54,8 @@ export const en: TranslationMap = {
     debug: "Gateway snapshots, events, and manual RPC calls.",
     logs: "Live tail of the gateway file logs.",
     cortex: "Browse the knowledge graph: triples, subjects, and predicates.",
+    mcp: "MCP server metrics, tool usage, and connection status.",
+    kaneru: "Multi-agent squads, Q-learning routing, and consensus decisions.",
   },
   overview: {
     access: {

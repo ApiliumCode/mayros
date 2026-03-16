@@ -36,6 +36,8 @@ export const zh_CN: TranslationMap = {
     debug: "调试",
     logs: "日志",
     cortex: "Cortex",
+    mcp: "MCP",
+    kaneru: "Kaneru",
   },
   subtitles: {
     agents: "管理代理工作区、工具和身份。",
@@ -52,6 +54,8 @@ export const zh_CN: TranslationMap = {
     debug: "网关快照、事件和手动 RPC 调用。",
     logs: "网关文件日志的实时追踪。",
     cortex: "浏览知识图谱：三元组、主体和谓词。",
+    mcp: "MCP 服务器指标、工具使用情况和连接状态。",
+    kaneru: "多代理小队、Q-learning 路由和共识决策。",
   },
   overview: {
     access: {

@@ -14,6 +14,8 @@ import type {
   CortexBrowseFilter,
   TripleEntry,
 } from "./controllers/cortex.ts";
+import type { McpDashboardResponse } from "./controllers/mcp.ts";
+import type { KaneruDashboardResponse } from "./controllers/kaneru.ts";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
@@ -129,6 +131,12 @@ export type AppViewState = {
   presenceEntries: PresenceEntry[];
   presenceError: string | null;
   presenceStatus: string | null;
+  mcpLoading: boolean;
+  mcpError: string | null;
+  mcpDashboard: McpDashboardResponse | null;
+  kaneruLoading: boolean;
+  kaneruError: string | null;
+  kaneruDashboard: KaneruDashboardResponse | null;
   cortexLoading: boolean;
   cortexStatus: CortexStatusResponse | null;
   cortexError: string | null;

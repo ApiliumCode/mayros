@@ -73,6 +73,10 @@ import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderCortex } from "./views/cortex.ts";
+import { renderMcpDashboard } from "./views/mcp.ts";
+import { loadMcpDashboard } from "./controllers/mcp.ts";
+import { renderKaneruDashboard } from "./views/kaneru.ts";
+import { loadKaneruDashboard } from "./controllers/kaneru.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -322,6 +326,7 @@ export function renderApp(state: AppViewState) {
                   state.sessionsFilterLimit = next.limit;
                   state.sessionsIncludeGlobal = next.includeGlobal;
                   state.sessionsIncludeUnknown = next.includeUnknown;
+                  void loadSessions(state);
                 },
                 onRefresh: () => loadSessions(state),
                 onPatch: (key, patch) => patchSession(state, key, patch),
@@ -999,6 +1004,28 @@ export function renderApp(state: AppViewState) {
                 },
                 onPageChange: (offset) => void loadCortexTriples(state, { offset }),
                 onReconnect: () => void reconnectCortex(state),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "mcp"
+            ? renderMcpDashboard({
+                loading: state.mcpLoading,
+                error: state.mcpError,
+                dashboard: state.mcpDashboard,
+                onRefresh: () => void loadMcpDashboard(state),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "kaneru"
+            ? renderKaneruDashboard({
+                loading: state.kaneruLoading,
+                error: state.kaneruError,
+                dashboard: state.kaneruDashboard,
+                onRefresh: () => void loadKaneruDashboard(state),
               })
             : nothing
         }
