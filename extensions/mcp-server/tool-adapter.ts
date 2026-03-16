@@ -9,6 +9,7 @@
  */
 
 import type { McpToolDef, McpToolResult } from "./protocol.js";
+import type { McpMetricsCollector } from "./metrics-collector.js";
 
 // ============================================================================
 // Types
@@ -90,6 +91,42 @@ export function typeBoxToJsonSchema(schema: unknown): Record<string, unknown> {
 // Tool Adapter
 // ============================================================================
 
+/** Substrings that signal a key may contain sensitive data. */
+const SENSITIVE_SUBSTRINGS = [
+  "token",
+  "secret",
+  "password",
+  "apikey",
+  "api_key",
+  "credential",
+  "private_key",
+  "privatekey",
+  "passphrase",
+  "authorization",
+  "bearer",
+  "cookie",
+  "jwt",
+];
+
+/** Check if a key name likely holds sensitive data (substring match, case-insensitive). */
+function isSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return SENSITIVE_SUBSTRINGS.some((sub) => lower.includes(sub));
+}
+
+/** Serialize tool args for metrics, redacting sensitive fields. */
+function safeSerializeParams(args: Record<string, unknown>): string {
+  const redacted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (isSensitiveKey(key)) {
+      redacted[key] = "[REDACTED]";
+    } else {
+      redacted[key] = value;
+    }
+  }
+  return JSON.stringify(redacted);
+}
+
 /** Tool names to exclude from MCP exposure (internal-only tools). */
 const EXCLUDED_TOOLS = new Set([
   "mcp_connect",
@@ -100,6 +137,12 @@ const EXCLUDED_TOOLS = new Set([
 
 export class McpToolAdapter {
   private tools = new Map<string, AdaptableTool>();
+  private metrics: McpMetricsCollector | null = null;
+
+  /** Wire a metrics collector for tool call instrumentation. */
+  setMetrics(collector: McpMetricsCollector): void {
+    this.metrics = collector;
+  }
 
   /** Register tools from the Mayros plugin registry. */
   registerTools(tools: AdaptableTool[]): void {
@@ -144,6 +187,8 @@ export class McpToolAdapter {
       };
     }
 
+    const start = Date.now();
+    let isError = false;
     try {
       const callId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const result = await tool.execute(callId, args);
@@ -170,10 +215,19 @@ export class McpToolAdapter {
 
       return { content };
     } catch (err) {
+      isError = true;
       return {
         content: [{ type: "text", text: `Tool execution failed: ${String(err)}` }],
         isError: true,
       };
+    } finally {
+      try {
+        const durationMs = Date.now() - start;
+        const paramsStr = Object.keys(args).length > 0 ? safeSerializeParams(args) : undefined;
+        this.metrics?.recordCall(name, durationMs, isError, paramsStr);
+      } catch {
+        // Metrics failure must never break tool responses
+      }
     }
   }
 }
