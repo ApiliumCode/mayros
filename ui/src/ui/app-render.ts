@@ -77,6 +77,8 @@ import { renderMcpDashboard } from "./views/mcp.ts";
 import { loadMcpDashboard } from "./controllers/mcp.ts";
 import { renderKaneruDashboard } from "./views/kaneru.ts";
 import { loadKaneruDashboard } from "./controllers/kaneru.ts";
+import { renderVenturesDashboard } from "./views/ventures.ts";
+import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -1015,6 +1017,17 @@ export function renderApp(state: AppViewState) {
                 error: state.mcpError,
                 dashboard: state.mcpDashboard,
                 onRefresh: () => void loadMcpDashboard(state),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "ventures"
+            ? renderVenturesDashboard({
+                loading: state.venturesLoading,
+                error: state.venturesError,
+                dashboard: state.venturesDashboard,
+                onRefresh: () => void loadVenturesDashboard(state),
               })
             : nothing
         }

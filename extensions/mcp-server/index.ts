@@ -225,6 +225,12 @@ const mcpServerPlugin = {
             ...createKaneruTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
           );
 
+          // Venture tools — ventures, missions, fuel, pulse
+          const { createVentureTools } = await import("./venture-tools.js");
+          mcpTools.push(
+            ...createVentureTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
+          );
+
           // Combine: dedicated MCP tools first, then auto-discovered plugin tools
           const allTools = [...mcpTools, ...pluginTools];
 

@@ -37,6 +37,7 @@ export const zh_TW: TranslationMap = {
     logs: "日誌",
     cortex: "Cortex",
     mcp: "MCP",
+    ventures: "Ventures",
     kaneru: "Kaneru",
   },
   subtitles: {
@@ -55,6 +56,7 @@ export const zh_TW: TranslationMap = {
     logs: "網關文件日志的實時追蹤。",
     cortex: "瀏覽知識圖譜：三元組、主體和謂詞。",
     mcp: "MCP 伺服器指標、工具使用情況和連接狀態。",
+    ventures: "風險項目、任務板和燃料預算。",
     kaneru: "多代理小隊、Q-learning 路由和共識決策。",
   },
   overview: {

@@ -2,7 +2,8 @@
  * `mayros kaneru` — Kaneru multi-agent coordination CLI.
  *
  * Provides access to squad management, mission routing, consensus,
- * delegation, knowledge fusion, and the Kaneru dashboard.
+ * delegation, knowledge fusion, the Kaneru dashboard, and venture-layer
+ * management (ventures, missions, pulse, fuel).
  *
  * Subcommands:
  *   squad create  — Create a new squad of agents
@@ -14,6 +15,17 @@
  *   route         — Route a mission to the best agent via Q-learning
  *   fuse          — Merge knowledge between namespaces
  *   dashboard     — Show Kaneru dashboard summary
+ *   venture create  — Create a new venture
+ *   venture list    — List all ventures
+ *   venture status  — Get venture status
+ *   mission create     — Create a mission within a venture
+ *   mission list       — List missions for a venture
+ *   mission claim      — Claim a mission for an agent run
+ *   mission transition — Transition a mission to a new status
+ *   pulse register  — Register a pulse schedule for an agent
+ *   pulse trigger   — Trigger a pulse event for an agent
+ *   pulse list      — List pulse schedules for an agent
+ *   fuel summary    — Show fuel consumption summary for a venture
  */
 
 import type { Command } from "commander";
@@ -35,14 +47,61 @@ function handleError(err: unknown): void {
   process.exitCode = 1;
 }
 
+/** Lazy-load venture-layer managers to avoid heavy imports at CLI parse time. */
+async function createVentureManagers(opts: {
+  cortexHost?: string;
+  cortexPort?: string;
+  cortexToken?: string;
+}) {
+  let CortexClient: typeof import("../../extensions/shared/cortex-client.js").CortexClient;
+  let VentureManager: typeof import("../../extensions/kaneru/venture.js").VentureManager;
+  let MissionManager: typeof import("../../extensions/kaneru/mission.js").MissionManager;
+  let ChainManager: typeof import("../../extensions/kaneru/chain.js").ChainManager;
+  let FuelController: typeof import("../../extensions/kaneru/fuel.js").FuelController;
+  let PulseScheduler: typeof import("../../extensions/kaneru/pulse.js").PulseScheduler;
+  try {
+    ({ CortexClient } = await import("../../extensions/shared/cortex-client.js"));
+    ({ VentureManager } = await import("../../extensions/kaneru/venture.js"));
+    ({ MissionManager } = await import("../../extensions/kaneru/mission.js"));
+    ({ ChainManager } = await import("../../extensions/kaneru/chain.js"));
+    ({ FuelController } = await import("../../extensions/kaneru/fuel.js"));
+    ({ PulseScheduler } = await import("../../extensions/kaneru/pulse.js"));
+  } catch {
+    throw new Error("Failed to load Kaneru venture modules. Run `pnpm build` first.");
+  }
+
+  const host = opts.cortexHost ?? "127.0.0.1";
+  const port = typeof opts.cortexPort === "string" ? parseInt(opts.cortexPort, 10) : 19090;
+  const client = new CortexClient({ host, port, authToken: opts.cortexToken });
+  const ns = "mayros";
+  const vm = new VentureManager(client, ns);
+
+  return {
+    client,
+    venture: vm,
+    mission: new MissionManager(client, ns, vm),
+    chain: new ChainManager(client, ns),
+    fuel: new FuelController(client, ns),
+    pulse: new PulseScheduler(client, ns),
+    destroy() {
+      client.destroy();
+    },
+  };
+}
+
 /** Lazy-load KaneruFacade to avoid heavy imports at CLI parse time. */
 async function createFacade(opts: {
   cortexHost?: string;
   cortexPort?: string;
   cortexToken?: string;
 }) {
-  const { KaneruFacade } = await import("../../extensions/agent-mesh/kaneru-facade.js");
-  return new KaneruFacade({
+  let mod: { KaneruFacade: typeof import("../../extensions/agent-mesh/kaneru-facade.js").KaneruFacade };
+  try {
+    mod = await import("../../extensions/agent-mesh/kaneru-facade.js");
+  } catch {
+    throw new Error("Failed to load Kaneru module. Run `pnpm build` first.");
+  }
+  return new mod.KaneruFacade({
     host: opts.cortexHost,
     port: opts.cortexPort,
     token: opts.cortexToken,
@@ -333,6 +392,334 @@ export function registerKaneruCli(program: Command) {
         handleError(err);
       } finally {
         facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru venture
+  // ------------------------------------------------------------------
+  const venture = kaneru.command("venture").description("Manage Kaneru ventures");
+
+  // mayros kaneru venture create
+  venture
+    .command("create")
+    .description("Create a new venture")
+    .requiredOption("--name <name>", "Venture name")
+    .requiredOption("--prefix <prefix>", "Short prefix for the venture")
+    .requiredOption("--directive <text>", "Venture directive / objective")
+    .option("--fuel-limit <cents>", "Fuel limit in cents")
+    .action(async (opts: { name: string; prefix: string; directive: string; fuelLimit?: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const v = await mgrs.venture.create({
+          name: opts.name,
+          prefix: opts.prefix,
+          directive: opts.directive,
+          fuelLimit: opts.fuelLimit ? parseInt(opts.fuelLimit, 10) : undefined,
+        });
+        console.log(`Venture created: ${v.id}`);
+        console.log(`  Name: ${v.name}`);
+        console.log(`  Prefix: ${v.prefix}`);
+        console.log(`  Directive: ${v.directive}`);
+        if (v.fuelLimit !== undefined) {
+          console.log(`  Fuel limit: ${v.fuelLimit} cents`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru venture list
+  venture
+    .command("list")
+    .description("List all ventures")
+    .action(async () => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const ventures = await mgrs.venture.list();
+        if (ventures.length === 0) {
+          console.log("No ventures found.");
+          return;
+        }
+        console.log(`Ventures (${ventures.length}):\n`);
+        for (const v of ventures) {
+          console.log(`  ${v.id}  ${v.name}  [${v.prefix}]  status: ${v.status}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru venture status
+  venture
+    .command("status")
+    .description("Get venture status")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const v = await mgrs.venture.get(opts.venture);
+        if (!v) {
+          console.log("Venture not found.");
+          return;
+        }
+        console.log(`Venture: ${v.name} (${v.id})`);
+        console.log(`  Prefix: ${v.prefix}`);
+        console.log(`  Status: ${v.status}`);
+        console.log(`  Directive: ${v.directive}`);
+        console.log(`  Fuel limit: ${v.fuelLimit} cents`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru mission
+  // ------------------------------------------------------------------
+  const mission = kaneru.command("mission").description("Manage Kaneru missions within ventures");
+
+  // mayros kaneru mission create
+  mission
+    .command("create")
+    .description("Create a mission within a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .requiredOption("--title <text>", "Mission title")
+    .option("--priority <p>", "Mission priority (e.g., low, normal, high, critical)")
+    .option("--directive <did>", "Directive ID to associate with")
+    .action(
+      async (opts: { venture: string; title: string; priority?: string; directive?: string }) => {
+        const parent = kaneru.opts();
+        const mgrs = await createVentureManagers(parent);
+        try {
+          const m = await mgrs.mission.create({
+            ventureId: opts.venture,
+            title: opts.title,
+            priority: opts.priority as "medium" | undefined,
+            directiveId: opts.directive,
+          });
+          console.log(`Mission created: ${m.id}`);
+          console.log(`  Title: ${m.title}`);
+          console.log(`  Venture: ${m.ventureId}`);
+          console.log(`  Status: ${m.status}`);
+          if (m.priority) {
+            console.log(`  Priority: ${m.priority}`);
+          }
+        } catch (err) {
+          handleError(err);
+        } finally {
+          mgrs.destroy();
+        }
+      },
+    );
+
+  // mayros kaneru mission list
+  mission
+    .command("list")
+    .description("List missions for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .option("--status <s>", "Filter by status")
+    .action(async (opts: { venture: string; status?: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const missions = await mgrs.mission.list(opts.venture, opts.status ? { status: opts.status as "queued" } : undefined);
+        if (missions.length === 0) {
+          console.log("No missions found.");
+          return;
+        }
+        console.log(`Missions (${missions.length}):\n`);
+        for (const m of missions) {
+          console.log(`  ${m.id}  ${m.title}  [${m.status}]  priority: ${m.priority ?? "—"}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru mission claim
+  mission
+    .command("claim")
+    .description("Claim a mission for an agent run")
+    .requiredOption("--mission <id>", "Mission ID")
+    .requiredOption("--agent <aid>", "Agent ID claiming the mission")
+    .requiredOption("--run <rid>", "Run ID for the claim")
+    .action(async (opts: { mission: string; agent: string; run: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const result = await mgrs.mission.claim(opts.mission, opts.agent, opts.run);
+        if (!result.ok) {
+          console.error(`Claim failed: ${result.reason}`);
+          process.exitCode = 1;
+          return;
+        }
+        console.log(`Mission claimed: ${result.mission.id}`);
+        console.log(`  Identifier: ${result.mission.identifier}`);
+        console.log(`  Agent: ${result.mission.claimedBy}`);
+        console.log(`  Status: ${result.mission.status}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru mission transition
+  mission
+    .command("transition")
+    .description("Transition a mission to a new status")
+    .requiredOption("--mission <id>", "Mission ID")
+    .requiredOption("--status <s>", "New status")
+    .requiredOption("--run <rid>", "Run ID performing the transition")
+    .action(async (opts: { mission: string; status: string; run: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const result = await mgrs.mission.transition(opts.mission, opts.status as "queued", opts.run);
+        console.log(`Mission transitioned: ${result.id}`);
+        console.log(`  Identifier: ${result.identifier}`);
+        console.log(`  New status: ${result.status}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru pulse
+  // ------------------------------------------------------------------
+  const pulse = kaneru.command("pulse").description("Manage Kaneru agent pulse schedules");
+
+  // mayros kaneru pulse register
+  pulse
+    .command("register")
+    .description("Register a pulse schedule for an agent")
+    .requiredOption("--agent <id>", "Agent ID")
+    .requiredOption("--venture <vid>", "Venture ID")
+    .requiredOption("--interval <interval>", "Pulse interval (e.g., 30s, 5m, 1h)")
+    .option("--triggers <t1,t2>", "Comma-separated trigger types")
+    .action(
+      async (opts: { agent: string; venture: string; interval: string; triggers?: string }) => {
+        const parent = kaneru.opts();
+        const mgrs = await createVentureManagers(parent);
+        try {
+          const triggerList = opts.triggers
+            ?.split(",")
+            .map((t) => t.trim())
+            .filter(Boolean) as import("../../extensions/kaneru/pulse.js").PulseTrigger[] | undefined;
+          await mgrs.pulse.register(opts.agent, opts.venture, {
+            interval: opts.interval,
+            triggers: triggerList ?? ["timer"],
+          });
+          console.log(`Pulse registered:`);
+          console.log(`  Agent: ${opts.agent}`);
+          console.log(`  Venture: ${opts.venture}`);
+          console.log(`  Interval: ${opts.interval}`);
+          if (triggerList && triggerList.length > 0) {
+            console.log(`  Triggers: ${triggerList.join(", ")}`);
+          }
+        } catch (err) {
+          handleError(err);
+        } finally {
+          mgrs.destroy();
+        }
+      },
+    );
+
+  // mayros kaneru pulse trigger
+  pulse
+    .command("trigger")
+    .description("Trigger a pulse event for an agent")
+    .requiredOption("--agent <id>", "Agent ID")
+    .requiredOption("--venture <vid>", "Venture ID")
+    .requiredOption("--trigger <type>", "Trigger type to fire")
+    .action(async (opts: { agent: string; venture: string; trigger: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const result = await mgrs.pulse.trigger(opts.agent, opts.venture, opts.trigger as "timer");
+        console.log(`Pulse triggered:`);
+        console.log(`  ID: ${result.id}`);
+        console.log(`  Agent: ${result.agentId}`);
+        console.log(`  Trigger: ${result.trigger}`);
+        console.log(`  Status: ${result.status}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru pulse list
+  pulse
+    .command("list")
+    .description("List pulse schedules for an agent")
+    .requiredOption("--agent <id>", "Agent ID")
+    .action(async (opts: { agent: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const queued = await mgrs.pulse.listQueued(opts.agent);
+        if (queued.length === 0) {
+          console.log("No queued pulses found.");
+          return;
+        }
+        console.log(`Queued pulses (${queued.length}):\n`);
+        for (const p of queued) {
+          console.log(`  ${p.id}  trigger: ${p.trigger}  coalesced: ${p.coalescedCount}  requested: ${p.requestedAt}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru fuel
+  // ------------------------------------------------------------------
+  const fuel = kaneru.command("fuel").description("Manage Kaneru fuel consumption");
+
+  // mayros kaneru fuel summary
+  fuel
+    .command("summary")
+    .description("Show fuel consumption summary for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const v = await mgrs.venture.get(opts.venture);
+        const fuelLimit = v?.fuelLimit ?? 0;
+        const summary = await mgrs.fuel.summary(opts.venture, fuelLimit);
+        console.log(`Fuel Summary — Venture: ${summary.ventureId}`);
+        console.log(`${"=".repeat(40)}`);
+        console.log(`  Total spent: ${summary.totalCents} cents`);
+        console.log(`  Fuel limit: ${summary.fuelLimit || "unlimited"}`);
+        console.log(`  Remaining: ${summary.fuelLimit ? `${summary.remaining} cents` : "unlimited"}`);
+        console.log(`  Burn rate: ${summary.burnRate} cents/hour`);
+        if (summary.byAgent.length > 0) {
+          console.log(`\n  By agent:`);
+          for (const a of summary.byAgent) {
+            console.log(`    ${a.agentId}: ${a.totalCents} cents`);
+          }
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
       }
     });
 }

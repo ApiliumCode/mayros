@@ -14,6 +14,7 @@ export const TAB_GROUPS = [
       "cron",
       "cortex",
       "mcp",
+      "ventures",
       "kaneru",
     ],
   },
@@ -31,6 +32,7 @@ export type Tab =
   | "cron"
   | "cortex"
   | "mcp"
+  | "ventures"
   | "kaneru"
   | "skills"
   | "nodes"
@@ -49,6 +51,7 @@ const TAB_PATHS: Record<Tab, string> = {
   cron: "/cron",
   cortex: "/cortex",
   mcp: "/mcp",
+  ventures: "/ventures",
   kaneru: "/kaneru",
   skills: "/skills",
   nodes: "/nodes",
@@ -161,6 +164,8 @@ export function iconForTab(tab: Tab): IconName {
       return "brain";
     case "mcp":
       return "radio";
+    case "ventures":
+      return "globe";
     case "kaneru":
       return "zap";
     case "skills":

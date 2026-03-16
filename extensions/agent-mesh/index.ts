@@ -1970,13 +1970,16 @@ const agentMeshPlugin = {
     api.registerGatewayMethod("kaneru.dashboard", async ({ respond }) => {
       try {
         const summary = await dashboard.getSummary();
-        const routeTable = taskRouter?.getRouteTable?.() ?? [];
+        const fullTable = taskRouter?.getRouteTable?.() ?? [];
+        const routeTable = fullTable
+          .sort((a, b) => b.qValue - a.qValue)
+          .slice(0, 100);
         respond(true, {
           squads: summary.teams.map((t) => ({
-            id: t.id,
-            name: t.name,
-            status: t.status,
-            memberCount: t.memberCount,
+            id: t.teamId,
+            name: t.teamName,
+            status: t.teamStatus,
+            memberCount: t.members.length,
             updatedAt: t.updatedAt,
           })),
           routeTable,
@@ -1984,6 +1987,86 @@ const agentMeshPlugin = {
             activeSquads: summary.activeTeams,
             qTableSize: taskRouter?.size() ?? 0,
             epsilon: taskRouter?.getEpsilon() ?? 0,
+          },
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
+    // Gateway Method — Ventures Dashboard
+    // ========================================================================
+
+    function countChainNodes(nodes: Array<{ children: Array<unknown> }>): number {
+      let count = 0;
+      for (const n of nodes) {
+        count += 1;
+        count += countChainNodes(n.children as Array<{ children: Array<unknown> }>);
+      }
+      return count;
+    }
+
+    api.registerGatewayMethod("ventures.dashboard", async ({ respond }) => {
+      try {
+        const { VentureManager } = await import("../kaneru/venture.js");
+        const { MissionManager } = await import("../kaneru/mission.js");
+        const { FuelController } = await import("../kaneru/fuel.js");
+        const { ChainManager } = await import("../kaneru/chain.js");
+
+        const vm = new VentureManager(client, ns);
+        const mm = new MissionManager(client, ns, vm);
+        const fc = new FuelController(client, ns);
+        const cm = new ChainManager(client, ns);
+
+        const ventures = await vm.list();
+        const venturesSummary = [];
+        const allMissions: Array<{ id: string; identifier: string; title: string; status: string; priority: string; claimedBy: string | null }> = [];
+
+        let totalFuelSpent = 0;
+        let activeMissions = 0;
+
+        // Cap at 20 ventures to limit round-trips
+        for (const v of ventures.slice(0, 20)) {
+          const missions = await mm.list(v.id, { limit: 50 });
+          const fuel = await fc.summary(v.id, v.fuelLimit);
+          const chain = await cm.getChain(v.id);
+
+          totalFuelSpent += fuel.totalCents;
+          const active = missions.filter((m) => m.status === "active").length;
+          activeMissions += active;
+
+          venturesSummary.push({
+            id: v.id,
+            name: v.name,
+            status: v.status,
+            prefix: v.prefix,
+            fuelLimit: v.fuelLimit,
+            fuelSpent: fuel.totalCents,
+            agentCount: countChainNodes(chain),
+            missionCount: missions.length,
+          });
+
+          // Reuse the missions we already loaded
+          for (const m of missions) {
+            allMissions.push({
+              id: m.id,
+              identifier: m.identifier,
+              title: m.title,
+              status: m.status,
+              priority: m.priority,
+              claimedBy: m.claimedBy,
+            });
+          }
+        }
+
+        respond(true, {
+          ventures: venturesSummary,
+          missions: allMissions.slice(0, 100),
+          stats: {
+            totalVentures: ventures.length,
+            activeMissions,
+            totalFuelSpent,
           },
         });
       } catch (err) {
