@@ -339,6 +339,17 @@ export class TaskRouter {
     return count;
   }
 
+  /** Export Q-table entries for dashboard visualization. */
+  getRouteTable(): Array<{ stateKey: string; agentId: string; qValue: number }> {
+    const entries: Array<{ stateKey: string; agentId: string; qValue: number }> = [];
+    for (const [stateKey, actions] of this.qTable) {
+      for (const [agentId, qValue] of actions) {
+        entries.push({ stateKey, agentId, qValue });
+      }
+    }
+    return entries;
+  }
+
   // ---------- Q-table operations ----------
 
   private getQ(state: string, action: string): number {

@@ -51,9 +51,9 @@ import { RaftLeader } from "./raft-leader.js";
 
 const agentMeshPlugin = {
   id: "agent-mesh",
-  name: "Agent Mesh",
+  name: "Kaneru",
   description:
-    "Multi-agent coordination mesh with shared namespaces, delegation, and knowledge fusion via AIngle Cortex",
+    "Kaneru — multi-agent coordination with squads, missions, consensus, and Q-learning routing via AIngle Cortex",
   kind: "coordination" as const,
   configSchema: agentMeshConfigSchema,
 
@@ -1962,6 +1962,34 @@ const agentMeshPlugin = {
       },
       { commands: ["mesh"] },
     );
+
+    // ========================================================================
+    // Gateway Method — Kaneru Dashboard
+    // ========================================================================
+
+    api.registerGatewayMethod("kaneru.dashboard", async ({ respond }) => {
+      try {
+        const summary = await dashboard.getSummary();
+        const routeTable = taskRouter?.getRouteTable?.() ?? [];
+        respond(true, {
+          squads: summary.teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            status: t.status,
+            memberCount: t.memberCount,
+            updatedAt: t.updatedAt,
+          })),
+          routeTable,
+          stats: {
+            activeSquads: summary.activeTeams,
+            qTableSize: taskRouter?.size() ?? 0,
+            epsilon: taskRouter?.getEpsilon() ?? 0,
+          },
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
 
     // ========================================================================
     // Service

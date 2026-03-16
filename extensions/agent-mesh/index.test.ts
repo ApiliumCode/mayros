@@ -244,7 +244,7 @@ describe("agent mesh plugin registration", () => {
     const { default: plugin } = await import("./index.js");
 
     expect(plugin.id).toBe("agent-mesh");
-    expect(plugin.name).toBe("Agent Mesh");
+    expect(plugin.name).toBe("Kaneru");
     expect(plugin.kind).toBe("coordination");
     expect(plugin.configSchema).toBeTruthy();
     expect(typeof plugin.register).toBe("function");

@@ -1,0 +1,259 @@
+/**
+ * Kaneru Facade.
+ *
+ * Unified entry point for CLI and MCP tools to access multi-agent
+ * coordination services (squads, consensus, routing, delegation,
+ * knowledge fusion, and mailbox).
+ *
+ * Wraps agent-mesh internals behind a clean interface using Kaneru
+ * terminology: squads, missions, directives, chain, fuel.
+ */
+
+import { CortexClient } from "../shared/cortex-client.js";
+import { NamespaceManager } from "./namespace-manager.js";
+import { KnowledgeFusion } from "./knowledge-fusion.js";
+import { TeamManager } from "./team-manager.js";
+import { AgentMailbox } from "./agent-mailbox.js";
+import { BackgroundTracker } from "./background-tracker.js";
+import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
+import { TaskRouter } from "./task-router.js";
+import { PerformanceTracker } from "./performance-tracker.js";
+import { ConsensusEngine } from "./consensus-engine.js";
+import { DelegationEngine } from "./delegation-engine.js";
+import { TeamDashboardService } from "./team-dashboard.js";
+import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export type KaneruFacadeOptions = {
+  host?: string;
+  port?: number | string;
+  token?: string;
+  namespace?: string;
+};
+
+export type SquadCreateOptions = {
+  name: string;
+  agents: Array<{ agentId: string; role: string; task?: string }>;
+  strategy?: MergeStrategy;
+};
+
+export type RoutingResult = {
+  agentId: string;
+  confidence: number;
+  taskType: string;
+  complexity: string;
+  domain: string;
+  routingId: string;
+};
+
+export type KaneruDashboardData = {
+  squads: Array<{
+    id: string;
+    name: string;
+    status: string;
+    memberCount: number;
+    updatedAt: string;
+  }>;
+  routeTable: Array<{
+    stateKey: string;
+    agentId: string;
+    qValue: number;
+  }>;
+  stats: {
+    activeSquads: number;
+    qTableSize: number;
+    epsilon: number;
+  };
+};
+
+// ============================================================================
+// Facade
+// ============================================================================
+
+export class KaneruFacade {
+  private readonly client: CortexClient;
+  private readonly ns: string;
+  private readonly nsMgr: NamespaceManager;
+  private readonly fusion: KnowledgeFusion;
+  private readonly teamMgr: TeamManager;
+  private readonly mailbox: AgentMailbox;
+  private readonly bgTracker: BackgroundTracker;
+  private readonly perfTracker: PerformanceTracker;
+  private readonly taskRouter: TaskRouter;
+  private readonly consensus: ConsensusEngine;
+  private readonly delegation: DelegationEngine;
+  private readonly orchestrator: WorkflowOrchestrator;
+  private readonly dashboard: TeamDashboardService;
+
+  constructor(opts: KaneruFacadeOptions) {
+    const host = opts.host ?? "127.0.0.1";
+    const port = typeof opts.port === "string" ? parseInt(opts.port, 10) : (opts.port ?? 19090);
+    this.ns = opts.namespace ?? "mayros";
+
+    this.client = new CortexClient({
+      host,
+      port,
+      authToken: opts.token,
+    });
+
+    this.nsMgr = new NamespaceManager(this.client, this.ns, 100);
+    this.fusion = new KnowledgeFusion(this.client, this.ns);
+    this.teamMgr = new TeamManager(this.client, this.ns, this.nsMgr, this.fusion, {
+      maxTeamSize: 20,
+      defaultStrategy: "additive",
+      workflowTimeout: 600_000,
+    });
+    this.mailbox = new AgentMailbox(this.client, this.ns);
+    this.bgTracker = new BackgroundTracker(this.client, this.ns);
+    this.perfTracker = new PerformanceTracker(this.client, this.ns);
+    this.taskRouter = new TaskRouter(this.client, this.ns, this.perfTracker);
+    this.consensus = new ConsensusEngine(this.client, this.ns, this.perfTracker);
+    this.delegation = new DelegationEngine(this.client, this.ns, this.nsMgr);
+    this.orchestrator = new WorkflowOrchestrator(
+      this.client,
+      this.ns,
+      this.teamMgr,
+      this.fusion,
+      this.nsMgr,
+      this.mailbox,
+      this.bgTracker,
+      undefined,
+      this.taskRouter,
+      this.consensus,
+      this.perfTracker,
+    );
+    this.dashboard = new TeamDashboardService(this.teamMgr, this.mailbox, null, this.ns);
+  }
+
+  /** Create a squad (team) of agents for coordinated missions. */
+  async squadCreate(opts: SquadCreateOptions) {
+    return this.teamMgr.createTeam({
+      name: opts.name,
+      members: opts.agents.map((a) => ({
+        agentId: a.agentId,
+        role: a.role,
+        task: a.task ?? "",
+      })),
+      strategy: opts.strategy ?? "additive",
+    });
+  }
+
+  /** Start a workflow run on a squad. */
+  async squadRun(squadId: string, mission: string) {
+    return this.orchestrator.startWorkflow({
+      workflowName: mission,
+      config: { squadId },
+    });
+  }
+
+  /** Get squad status. */
+  async squadStatus(squadId: string) {
+    return this.teamMgr.getTeam(squadId);
+  }
+
+  /** List all squads. */
+  async squadList() {
+    return this.teamMgr.listTeams();
+  }
+
+  /** Delegate a mission from one agent to another. */
+  async delegate(from: string, to: string, mission: string) {
+    const ctx = await this.delegation.prepareContext(mission, from);
+    this.delegation.injectContext(to, ctx);
+    return ctx;
+  }
+
+  /** Run consensus on a question across a squad. */
+  async consensusResolve(opts: {
+    squadId: string;
+    question: string;
+    strategy?: ConsensusStrategy;
+  }) {
+    const squad = await this.teamMgr.getTeam(opts.squadId);
+    if (!squad) {
+      throw new Error(`Squad not found: ${opts.squadId}`);
+    }
+    const agentIds = squad.members.map((m) => m.agentId);
+    return this.consensus.resolve({
+      id: `consensus-${Date.now()}`,
+      conflicts: [
+        {
+          subject: opts.question,
+          predicate: `${this.ns}:consensus:question`,
+          values: ["approve", "reject"],
+          namespaces: agentIds.map((id) => `${this.ns}:agent:${id}`),
+        },
+      ],
+      agentIds,
+      strategy: opts.strategy ?? "weighted",
+    });
+  }
+
+  /** Route a mission to the best agent via Q-learning. */
+  async route(mission: string, available?: string[], path?: string): Promise<RoutingResult> {
+    const agents = available ?? [];
+    const decision = await this.taskRouter.selectAgent(mission, agents, path);
+    return {
+      agentId: decision.agentId,
+      confidence: decision.confidence,
+      taskType: decision.classification.taskType,
+      complexity: decision.classification.complexity,
+      domain: decision.classification.domain,
+      routingId: decision.routingId,
+    };
+  }
+
+  /** Merge knowledge between two namespaces. */
+  async fuse(sourceNs: string, targetNs: string, strategy?: MergeStrategy) {
+    return this.fusion.merge(sourceNs, targetNs, strategy ?? "additive");
+  }
+
+  /** Send a message between agents. */
+  async mailboxSend(from: string, to: string, content: string, type?: string) {
+    return this.mailbox.send({
+      from,
+      to,
+      content,
+      type: (type ?? "info") as "task" | "result" | "info" | "error",
+    });
+  }
+
+  /** Check an agent's inbox. */
+  async mailboxCheck(agentId: string) {
+    return this.mailbox.inbox({ recipientId: agentId, status: "unread" });
+  }
+
+  /** Get agent mailbox stats. */
+  async mailboxStats(agentId: string) {
+    return this.mailbox.stats(agentId);
+  }
+
+  /** Get dashboard summary for all squads. */
+  async getDashboard(): Promise<KaneruDashboardData> {
+    const summary = await this.dashboard.getSummary();
+    const routeTable = this.taskRouter.getRouteTable?.() ?? [];
+    return {
+      squads: summary.teams.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        memberCount: t.memberCount,
+        updatedAt: t.updatedAt,
+      })),
+      routeTable,
+      stats: {
+        activeSquads: summary.activeTeams,
+        qTableSize: this.taskRouter.size(),
+        epsilon: this.taskRouter.getEpsilon(),
+      },
+    };
+  }
+
+  /** Release all resources. */
+  destroy(): void {
+    this.client.destroy();
+  }
+}
