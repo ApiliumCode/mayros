@@ -110,7 +110,7 @@ function getPlatformKey(): string {
 
 function getAssetPattern(): string {
   const platform = getPlatformKey();
-  const ext = process.platform === "win32" ? ".zip" : ".tar.gz";
+  const ext = process.platform === "win32" ? ".exe.zip" : ".tar.gz";
   return `aingle-cortex-${platform}${ext}`;
 }
 

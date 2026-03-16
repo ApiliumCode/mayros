@@ -39,7 +39,7 @@ function parseBaseUrl(url: string): { host: string; port: number } {
   }
 }
 
-export function createKaneruTools(deps: KaneruToolDeps): AdaptableTool[] {
+export function createKaneruTools(deps: KaneruToolDeps): AdaptableTool[] & { destroy(): void } {
   let facade: KaneruFacade | null = null;
 
   function getFacade(): KaneruFacade {
@@ -55,7 +55,7 @@ export function createKaneruTools(deps: KaneruToolDeps): AdaptableTool[] {
     return facade;
   }
 
-  return [
+  const tools: AdaptableTool[] = [
     // ------------------------------------------------------------------
     // 1. kaneru_squad_create
     // ------------------------------------------------------------------
@@ -406,4 +406,13 @@ export function createKaneruTools(deps: KaneruToolDeps): AdaptableTool[] {
       },
     },
   ];
+
+  return Object.assign(tools, {
+    destroy() {
+      if (facade) {
+        facade.destroy();
+        facade = null;
+      }
+    },
+  });
 }

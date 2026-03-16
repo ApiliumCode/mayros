@@ -21,6 +21,7 @@ import { PerformanceTracker } from "./performance-tracker.js";
 import { ConsensusEngine } from "./consensus-engine.js";
 import { DelegationEngine } from "./delegation-engine.js";
 import { TeamDashboardService } from "./team-dashboard.js";
+import { randomUUID } from "node:crypto";
 import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
 
 // ============================================================================
@@ -178,7 +179,7 @@ export class KaneruFacade {
     }
     const agentIds = squad.members.map((m) => m.agentId);
     return this.consensus.resolve({
-      id: `consensus-${Date.now()}`,
+      id: `consensus-${randomUUID()}`,
       conflicts: [
         {
           subject: opts.question,
@@ -196,12 +197,14 @@ export class KaneruFacade {
   async route(mission: string, available?: string[], path?: string): Promise<RoutingResult> {
     const agents = available ?? [];
     const decision = await this.taskRouter.selectAgent(mission, agents, path);
+    // stateKey format is "taskType:complexity:domain" (empty when overridden/single agent)
+    const parts = decision.stateKey.split(":");
     return {
       agentId: decision.agentId,
       confidence: decision.confidence,
-      taskType: decision.classification.taskType,
-      complexity: decision.classification.complexity,
-      domain: decision.classification.domain,
+      taskType: parts[0] ?? "unknown",
+      complexity: parts[1] ?? "unknown",
+      domain: parts[2] ?? "unknown",
       routingId: decision.routingId,
     };
   }
@@ -223,7 +226,7 @@ export class KaneruFacade {
 
   /** Check an agent's inbox. */
   async mailboxCheck(agentId: string) {
-    return this.mailbox.inbox({ recipientId: agentId, status: "unread" });
+    return this.mailbox.inbox({ agent: agentId, status: "unread" });
   }
 
   /** Get agent mailbox stats. */
@@ -234,13 +237,16 @@ export class KaneruFacade {
   /** Get dashboard summary for all squads. */
   async getDashboard(): Promise<KaneruDashboardData> {
     const summary = await this.dashboard.getSummary();
-    const routeTable = this.taskRouter.getRouteTable?.() ?? [];
+    const fullTable = this.taskRouter.getRouteTable?.() ?? [];
+    const routeTable = fullTable
+      .sort((a, b) => b.qValue - a.qValue)
+      .slice(0, 100);
     return {
       squads: summary.teams.map((t) => ({
-        id: t.id,
-        name: t.name,
-        status: t.status,
-        memberCount: t.memberCount,
+        id: t.teamId,
+        name: t.teamName,
+        status: t.teamStatus,
+        memberCount: t.members.length,
         updatedAt: t.updatedAt,
       })),
       routeTable,
