@@ -21,6 +21,12 @@ import { PerformanceTracker } from "./performance-tracker.js";
 import { ConsensusEngine } from "./consensus-engine.js";
 import { DelegationEngine } from "./delegation-engine.js";
 import { TeamDashboardService } from "./team-dashboard.js";
+import { LearningProfileManager } from "../kaneru/learning-profiles.js";
+import type { MissionOutcome, LearningProfile } from "../kaneru/learning-profiles.js";
+import { DecisionHistory } from "../kaneru/decision-history.js";
+import type { DecisionRecord, DecisionContext, ConsensusResultLike } from "../kaneru/decision-history.js";
+import { KnowledgeTransferService } from "../kaneru/knowledge-transfer.js";
+import type { TransferResult } from "../kaneru/knowledge-transfer.js";
 import { randomUUID } from "node:crypto";
 import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
 
@@ -88,6 +94,9 @@ export class KaneruFacade {
   private readonly delegation: DelegationEngine;
   private readonly orchestrator: WorkflowOrchestrator;
   private readonly dashboard: TeamDashboardService;
+  private readonly learningProfiles: LearningProfileManager;
+  private readonly decisionHistory: DecisionHistory;
+  private readonly knowledgeTransfer: KnowledgeTransferService;
 
   constructor(opts: KaneruFacadeOptions) {
     const host = opts.host ?? "127.0.0.1";
@@ -127,6 +136,11 @@ export class KaneruFacade {
       this.perfTracker,
     );
     this.dashboard = new TeamDashboardService(this.teamMgr, this.mailbox, null, this.ns);
+    this.learningProfiles = new LearningProfileManager(this.client, this.ns);
+    this.decisionHistory = new DecisionHistory(this.client, this.ns);
+    this.knowledgeTransfer = new KnowledgeTransferService(
+      this.client, this.ns, this.fusion, this.nsMgr,
+    );
   }
 
   /** Create a squad (team) of agents for coordinated missions. */
@@ -232,6 +246,47 @@ export class KaneruFacade {
   /** Get agent mailbox stats. */
   async mailboxStats(agentId: string) {
     return this.mailbox.stats(agentId);
+  }
+
+  // ---- Learning Profiles ----
+
+  /** Record a mission outcome and update agent learning profile. */
+  async recordMissionOutcome(outcome: MissionOutcome): Promise<LearningProfile> {
+    return this.learningProfiles.recordOutcome(outcome);
+  }
+
+  /** Get all learning profiles for an agent. */
+  async getAgentExpertise(agentId: string): Promise<LearningProfile[]> {
+    return this.learningProfiles.getAgentProfiles(agentId);
+  }
+
+  /** Get top agents for a given domain and task type. */
+  async topAgentsFor(domain: string, taskType: string, limit?: number): Promise<LearningProfile[]> {
+    return this.learningProfiles.topAgents(domain, taskType, limit);
+  }
+
+  // ---- Knowledge Transfer ----
+
+  /** Transfer knowledge from agent's namespace to shared namespace. */
+  async transferKnowledge(agentId: string, missionId: string, squadId?: string): Promise<TransferResult> {
+    return this.knowledgeTransfer.transferOnComplete(agentId, missionId, squadId);
+  }
+
+  // ---- Decision History ----
+
+  /** Record a consensus result as a decision. */
+  async recordDecision(result: ConsensusResultLike, context?: DecisionContext): Promise<DecisionRecord> {
+    return this.decisionHistory.record(result, context);
+  }
+
+  /** Query decision history. */
+  async queryDecisions(opts?: { ventureId?: string; limit?: number }): Promise<DecisionRecord[]> {
+    return this.decisionHistory.query(opts);
+  }
+
+  /** Get human-readable explanation of a decision. */
+  async explainDecision(decisionId: string): Promise<string> {
+    return this.decisionHistory.explain(decisionId);
   }
 
   /** Get dashboard summary for all squads. */

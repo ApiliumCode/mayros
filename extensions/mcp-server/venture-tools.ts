@@ -1,8 +1,9 @@
 /**
  * MCP-friendly Kaneru venture tools.
  *
- * Exposes 8 tools for venture creation, mission lifecycle, fuel tracking,
- * and pulse scheduling via the venture layer managers.
+ * Exposes 12 tools for venture creation, mission lifecycle, fuel tracking,
+ * pulse scheduling, learning profiles, and decision history via the
+ * venture layer managers.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -13,6 +14,8 @@ import { VentureManager } from "../kaneru/venture.js";
 import { MissionManager } from "../kaneru/mission.js";
 import { FuelController } from "../kaneru/fuel.js";
 import { PulseScheduler } from "../kaneru/pulse.js";
+import { LearningProfileManager } from "../kaneru/learning-profiles.js";
+import { DecisionHistory } from "../kaneru/decision-history.js";
 import type { MissionStatus } from "../kaneru/mission.js";
 import type { PulseTrigger } from "../kaneru/pulse.js";
 
@@ -59,6 +62,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
   let missionManager: MissionManager | null = null;
   let fuelController: FuelController | null = null;
   let pulseScheduler: PulseScheduler | null = null;
+  let learningProfiles: LearningProfileManager | null = null;
+  let decisionHistory: DecisionHistory | null = null;
 
   function getClient(): CortexClient {
     if (!client) {
@@ -99,6 +104,20 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       pulseScheduler = new PulseScheduler(getClient(), getNs());
     }
     return pulseScheduler;
+  }
+
+  function getLearningProfiles(): LearningProfileManager {
+    if (!learningProfiles) {
+      learningProfiles = new LearningProfileManager(getClient(), getNs());
+    }
+    return learningProfiles;
+  }
+
+  function getDecisionHistory(): DecisionHistory {
+    if (!decisionHistory) {
+      decisionHistory = new DecisionHistory(getClient(), getNs());
+    }
+    return decisionHistory;
   }
 
   const tools: AdaptableTool[] = [
@@ -427,6 +446,144 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
         }
       },
     },
+
+    // ------------------------------------------------------------------
+    // 9. kaneru_learn_profile
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_learn_profile",
+      description:
+        "Get learning profiles for an agent showing expertise across " +
+        "domain×taskType combinations, success rates, and mission counts.",
+      parameters: Type.Object({
+        agentId: Type.String({ description: "Agent ID to get profiles for" }),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const mgr = getLearningProfiles();
+          const profiles = await mgr.getAgentProfiles(params.agentId as string);
+          if (profiles.length === 0) {
+            return textResult(`No learning profiles found for agent: ${params.agentId}`);
+          }
+          const lines = profiles.map(
+            (p) =>
+              `  ${p.domain}:${p.taskType} — expertise: ${(p.expertise * 100).toFixed(1)}%, ` +
+              `success: ${(p.successRate * 100).toFixed(1)}%, missions: ${p.missionCount}`,
+          );
+          return textResult(
+            `${profiles.length} profile(s) for ${params.agentId}:\n${lines.join("\n")}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 10. kaneru_learn_top
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_learn_top",
+      description:
+        "Get top agents for a given domain and task type, ranked by expertise score.",
+      parameters: Type.Object({
+        domain: Type.String({ description: "Domain (e.g. typescript, python, rust)" }),
+        taskType: Type.String({ description: "Task type (e.g. code-review, debugging, implementation)" }),
+        limit: Type.Optional(
+          Type.Number({ description: "Max results (default: 10)" }),
+        ),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const mgr = getLearningProfiles();
+          const limit = (params.limit as number | undefined) ?? 10;
+          const profiles = await mgr.topAgents(
+            params.domain as string,
+            params.taskType as string,
+            limit,
+          );
+          if (profiles.length === 0) {
+            return textResult(
+              `No agents found for ${params.domain}:${params.taskType}`,
+            );
+          }
+          const lines = profiles.map(
+            (p) =>
+              `  ${p.agentId} — expertise: ${(p.expertise * 100).toFixed(1)}%, ` +
+              `success: ${(p.successRate * 100).toFixed(1)}%, missions: ${p.missionCount}`,
+          );
+          return textResult(
+            `Top ${profiles.length} agent(s) for ${params.domain}:${params.taskType}:\n${lines.join("\n")}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 11. kaneru_decisions_list
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_decisions_list",
+      description:
+        "Query consensus decision history with optional venture filter. " +
+        "Returns decisions sorted by most recent first.",
+      parameters: Type.Object({
+        ventureId: Type.Optional(
+          Type.String({ description: "Filter by venture ID" }),
+        ),
+        limit: Type.Optional(
+          Type.Number({ description: "Max results (default: 20)" }),
+        ),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const history = getDecisionHistory();
+          const decisions = await history.query({
+            ventureId: (params.ventureId as string | undefined) ?? undefined,
+            limit: (params.limit as number | undefined) ?? 20,
+          });
+          if (decisions.length === 0) {
+            return textResult("No decisions found.");
+          }
+          const lines = decisions.map(
+            (d) =>
+              `  ${d.id} [${d.strategy}] confidence: ${(d.confidence * 100).toFixed(1)}%\n` +
+              `    Q: ${d.question}\n` +
+              `    Outcome: ${d.resolvedValue}\n` +
+              `    Decided: ${d.decidedAt}`,
+          );
+          return textResult(
+            `${decisions.length} decision(s):\n${lines.join("\n")}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 12. kaneru_decisions_explain
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_decisions_explain",
+      description:
+        "Get a human-readable explanation of a consensus decision including " +
+        "question, votes, strategy, outcome, participants, and confidence.",
+      parameters: Type.Object({
+        decisionId: Type.String({ description: "Decision ID to explain" }),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const history = getDecisionHistory();
+          const explanation = await history.explain(params.decisionId as string);
+          return textResult(explanation);
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
   ];
 
   return Object.assign(tools, {
@@ -439,6 +596,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       missionManager = null;
       fuelController = null;
       pulseScheduler = null;
+      learningProfiles = null;
+      decisionHistory = null;
     },
   });
 }

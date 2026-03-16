@@ -26,6 +26,10 @@
  *   pulse trigger   — Trigger a pulse event for an agent
  *   pulse list      — List pulse schedules for an agent
  *   fuel summary    — Show fuel consumption summary for a venture
+ *   learn profile   — Show learning profiles for an agent
+ *   learn top       — Show top agents for a domain and task type
+ *   decisions list     — List recent consensus decisions
+ *   decisions explain  — Explain a decision with full reasoning
  */
 
 import type { Command } from "commander";
@@ -720,6 +724,122 @@ export function registerKaneruCli(program: Command) {
         handleError(err);
       } finally {
         mgrs.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru learn
+  // ------------------------------------------------------------------
+  const learn = kaneru.command("learn").description("Agent learning profiles and expertise");
+
+  // mayros kaneru learn profile --agent <id>
+  learn
+    .command("profile")
+    .description("Show learning profiles for an agent")
+    .requiredOption("--agent <id>", "Agent ID")
+    .action(async (opts: { agent: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const profiles = await facade.getAgentExpertise(opts.agent);
+        if (profiles.length === 0) {
+          console.log(`No learning profiles found for agent: ${opts.agent}`);
+          return;
+        }
+        console.log(`Learning profiles for ${opts.agent} (${profiles.length}):\n`);
+        for (const p of profiles) {
+          console.log(`  ${p.domain}:${p.taskType}`);
+          console.log(`    Expertise: ${(p.expertise * 100).toFixed(1)}%`);
+          console.log(`    Success rate: ${(p.successRate * 100).toFixed(1)}%`);
+          console.log(`    Missions: ${p.missionCount}`);
+          console.log(`    Avg duration: ${p.avgDurationMs}ms`);
+          console.log(`    Last updated: ${p.lastUpdated}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru learn top --domain <d> --task-type <t>
+  learn
+    .command("top")
+    .description("Show top agents for a domain and task type")
+    .requiredOption("--domain <d>", "Domain (e.g. typescript, python)")
+    .requiredOption("--task-type <t>", "Task type (e.g. code-review, debugging)")
+    .option("--limit <n>", "Max results", "10")
+    .action(async (opts: { domain: string; taskType: string; limit: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const limit = parseInt(opts.limit, 10) || 10;
+        const profiles = await facade.topAgentsFor(opts.domain, opts.taskType, limit);
+        if (profiles.length === 0) {
+          console.log(`No agents found for ${opts.domain}:${opts.taskType}`);
+          return;
+        }
+        console.log(`Top agents for ${opts.domain}:${opts.taskType} (${profiles.length}):\n`);
+        for (const p of profiles) {
+          console.log(`  ${p.agentId}  expertise: ${(p.expertise * 100).toFixed(1)}%  success: ${(p.successRate * 100).toFixed(1)}%  missions: ${p.missionCount}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru decisions
+  // ------------------------------------------------------------------
+  const decisions = kaneru.command("decisions").description("Consensus decision history");
+
+  // mayros kaneru decisions list [--venture <id>] [--limit N]
+  decisions
+    .command("list")
+    .description("List recent decisions")
+    .option("--venture <id>", "Filter by venture")
+    .option("--limit <n>", "Max results", "20")
+    .action(async (opts: { venture?: string; limit: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const limit = parseInt(opts.limit, 10) || 20;
+        const records = await facade.queryDecisions({ ventureId: opts.venture, limit });
+        if (records.length === 0) {
+          console.log("No decisions found.");
+          return;
+        }
+        console.log(`Decisions (${records.length}):\n`);
+        for (const d of records) {
+          console.log(`  ${d.id}  [${d.strategy}]  confidence: ${(d.confidence * 100).toFixed(1)}%`);
+          console.log(`    Question: ${d.question}`);
+          console.log(`    Outcome: ${d.resolvedValue}`);
+          console.log(`    Decided: ${d.decidedAt}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru decisions explain --decision <id>
+  decisions
+    .command("explain")
+    .description("Explain a decision with full reasoning")
+    .requiredOption("--decision <id>", "Decision ID")
+    .action(async (opts: { decision: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const explanation = await facade.explainDecision(opts.decision);
+        console.log(explanation);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
       }
     });
 }

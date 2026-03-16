@@ -159,11 +159,11 @@ describe("kaneru subcommands", () => {
     expect(cmd!.description()).toContain("dashboard");
   });
 
-  it("has exactly 10 top-level subcommands under kaneru", () => {
+  it("has exactly 12 top-level subcommands under kaneru", () => {
     const program = makeProgram();
     const kaneru = getKaneru(program);
     const names = kaneru.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["consensus", "dashboard", "delegate", "fuel", "fuse", "mission", "pulse", "route", "squad", "venture"]);
+    expect(names).toEqual(["consensus", "dashboard", "decisions", "delegate", "fuel", "fuse", "learn", "mission", "pulse", "route", "squad", "venture"]);
   });
 });
 
