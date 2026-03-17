@@ -5,6 +5,9 @@
  * synchronization. Uses the existing DAG sync primitives to replicate
  * venture state across peers.
  *
+ * Supports auto-discovery via Cortex P2P (mDNS or manual peers)
+ * using the existing p2pListPeers() API.
+ *
  * Paperclip: single Postgres, no distribution.
  * Kaneru: DAG-synced ventures across devices.
  */
@@ -194,5 +197,54 @@ export class DistributedVentureManager {
       syncStrategy: "full",
       lastSyncAt,
     };
+  }
+
+  /**
+   * Auto-discover peers via Cortex P2P network (mDNS or gossip).
+   * Registers all discovered peers for the given venture.
+   *
+   * Requires Cortex to be running with --p2p and optionally --p2p-mdns.
+   * Returns the list of newly registered peer addresses.
+   */
+  async discoverPeers(ventureId: string): Promise<string[]> {
+    let connectedPeers: Array<{ addr: string }>;
+    try {
+      // Use Cortex P2P API to list connected peers
+      const status = await this.client.p2pStatus();
+      connectedPeers = status?.connected_peers ?? [];
+    } catch {
+      // P2P not enabled or Cortex unreachable
+      return [];
+    }
+
+    if (connectedPeers.length === 0) return [];
+
+    const existing = await this.listPeers(ventureId);
+    const existingSet = new Set(existing);
+    const newPeers: string[] = [];
+
+    for (const peer of connectedPeers) {
+      if (!peer.addr || existingSet.has(peer.addr)) continue;
+      await this.registerPeer(ventureId, peer.addr);
+      newPeers.push(peer.addr);
+    }
+
+    return newPeers;
+  }
+
+  /**
+   * Add a P2P peer to Cortex's connection pool, then register it for the venture.
+   * Combines peer connection + venture registration in one call.
+   */
+  async addAndRegisterPeer(ventureId: string, peerAddr: string): Promise<void> {
+    // Connect via Cortex P2P
+    try {
+      await this.client.p2pAddPeer(peerAddr);
+    } catch {
+      // Connection may fail but registration can still proceed
+    }
+
+    // Register for the venture
+    await this.registerPeer(ventureId, peerAddr);
   }
 }

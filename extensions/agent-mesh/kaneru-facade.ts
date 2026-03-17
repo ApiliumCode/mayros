@@ -391,6 +391,16 @@ export class KaneruFacade {
     return this.distributed.listPeers(ventureId);
   }
 
+  /** Auto-discover P2P peers and register them for a venture. */
+  async discoverPeers(ventureId: string): Promise<string[]> {
+    return this.distributed.discoverPeers(ventureId);
+  }
+
+  /** Install a Dojo template from the Skill Hub marketplace. */
+  async dojoInstallFromHub(slug: string, ventureName: string): Promise<DojoInstallResult> {
+    return this.dojo.installFromHub(slug, ventureName);
+  }
+
   /** Get dashboard summary for all squads. */
   async getDashboard(): Promise<KaneruDashboardData> {
     const summary = await this.dashboard.getSummary();

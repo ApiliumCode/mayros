@@ -970,4 +970,81 @@ export function registerKaneruCli(program: Command) {
         facade.destroy();
       }
     });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru discover
+  // ------------------------------------------------------------------
+  kaneru
+    .command("discover")
+    .description("Auto-discover P2P peers and register them for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const mgrs = await createVentureManagers(parent);
+      try {
+        const { DistributedVentureManager } = await import(
+          "../../extensions/kaneru/distributed.js"
+        );
+        const dist = new DistributedVentureManager(mgrs.client, "mayros");
+        const newPeers = await dist.discoverPeers(opts.venture);
+        if (newPeers.length === 0) {
+          console.log("No new peers discovered. Ensure Cortex is running with --p2p --p2p-mdns.");
+          return;
+        }
+        console.log(`Discovered ${newPeers.length} new peer(s):\n`);
+        for (const p of newPeers) {
+          console.log(`  ${p}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        mgrs.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru dojo search
+  // ------------------------------------------------------------------
+  dojo
+    .command("search")
+    .description("Search Dojo templates on the Skill Hub marketplace")
+    .option("--query <text>", "Search query", "dojo")
+    .action(async (opts: { query: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const { DojoService } = await import("../../extensions/kaneru/dojo.js");
+        const { VentureManager } = await import("../../extensions/kaneru/venture.js");
+        const { ChainManager } = await import("../../extensions/kaneru/chain.js");
+        const { DirectiveManager } = await import("../../extensions/kaneru/directives.js");
+        const { CortexClient } = await import("../../extensions/shared/cortex-client.js");
+
+        const host = parent.cortexHost ?? "127.0.0.1";
+        const port = parent.cortexPort ? parseInt(parent.cortexPort, 10) : 19090;
+        const client = new CortexClient({ host, port, authToken: parent.cortexToken });
+        const ns = "mayros";
+        const dojoSvc = new DojoService(
+          client, ns,
+          new VentureManager(client, ns),
+          new ChainManager(client, ns),
+          new DirectiveManager(client, ns),
+        );
+
+        const results = await dojoSvc.searchHub(opts.query);
+        if (results.length === 0) {
+          console.log("No templates found on Hub. Using bundled templates only.");
+          return;
+        }
+        console.log(`Hub templates (${results.length}):\n`);
+        for (const t of results) {
+          console.log(`  ${t.slug}  ${t.name}  v${t.version}`);
+          console.log(`    ${t.description}`);
+        }
+        client.destroy();
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
 }
