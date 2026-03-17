@@ -269,6 +269,62 @@ export class KaneruFacade {
     return this.mailbox.stats(agentId);
   }
 
+  // ---- Mission Lifecycle Orchestration ----
+
+  /**
+   * Complete a mission with full lifecycle orchestration:
+   * 1. Record learning profile outcome
+   * 2. Transfer knowledge to shared namespace
+   * 3. Build channel notification
+   *
+   * Returns the notification message for the caller to deliver.
+   */
+  async completeMissionWithLearning(opts: {
+    missionId: string;
+    agentId: string;
+    title: string;
+    success: boolean;
+    durationMs: number;
+    ventureId: string;
+    squadId?: string;
+  }): Promise<{ profile: LearningProfile; notification: ChannelNotification }> {
+    // 1. Record learning outcome
+    const profile = await this.learningProfiles.recordOutcome({
+      missionId: opts.missionId,
+      agentId: opts.agentId,
+      title: opts.title,
+      success: opts.success,
+      durationMs: opts.durationMs,
+    });
+
+    // 2. Transfer knowledge (best-effort)
+    try {
+      await this.knowledgeTransfer.transferOnComplete(opts.agentId, opts.missionId, opts.squadId);
+    } catch {
+      // Non-fatal: knowledge transfer failure should not block completion
+    }
+
+    // 3. Build notification
+    const notification = this.channelOps.buildMissionReport(
+      {
+        id: opts.missionId,
+        identifier: opts.missionId,
+        title: opts.title,
+        ventureId: opts.ventureId,
+        status: opts.success ? "complete" : "abandoned",
+      } as import("../kaneru/mission.js").Mission,
+      {
+        missionId: opts.missionId,
+        agentId: opts.agentId,
+        title: opts.title,
+        success: opts.success,
+        durationMs: opts.durationMs,
+      },
+    );
+
+    return { profile, notification };
+  }
+
   // ---- Learning Profiles ----
 
   /** Record a mission outcome and update agent learning profile. */
