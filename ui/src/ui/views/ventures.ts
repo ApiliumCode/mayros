@@ -4,6 +4,7 @@ import type {
   VentureSummary,
   MissionSummary,
 } from "../controllers/ventures.ts";
+import { renderChainVisualizer } from "./chain-visualizer.ts";
 
 export type VentureDashboardProps = {
   loading: boolean;
@@ -269,6 +270,13 @@ export function renderVenturesDashboard(props: VentureDashboardProps) {
       ${renderVenturesTable(d.ventures)}
 
       ${renderMissionBoard(d.missions)}
+
+      ${d.chain && d.chain.length > 0
+        ? renderChainVisualizer({
+            chain: d.chain,
+            ventureId: d.ventures.length > 0 ? d.ventures[0].id : "",
+          })
+        : nothing}
     </section>
   `;
 }

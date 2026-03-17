@@ -3,13 +3,18 @@ import type {
   KaneruDashboardResponse,
   SquadSummary,
   RouteTableEntry,
+  AvailableAgent,
 } from "../controllers/kaneru.ts";
+import { renderSquadBuilder } from "./squad-builder.ts";
+import type { SquadBuilderProps } from "./squad-builder.ts";
 
 export type KaneruDashboardProps = {
   loading: boolean;
   error: string | null;
   dashboard: KaneruDashboardResponse | null;
   onRefresh: () => void;
+  // Squad builder props
+  squadBuilder?: SquadBuilderProps;
 };
 
 // ============================================================================
@@ -211,6 +216,8 @@ export function renderKaneruDashboard(props: KaneruDashboardProps) {
       ${renderSquadsCard(d.squads)}
 
       ${renderRouteTableCard(d.routeTable, d.stats)}
+
+      ${props.squadBuilder ? renderSquadBuilder(props.squadBuilder) : nothing}
     </section>
   `;
 }

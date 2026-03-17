@@ -24,9 +24,17 @@ export type MissionSummary = {
   claimedBy: string | null;
 };
 
+export type ChainNodeData = {
+  agentId: string;
+  role: string;
+  escalatesTo: string | null;
+  children: ChainNodeData[];
+};
+
 export type VentureDashboardResponse = {
   ventures: VentureSummary[];
   missions: MissionSummary[];
+  chain: ChainNodeData[];
   stats: {
     totalVentures: number;
     activeMissions: number;

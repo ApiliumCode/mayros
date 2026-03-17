@@ -32,12 +32,24 @@ export type KaneruDashboardResponse = {
 // State
 // ============================================================================
 
+export type AvailableAgent = {
+  agentId: string;
+  role: string;
+  expertise?: string;
+};
+
 export type KaneruDashboardState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
   kaneruLoading: boolean;
   kaneruError: string | null;
   kaneruDashboard: KaneruDashboardResponse | null;
+  // Squad builder state
+  squadBuilderAgents: AvailableAgent[];
+  squadBuilderSelected: string[];
+  squadBuilderName: string;
+  squadBuilderStrategy: string;
+  squadBuilderCreating: boolean;
 };
 
 // ============================================================================

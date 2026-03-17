@@ -2060,9 +2060,21 @@ const agentMeshPlugin = {
           }
         }
 
+        // Collect chain data from all ventures for visualization
+        const allChainNodes: Array<{ agentId: string; role: string; escalatesTo: string | null; children: unknown[] }> = [];
+        for (const v of ventures.slice(0, 20)) {
+          try {
+            const chain = await cm.getChain(v.id);
+            allChainNodes.push(...chain);
+          } catch {
+            // skip ventures with no chain
+          }
+        }
+
         respond(true, {
           ventures: venturesSummary,
           missions: allMissions.slice(0, 100),
+          chain: allChainNodes,
           stats: {
             totalVentures: ventures.length,
             activeMissions,
