@@ -30,6 +30,11 @@
  *   learn top       — Show top agents for a domain and task type
  *   decisions list     — List recent consensus decisions
  *   decisions explain  — Explain a decision with full reasoning
+ *   dojo list          — List available venture templates
+ *   dojo preview       — Preview a template
+ *   dojo install       — Install a template as a new venture
+ *   sync               — Sync a venture with P2P peers
+ *   peers              — List P2P peers for a venture
  */
 
 import type { Command } from "commander";
@@ -836,6 +841,129 @@ export function registerKaneruCli(program: Command) {
       try {
         const explanation = await facade.explainDecision(opts.decision);
         console.log(explanation);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru dojo
+  // ------------------------------------------------------------------
+  const dojo = kaneru.command("dojo").description("Kaneru Dojo — venture templates");
+
+  // mayros kaneru dojo list
+  dojo
+    .command("list")
+    .description("List available venture templates")
+    .action(async () => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const templates = await facade.dojoList();
+        if (templates.length === 0) {
+          console.log("No templates found.");
+          return;
+        }
+        console.log(`Templates (${templates.length}):\n`);
+        for (const t of templates) {
+          console.log(`  ${t.id}  ${t.name}`);
+          console.log(`    ${t.description}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru dojo preview --template <id>
+  dojo
+    .command("preview")
+    .description("Preview a venture template")
+    .requiredOption("--template <id>", "Template ID")
+    .action(async (opts: { template: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const preview = await facade.dojoPreview(opts.template);
+        console.log(preview);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru dojo install --template <id> --name <name>
+  dojo
+    .command("install")
+    .description("Install a template as a new venture")
+    .requiredOption("--template <id>", "Template ID")
+    .requiredOption("--name <name>", "Venture name")
+    .action(async (opts: { template: string; name: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const result = await facade.dojoInstall(opts.template, opts.name);
+        console.log(`Template installed:`);
+        console.log(`  Venture: ${result.ventureId}`);
+        console.log(`  Name: ${result.ventureName}`);
+        console.log(`  Prefix: ${result.prefix}`);
+        console.log(`  Agents deployed: ${result.agentsDeployed}`);
+        console.log(`  Directives created: ${result.directivesCreated}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru sync
+  // ------------------------------------------------------------------
+  kaneru
+    .command("sync")
+    .description("Sync venture with P2P peers")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const result = await facade.syncVenture(opts.venture);
+        console.log(`Sync complete:`);
+        console.log(`  Venture: ${result.ventureId}`);
+        console.log(`  Actions synced: ${result.actionsSynced}`);
+        console.log(`  Triples added: ${result.triplesAdded}`);
+        console.log(`  Conflicts: ${result.conflicts}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru peers
+  // ------------------------------------------------------------------
+  kaneru
+    .command("peers")
+    .description("List P2P peers for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const peers = await facade.listPeers(opts.venture);
+        if (peers.length === 0) {
+          console.log("No peers found.");
+          return;
+        }
+        console.log(`Peers (${peers.length}):\n`);
+        for (const p of peers) {
+          console.log(`  ${p}`);
+        }
       } catch (err) {
         handleError(err);
       } finally {

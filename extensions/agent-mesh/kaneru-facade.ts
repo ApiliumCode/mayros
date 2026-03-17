@@ -6,7 +6,8 @@
  * knowledge fusion, and mailbox).
  *
  * Wraps agent-mesh internals behind a clean interface using Kaneru
- * terminology: squads, missions, directives, chain, fuel.
+ * terminology: squads, missions, directives, chain, fuel, dojo,
+ * distributed sync, and channel operations.
  */
 
 import { CortexClient } from "../shared/cortex-client.js";
@@ -27,6 +28,15 @@ import { DecisionHistory } from "../kaneru/decision-history.js";
 import type { DecisionRecord, DecisionContext, ConsensusResultLike } from "../kaneru/decision-history.js";
 import { KnowledgeTransferService } from "../kaneru/knowledge-transfer.js";
 import type { TransferResult } from "../kaneru/knowledge-transfer.js";
+import { DojoService } from "../kaneru/dojo.js";
+import type { DojoTemplate, DojoInstallResult } from "../kaneru/dojo.js";
+import { ChannelOpsService } from "../kaneru/channel-ops.js";
+import type { ChannelNotification } from "../kaneru/channel-ops.js";
+import { DistributedVentureManager } from "../kaneru/distributed.js";
+import type { SyncResult } from "../kaneru/distributed.js";
+import { VentureManager } from "../kaneru/venture.js";
+import { ChainManager } from "../kaneru/chain.js";
+import { DirectiveManager } from "../kaneru/directives.js";
 import { randomUUID } from "node:crypto";
 import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
 
@@ -97,6 +107,9 @@ export class KaneruFacade {
   private readonly learningProfiles: LearningProfileManager;
   private readonly decisionHistory: DecisionHistory;
   private readonly knowledgeTransfer: KnowledgeTransferService;
+  private readonly dojo: DojoService;
+  private readonly channelOps: ChannelOpsService;
+  private readonly distributed: DistributedVentureManager;
 
   constructor(opts: KaneruFacadeOptions) {
     const host = opts.host ?? "127.0.0.1";
@@ -141,6 +154,13 @@ export class KaneruFacade {
     this.knowledgeTransfer = new KnowledgeTransferService(
       this.client, this.ns, this.fusion, this.nsMgr,
     );
+
+    const ventureManager = new VentureManager(this.client, this.ns);
+    const chainManager = new ChainManager(this.client, this.ns);
+    const directiveManager = new DirectiveManager(this.client, this.ns);
+    this.dojo = new DojoService(this.client, this.ns, ventureManager, chainManager, directiveManager);
+    this.channelOps = new ChannelOpsService(this.ns);
+    this.distributed = new DistributedVentureManager(this.client, this.ns);
   }
 
   /** Create a squad (team) of agents for coordinated missions. */
@@ -287,6 +307,31 @@ export class KaneruFacade {
   /** Get human-readable explanation of a decision. */
   async explainDecision(decisionId: string): Promise<string> {
     return this.decisionHistory.explain(decisionId);
+  }
+
+  // ---- Dojo ----
+
+  /** List available Dojo venture templates. */
+  async dojoList(): Promise<DojoTemplate[]> { return this.dojo.listTemplates(); }
+
+  /** Preview a Dojo template as a human-readable string. */
+  async dojoPreview(templateId: string): Promise<string> { return this.dojo.preview(templateId); }
+
+  /** Install a Dojo template as a new venture. */
+  async dojoInstall(templateId: string, ventureName: string): Promise<DojoInstallResult> {
+    return this.dojo.install(templateId, ventureName);
+  }
+
+  // ---- Distributed ----
+
+  /** Sync a venture with P2P peers. */
+  async syncVenture(ventureId: string): Promise<SyncResult> {
+    return this.distributed.syncVenture(ventureId);
+  }
+
+  /** List P2P peers for a venture. */
+  async listPeers(ventureId: string): Promise<string[]> {
+    return this.distributed.listPeers(ventureId);
   }
 
   /** Get dashboard summary for all squads. */

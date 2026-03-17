@@ -1,9 +1,9 @@
 /**
  * MCP-friendly Kaneru venture tools.
  *
- * Exposes 12 tools for venture creation, mission lifecycle, fuel tracking,
- * pulse scheduling, learning profiles, and decision history via the
- * venture layer managers.
+ * Exposes 16 tools for venture creation, mission lifecycle, fuel tracking,
+ * pulse scheduling, learning profiles, decision history, Dojo templates,
+ * distributed sync, and terminal execution via the venture layer managers.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -16,6 +16,10 @@ import { FuelController } from "../kaneru/fuel.js";
 import { PulseScheduler } from "../kaneru/pulse.js";
 import { LearningProfileManager } from "../kaneru/learning-profiles.js";
 import { DecisionHistory } from "../kaneru/decision-history.js";
+import { DojoService } from "../kaneru/dojo.js";
+import { ChainManager } from "../kaneru/chain.js";
+import { DirectiveManager } from "../kaneru/directives.js";
+import { DistributedVentureManager } from "../kaneru/distributed.js";
 import type { MissionStatus } from "../kaneru/mission.js";
 import type { PulseTrigger } from "../kaneru/pulse.js";
 
@@ -64,6 +68,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
   let pulseScheduler: PulseScheduler | null = null;
   let learningProfiles: LearningProfileManager | null = null;
   let decisionHistory: DecisionHistory | null = null;
+  let dojoService: DojoService | null = null;
+  let distributedManager: DistributedVentureManager | null = null;
 
   function getClient(): CortexClient {
     if (!client) {
@@ -118,6 +124,23 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       decisionHistory = new DecisionHistory(getClient(), getNs());
     }
     return decisionHistory;
+  }
+
+  function getDojoService(): DojoService {
+    if (!dojoService) {
+      const vm = getVentureManager();
+      const chain = new ChainManager(getClient(), getNs());
+      const directives = new DirectiveManager(getClient(), getNs());
+      dojoService = new DojoService(getClient(), getNs(), vm, chain, directives);
+    }
+    return dojoService;
+  }
+
+  function getDistributedManager(): DistributedVentureManager {
+    if (!distributedManager) {
+      distributedManager = new DistributedVentureManager(getClient(), getNs());
+    }
+    return distributedManager;
   }
 
   const tools: AdaptableTool[] = [
@@ -584,6 +607,159 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
         }
       },
     },
+
+    // ------------------------------------------------------------------
+    // 13. kaneru_dojo_list
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_dojo_list",
+      description:
+        "List available Dojo venture templates. Templates provide pre-configured " +
+        "venture structures with missions, directives, and agent assignments.",
+      parameters: Type.Object({}),
+      execute: async (_callId: string, _params: Record<string, unknown>) => {
+        try {
+          const dojo = getDojoService();
+          const templates = await dojo.listTemplates();
+          if (templates.length === 0) {
+            return textResult("No templates found.");
+          }
+          const lines = templates.map(
+            (t) => `  ${t.id} — ${t.name}\n    ${t.description}`,
+          );
+          return textResult(
+            `${templates.length} template(s):\n${lines.join("\n")}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 14. kaneru_dojo_install
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_dojo_install",
+      description:
+        "Install a Dojo template as a new venture. Creates the venture, " +
+        "missions, directives, and chain entries from the template blueprint.",
+      parameters: Type.Object({
+        templateId: Type.String({ description: "Template ID to install" }),
+        ventureName: Type.String({ description: "Name for the new venture" }),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const dojo = getDojoService();
+          const result = await dojo.install(
+            params.templateId as string,
+            params.ventureName as string,
+          );
+          return textResult(
+            `Template installed:\n` +
+              `  Venture: ${result.ventureId}\n` +
+              `  Name: ${result.ventureName}\n` +
+              `  Prefix: ${result.prefix}\n` +
+              `  Agents deployed: ${result.agentsDeployed}\n` +
+              `  Directives created: ${result.directivesCreated}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 15. kaneru_sync
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_sync",
+      description:
+        "Sync a venture with P2P peers. Pushes local changes and pulls " +
+        "remote updates, reporting conflicts if any.",
+      parameters: Type.Object({
+        ventureId: Type.String({ description: "Venture ID to sync" }),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const dist = getDistributedManager();
+          const result = await dist.syncVenture(params.ventureId as string);
+          return textResult(
+            `Sync complete:\n` +
+              `  Venture: ${result.ventureId}\n` +
+              `  Actions synced: ${result.actionsSynced}\n` +
+              `  Triples added: ${result.triplesAdded}\n` +
+              `  Conflicts: ${result.conflicts}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 16. kaneru_terminal_exec
+    // ------------------------------------------------------------------
+    {
+      name: "kaneru_terminal_exec",
+      description:
+        "Record a terminal command execution result. Used by remote terminal " +
+        "channels to log command output, exit codes, and duration for audit trails.",
+      parameters: Type.Object({
+        agentId: Type.String({ description: "Agent ID that executed the command" }),
+        command: Type.String({ description: "Command that was executed" }),
+        exitCode: Type.Number({ description: "Process exit code" }),
+        stdout: Type.String({ description: "Standard output" }),
+        stderr: Type.String({ description: "Standard error output" }),
+        durationMs: Type.Number({ description: "Execution duration in milliseconds" }),
+        missionId: Type.Optional(
+          Type.String({ description: "Associated mission ID (if any)" }),
+        ),
+      }),
+      execute: async (_callId: string, params: Record<string, unknown>) => {
+        try {
+          const client = getClient();
+          const ns = getNs();
+          const agentId = params.agentId as string;
+          const command = params.command as string;
+          const exitCode = params.exitCode as number;
+          const stdout = params.stdout as string;
+          const stderr = params.stderr as string;
+          const durationMs = params.durationMs as number;
+          const missionId = (params.missionId as string | undefined) ?? undefined;
+
+          const subject = `${ns}:terminal:exec:${agentId}:${Date.now()}`;
+          const payload = JSON.stringify({
+            agentId,
+            command,
+            exitCode,
+            stdout: stdout.slice(0, 4096),
+            stderr: stderr.slice(0, 4096),
+            durationMs,
+            missionId,
+            recordedAt: new Date().toISOString(),
+          });
+
+          await client.createTriple({
+            subject,
+            predicate: `${ns}:terminal:execution`,
+            object: payload,
+          });
+
+          return textResult(
+            `Terminal execution recorded:\n` +
+              `  Agent: ${agentId}\n` +
+              `  Command: ${command}\n` +
+              `  Exit code: ${exitCode}\n` +
+              `  Duration: ${durationMs}ms\n` +
+              (missionId ? `  Mission: ${missionId}\n` : "") +
+              `  Subject: ${subject}`,
+          );
+        } catch (err) {
+          return textResult(`Error: ${String(err)}`);
+        }
+      },
+    },
   ];
 
   return Object.assign(tools, {
@@ -598,6 +774,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       pulseScheduler = null;
       learningProfiles = null;
       decisionHistory = null;
+      dojoService = null;
+      distributedManager = null;
     },
   });
 }
