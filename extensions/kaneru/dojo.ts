@@ -183,23 +183,16 @@ export class DojoService {
   }
 
   /**
-   * Search for templates on the Skill Hub marketplace.
+   * Search for templates on the Skill Hub marketplace (hub.apilium.com).
    * Returns templates published with the "dojo-template" category.
    *
-   * Requires the skill-hub extension to be available.
+   * Uses the existing HubClient from skill-hub extension — same client
+   * used by `mayros hub search`. No duplicate marketplace.
    */
-  async searchHub(query?: string): Promise<Array<{ slug: string; name: string; description: string; version: string }>> {
-    let HubClient: new (opts: { baseUrl: string; authToken?: string }) => {
-      search(q: string, opts?: { category?: string; limit?: number }): Promise<{ skills: Array<{ slug: string; name: string; description: string; version: string }> }>;
-    };
-    try {
-      const mod = await import("../skill-hub/hub-client.js");
-      HubClient = mod.HubClient;
-    } catch {
-      return []; // skill-hub not available
-    }
+  async searchHub(query?: string, hubUrl?: string): Promise<Array<{ slug: string; name: string; description: string; version: string }>> {
+    const hub = await this.resolveHubClient(hubUrl);
+    if (!hub) return [];
 
-    const hub = new HubClient({ baseUrl: "https://hub.mayros.dev" });
     try {
       const result = await hub.search(query ?? "dojo", { category: "dojo-template", limit: 20 });
       return result.skills.map((s) => ({
@@ -214,24 +207,15 @@ export class DojoService {
   }
 
   /**
-   * Download and install a template from the Skill Hub.
-   * Fetches the template JSON, parses it as DojoTemplate, and runs install.
+   * Download and install a template from the Skill Hub (hub.apilium.com).
+   * Fetches the template archive, parses as DojoTemplate JSON, and installs.
    */
-  async installFromHub(slug: string, ventureName: string): Promise<DojoInstallResult> {
-    let HubClient: new (opts: { baseUrl: string; authToken?: string }) => {
-      download(slug: string, version?: string): Promise<Buffer>;
-    };
-    try {
-      const mod = await import("../skill-hub/hub-client.js");
-      HubClient = mod.HubClient;
-    } catch {
-      throw new Error("Skill Hub extension not available. Install the skill-hub plugin first.");
-    }
+  async installFromHub(slug: string, ventureName: string, hubUrl?: string): Promise<DojoInstallResult> {
+    const hub = await this.resolveHubClient(hubUrl);
+    if (!hub) throw new Error("Skill Hub extension not available. Install the skill-hub plugin first.");
 
-    const hub = new HubClient({ baseUrl: "https://hub.mayros.dev" });
     const archive = await hub.download(slug);
 
-    // Parse template from downloaded archive (expects JSON manifest)
     let template: DojoTemplate;
     try {
       template = JSON.parse(archive.toString("utf-8")) as DojoTemplate;
@@ -239,13 +223,24 @@ export class DojoService {
       throw new Error(`Failed to parse template "${slug}" — expected valid DojoTemplate JSON`);
     }
 
-    // Validate required fields
     if (!template.id || !template.agents || !template.directives || !template.ventureDefaults) {
       throw new Error(`Invalid template "${slug}" — missing required fields`);
     }
 
-    // Install using the standard flow
     return this.installTemplate(template, ventureName);
+  }
+
+  /**
+   * Resolve HubClient from skill-hub extension.
+   * Uses hub.apilium.com as default (same as `mayros hub` commands).
+   */
+  private async resolveHubClient(hubUrl?: string): Promise<{ search: (q: string, opts?: { category?: string; limit?: number }) => Promise<{ skills: Array<{ slug: string; name: string; description: string; version: string }> }>; download: (slug: string, version?: string) => Promise<Buffer> } | null> {
+    try {
+      const { HubClient } = await import("../skill-hub/hub-client.js");
+      return new HubClient(hubUrl ?? "https://hub.apilium.com");
+    } catch {
+      return null;
+    }
   }
 
   /** Internal: install a parsed DojoTemplate. Shared by install() and installFromHub(). */
