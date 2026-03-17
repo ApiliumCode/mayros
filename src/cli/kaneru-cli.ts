@@ -732,6 +732,228 @@ export function registerKaneruCli(program: Command) {
       }
     });
 
+  // mayros kaneru fuel analytics
+  fuel
+    .command("analytics")
+    .description("Show cost analytics for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .option("--period <p>", "Period: daily|weekly|monthly", "daily")
+    .action(async (opts: { venture: string; period: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const analytics = await facade.costAnalysis(opts.venture, { period: opts.period });
+        console.log(`Cost Analytics — Venture: ${analytics.ventureId}`);
+        console.log(`${"=".repeat(40)}`);
+        console.log(`  Total spent: ${analytics.totalCents} cents`);
+        console.log(`  Fuel limit: ${analytics.fuelLimit || "unlimited"}`);
+        if (analytics.byProvider.length > 0) {
+          console.log(`\n  By provider:`);
+          for (const p of analytics.byProvider) {
+            console.log(`    ${p.provider}/${p.model}: ${p.costCents} cents (${p.eventCount} events)`);
+          }
+        }
+        if (analytics.timeSeries.points.length > 0) {
+          console.log(`\n  Time series (${analytics.timeSeries.period}):`);
+          for (const pt of analytics.timeSeries.points) {
+            console.log(`    ${pt.date}: ${pt.costCents} cents (${pt.eventCount} events)`);
+          }
+        }
+        console.log(`\n  Efficiency:`);
+        console.log(`    Cost per mission: ${analytics.efficiency.costPerMissionCents} cents`);
+        console.log(`    Avg cost per event: ${analytics.efficiency.avgCostPerEventCents} cents`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru fuel forecast
+  fuel
+    .command("forecast")
+    .description("Show fuel burn rate forecast for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const analytics = await facade.costAnalysis(opts.venture);
+        const f = analytics.forecast;
+        console.log(`Fuel Forecast — Venture: ${analytics.ventureId}`);
+        console.log(`${"=".repeat(40)}`);
+        console.log(`  Burn rate: ${f.burnRateCentsPerHour} cents/hour`);
+        console.log(`  Projected monthly: ${f.projectedMonthlyCents} cents`);
+        if (f.daysUntilExhausted !== null) {
+          console.log(`  Days until exhausted: ${f.daysUntilExhausted}`);
+        } else {
+          console.log(`  Days until exhausted: N/A`);
+        }
+        console.log(`  Confidence: ${f.confidence}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru comment
+  // ------------------------------------------------------------------
+  const comment = kaneru.command("comment").description("Mission comments");
+
+  // mayros kaneru comment add
+  comment
+    .command("add")
+    .description("Add a comment to a mission")
+    .requiredOption("--mission <id>", "Mission ID")
+    .requiredOption("--author <agent>", "Author agent ID")
+    .requiredOption("--content <text>", "Comment content")
+    .action(async (opts: { mission: string; author: string; content: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const c = await facade.addComment(opts.mission, opts.author, opts.content);
+        console.log(`Comment added: ${c.id}`);
+        console.log(`  Mission: ${c.missionId}`);
+        console.log(`  Author: ${c.author}`);
+        console.log(`  Content: ${c.content}`);
+        console.log(`  Created: ${c.createdAt}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru comment list
+  comment
+    .command("list")
+    .description("List comments for a mission")
+    .requiredOption("--mission <id>", "Mission ID")
+    .action(async (opts: { mission: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const comments = await facade.listComments(opts.mission);
+        if (comments.length === 0) {
+          console.log("No comments found.");
+          return;
+        }
+        console.log(`Comments (${comments.length}):\n`);
+        for (const c of comments) {
+          console.log(`  ${c.id}  [${c.author}]  ${c.createdAt}`);
+          console.log(`    ${c.content}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // ------------------------------------------------------------------
+  // mayros kaneru project
+  // ------------------------------------------------------------------
+  const project = kaneru.command("project").description("Project management within ventures");
+
+  // mayros kaneru project create
+  project
+    .command("create")
+    .description("Create a new project within a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .requiredOption("--name <n>", "Project name")
+    .option("--owner <agent>", "Project owner agent ID")
+    .option("--target-date <d>", "Target completion date")
+    .option("--category <c>", "Project category")
+    .action(
+      async (opts: {
+        venture: string;
+        name: string;
+        owner?: string;
+        targetDate?: string;
+        category?: string;
+      }) => {
+        const parent = kaneru.opts();
+        const facade = await createFacade(parent);
+        try {
+          const p = await facade.projectCreate({
+            name: opts.name,
+            ventureId: opts.venture,
+            owner: opts.owner,
+            targetDate: opts.targetDate,
+            category: opts.category,
+          });
+          console.log(`Project created: ${p.id}`);
+          console.log(`  Name: ${p.name}`);
+          console.log(`  Venture: ${p.ventureId}`);
+          console.log(`  Status: ${p.status}`);
+          if (p.owner) console.log(`  Owner: ${p.owner}`);
+          if (p.targetDate) console.log(`  Target date: ${p.targetDate}`);
+          console.log(`  Category: ${p.category}`);
+        } catch (err) {
+          handleError(err);
+        } finally {
+          facade.destroy();
+        }
+      },
+    );
+
+  // mayros kaneru project list
+  project
+    .command("list")
+    .description("List projects for a venture")
+    .requiredOption("--venture <id>", "Venture ID")
+    .action(async (opts: { venture: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const projects = await facade.projectList(opts.venture);
+        if (projects.length === 0) {
+          console.log("No projects found.");
+          return;
+        }
+        console.log(`Projects (${projects.length}):\n`);
+        for (const p of projects) {
+          console.log(`  ${p.id}  ${p.name}  [${p.status}]  category: ${p.category}`);
+        }
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
+  // mayros kaneru project status
+  project
+    .command("status")
+    .description("Get project status")
+    .requiredOption("--project <id>", "Project ID")
+    .action(async (opts: { project: string }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const p = await facade.projectGet(opts.project);
+        if (!p) {
+          console.log("Project not found.");
+          return;
+        }
+        console.log(`Project: ${p.name} (${p.id})`);
+        console.log(`  Venture: ${p.ventureId}`);
+        console.log(`  Status: ${p.status}`);
+        console.log(`  Category: ${p.category}`);
+        if (p.owner) console.log(`  Owner: ${p.owner}`);
+        if (p.targetDate) console.log(`  Target date: ${p.targetDate}`);
+        if (p.description) console.log(`  Description: ${p.description}`);
+        console.log(`  Created: ${p.createdAt}`);
+        console.log(`  Updated: ${p.updatedAt}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
+      }
+    });
+
   // ------------------------------------------------------------------
   // mayros kaneru learn
   // ------------------------------------------------------------------

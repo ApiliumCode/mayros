@@ -34,6 +34,12 @@ import { ChannelOpsService } from "../kaneru/channel-ops.js";
 import type { ChannelNotification } from "../kaneru/channel-ops.js";
 import { DistributedVentureManager } from "../kaneru/distributed.js";
 import type { SyncResult } from "../kaneru/distributed.js";
+import { MissionCommentService } from "../kaneru/mission-comments.js";
+import type { MissionComment } from "../kaneru/mission-comments.js";
+import { ProjectManager } from "../kaneru/project.js";
+import type { Project, ProjectCreateOpts } from "../kaneru/project.js";
+import { CostAnalyticsService } from "../kaneru/cost-analytics.js";
+import type { CostAnalytics } from "../kaneru/cost-analytics.js";
 import { VentureManager } from "../kaneru/venture.js";
 import { ChainManager } from "../kaneru/chain.js";
 import { DirectiveManager } from "../kaneru/directives.js";
@@ -110,6 +116,9 @@ export class KaneruFacade {
   private readonly dojo: DojoService;
   private readonly channelOps: ChannelOpsService;
   private readonly distributed: DistributedVentureManager;
+  private readonly comments: MissionCommentService;
+  private readonly projects: ProjectManager;
+  private readonly costAnalyticsSvc: CostAnalyticsService;
 
   constructor(opts: KaneruFacadeOptions) {
     const host = opts.host ?? "127.0.0.1";
@@ -162,6 +171,9 @@ export class KaneruFacade {
     this.dojo = new DojoService(this.client, this.ns, ventureManager, chainManager, directiveManager);
     this.channelOps = new ChannelOpsService(this.ns);
     this.distributed = new DistributedVentureManager(this.client, this.ns);
+    this.comments = new MissionCommentService(this.client, this.ns);
+    this.projects = new ProjectManager(this.client, this.ns);
+    this.costAnalyticsSvc = new CostAnalyticsService(this.client, this.ns);
   }
 
   /** Create a squad (team) of agents for coordinated missions. */
@@ -399,6 +411,50 @@ export class KaneruFacade {
   /** Install a Dojo template from the Skill Hub marketplace. */
   async dojoInstallFromHub(slug: string, ventureName: string): Promise<DojoInstallResult> {
     return this.dojo.installFromHub(slug, ventureName);
+  }
+
+  // ---- Mission Comments ----
+
+  /** Add a comment to a mission. */
+  async addComment(missionId: string, author: string, content: string): Promise<MissionComment> {
+    return this.comments.add(missionId, author, content);
+  }
+
+  /** List comments for a mission. */
+  async listComments(missionId: string): Promise<MissionComment[]> {
+    return this.comments.list(missionId);
+  }
+
+  // ---- Projects ----
+
+  /** Create a new project within a venture. */
+  async projectCreate(opts: ProjectCreateOpts): Promise<Project> {
+    return this.projects.create(opts);
+  }
+
+  /** Get a project by ID. */
+  async projectGet(id: string): Promise<Project | null> {
+    return this.projects.get(id);
+  }
+
+  /** List projects for a venture. */
+  async projectList(ventureId: string): Promise<Project[]> {
+    return this.projects.list(ventureId);
+  }
+
+  /** Update project fields. */
+  async projectUpdate(id: string, patch: Partial<Project>): Promise<Project> {
+    return this.projects.update(id, patch);
+  }
+
+  // ---- Cost Analytics ----
+
+  /** Full cost analytics for a venture. */
+  async costAnalysis(ventureId: string, opts?: { period?: string; fuelLimit?: number }): Promise<CostAnalytics> {
+    return this.costAnalyticsSvc.analyze(ventureId, {
+      period: (opts?.period as "daily" | "weekly" | "monthly") ?? "daily",
+      fuelLimit: opts?.fuelLimit,
+    });
   }
 
   /** Get dashboard summary for all squads. */
