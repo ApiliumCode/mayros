@@ -4,6 +4,10 @@
  * Pre-built venture templates that install a complete setup: agents with
  * roles and escalation hierarchy, directive trees, and fuel limits.
  *
+ * Templates can be bundled (3 built-in) or downloaded from the Skill Hub
+ * marketplace. Hub templates are fetched via HubClient and parsed as
+ * DojoTemplate JSON.
+ *
  * `mayros kaneru dojo install security-audit --name "My Sec Team"`
  * creates a fully configured venture in one command.
  */
@@ -142,52 +146,11 @@ export class DojoService {
     return BUNDLED_TEMPLATES.find((t) => t.id === id) ?? null;
   }
 
-  /** Install a template: create venture, deploy agents, create directives. */
+  /** Install a bundled template: create venture, deploy agents, create directives. */
   async install(templateId: string, ventureName: string): Promise<DojoInstallResult> {
     const template = this.getTemplate(templateId);
     if (!template) throw new Error(`Template not found: ${templateId}`);
-
-    // Create venture
-    const venture = await this.ventureManager.create({
-      name: ventureName,
-      directive: template.directives[0]?.title ?? template.description,
-      fuelLimit: template.ventureDefaults.fuelLimit,
-      prefix: template.ventureDefaults.prefix,
-    });
-
-    // Deploy agents with roles
-    for (const agent of template.agents) {
-      await this.chainManager.deploy(agent.agentId, venture.id, agent.role);
-    }
-
-    // Set escalation hierarchy
-    for (const agent of template.agents) {
-      if (agent.escalatesTo) {
-        await this.chainManager.setEscalation(agent.agentId, agent.escalatesTo);
-      }
-    }
-
-    // Create directive tree
-    const directiveIds: string[] = [];
-    for (const dir of template.directives) {
-      const parentId = dir.parentIndex !== undefined ? directiveIds[dir.parentIndex] : undefined;
-      const created = await this.directiveManager.create({
-        title: dir.title,
-        level: dir.level,
-        ventureId: venture.id,
-        parentId,
-      });
-      directiveIds.push(created.id);
-    }
-
-    return {
-      ventureId: venture.id,
-      ventureName,
-      prefix: venture.prefix,
-      agentsDeployed: template.agents.length,
-      directivesCreated: directiveIds.length,
-      templateId,
-    };
+    return this.installTemplate(template, ventureName);
   }
 
   /** Preview a template as human-readable text. */
@@ -217,5 +180,112 @@ export class DojoService {
     ];
 
     return lines.join("\n");
+  }
+
+  /**
+   * Search for templates on the Skill Hub marketplace.
+   * Returns templates published with the "dojo-template" category.
+   *
+   * Requires the skill-hub extension to be available.
+   */
+  async searchHub(query?: string): Promise<Array<{ slug: string; name: string; description: string; version: string }>> {
+    let HubClient: new (opts: { baseUrl: string; authToken?: string }) => {
+      search(q: string, opts?: { category?: string; limit?: number }): Promise<{ skills: Array<{ slug: string; name: string; description: string; version: string }> }>;
+    };
+    try {
+      const mod = await import("../skill-hub/hub-client.js");
+      HubClient = mod.HubClient;
+    } catch {
+      return []; // skill-hub not available
+    }
+
+    const hub = new HubClient({ baseUrl: "https://hub.mayros.dev" });
+    try {
+      const result = await hub.search(query ?? "dojo", { category: "dojo-template", limit: 20 });
+      return result.skills.map((s) => ({
+        slug: s.slug,
+        name: s.name,
+        description: s.description,
+        version: s.version,
+      }));
+    } catch {
+      return []; // Hub unreachable
+    }
+  }
+
+  /**
+   * Download and install a template from the Skill Hub.
+   * Fetches the template JSON, parses it as DojoTemplate, and runs install.
+   */
+  async installFromHub(slug: string, ventureName: string): Promise<DojoInstallResult> {
+    let HubClient: new (opts: { baseUrl: string; authToken?: string }) => {
+      download(slug: string, version?: string): Promise<Buffer>;
+    };
+    try {
+      const mod = await import("../skill-hub/hub-client.js");
+      HubClient = mod.HubClient;
+    } catch {
+      throw new Error("Skill Hub extension not available. Install the skill-hub plugin first.");
+    }
+
+    const hub = new HubClient({ baseUrl: "https://hub.mayros.dev" });
+    const archive = await hub.download(slug);
+
+    // Parse template from downloaded archive (expects JSON manifest)
+    let template: DojoTemplate;
+    try {
+      template = JSON.parse(archive.toString("utf-8")) as DojoTemplate;
+    } catch {
+      throw new Error(`Failed to parse template "${slug}" — expected valid DojoTemplate JSON`);
+    }
+
+    // Validate required fields
+    if (!template.id || !template.agents || !template.directives || !template.ventureDefaults) {
+      throw new Error(`Invalid template "${slug}" — missing required fields`);
+    }
+
+    // Install using the standard flow
+    return this.installTemplate(template, ventureName);
+  }
+
+  /** Internal: install a parsed DojoTemplate. Shared by install() and installFromHub(). */
+  private async installTemplate(template: DojoTemplate, ventureName: string): Promise<DojoInstallResult> {
+    const venture = await this.ventureManager.create({
+      name: ventureName,
+      directive: template.directives[0]?.title ?? template.description,
+      fuelLimit: template.ventureDefaults.fuelLimit,
+      prefix: template.ventureDefaults.prefix,
+    });
+
+    for (const agent of template.agents) {
+      await this.chainManager.deploy(agent.agentId, venture.id, agent.role);
+    }
+
+    for (const agent of template.agents) {
+      if (agent.escalatesTo) {
+        await this.chainManager.setEscalation(agent.agentId, agent.escalatesTo);
+      }
+    }
+
+    const directiveIds: string[] = [];
+    for (const dir of template.directives) {
+      const parentId = dir.parentIndex !== undefined ? directiveIds[dir.parentIndex] : undefined;
+      const created = await this.directiveManager.create({
+        title: dir.title,
+        level: dir.level,
+        ventureId: venture.id,
+        parentId,
+      });
+      directiveIds.push(created.id);
+    }
+
+    return {
+      ventureId: venture.id,
+      ventureName,
+      prefix: venture.prefix,
+      agentsDeployed: template.agents.length,
+      directivesCreated: directiveIds.length,
+      templateId: template.id,
+    };
   }
 }
