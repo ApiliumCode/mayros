@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
 import type { PerformanceTracker } from "./performance-tracker.js";
+import type { LearningProfileManager } from "../kaneru/learning-profiles.js";
 
 // ============================================================================
 // Types
@@ -129,11 +130,18 @@ export class TaskRouter {
   private epsilon = EPSILON_INIT;
   private pendingDecisions = new Map<string, { stateKey: string; agentId: string }>();
 
+  private learningProfiles: LearningProfileManager | null = null;
+
   constructor(
     private readonly client: CortexClient | null,
     private readonly ns: string,
     private readonly perfTracker: PerformanceTracker,
   ) {}
+
+  /** Attach learning profiles for expertise-blended routing. */
+  setLearningProfiles(profiles: LearningProfileManager): void {
+    this.learningProfiles = profiles;
+  }
 
   /**
    * Classify a task description into structured classification.
@@ -197,35 +205,54 @@ export class TaskRouter {
       confidence = 0.5;
       reason = `Exploration (ε=${this.epsilon.toFixed(3)})`;
     } else {
-      // Exploitation
+      // Exploitation: blend Q-values with learning profile expertise
       const stateActions = this.qTable.get(stateKey);
       if (!stateActions || stateActions.size === 0) {
-        // No Q-values: prefer agent with best EMA score
+        // No Q-values: use expertise + EMA score
         let bestAgent = available[0]!;
         let bestScore = -Infinity;
         for (const a of available) {
-          const score = await this.perfTracker.getScore(a);
-          if (score > bestScore) {
-            bestScore = score;
+          const perfScore = await this.perfTracker.getScore(a);
+          const expertise = this.learningProfiles
+            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            : 0.5;
+          // Blend: 40% performance EMA + 60% learned expertise
+          const blended = 0.4 * perfScore + 0.6 * expertise;
+          if (blended > bestScore) {
+            bestScore = blended;
             bestAgent = a;
           }
         }
         agentId = bestAgent;
         confidence = 0.6;
-        reason = `Performance-based (no Q-data for ${stateKey})`;
+        reason = this.learningProfiles
+          ? `Expertise-based (no Q-data for ${stateKey}, score=${bestScore.toFixed(3)})`
+          : `Performance-based (no Q-data for ${stateKey})`;
       } else {
+        // Blend Q-value with expertise from learning profiles
         let bestAgent = available[0]!;
-        let bestQ = -Infinity;
+        let bestBlended = -Infinity;
+        let bestQ = 0;
         for (const a of available) {
           const q = stateActions.get(a) ?? 0;
-          if (q > bestQ) {
-            bestQ = q;
+          const expertise = this.learningProfiles
+            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            : 0.5;
+          // Normalize Q-value to 0-1 range (sigmoid-like: q / (1 + |q|))
+          const qNorm = q / (1 + Math.abs(q));
+          // Blend: 60% Q-value + 40% expertise
+          const blended = 0.6 * qNorm + 0.4 * expertise;
+          if (blended > bestBlended) {
+            bestBlended = blended;
             bestAgent = a;
+            bestQ = q;
           }
         }
         agentId = bestAgent;
         confidence = Math.min(1.0, 0.7 + bestQ * 0.1);
-        reason = `Q-value ${bestQ.toFixed(3)} for state ${stateKey}`;
+        reason = this.learningProfiles
+          ? `Blended Q=${bestQ.toFixed(3)} + expertise (score=${bestBlended.toFixed(3)}) for ${stateKey}`
+          : `Q-value ${bestQ.toFixed(3)} for state ${stateKey}`;
       }
     }
 

@@ -150,6 +150,7 @@ export class KaneruFacade {
     );
     this.dashboard = new TeamDashboardService(this.teamMgr, this.mailbox, null, this.ns);
     this.learningProfiles = new LearningProfileManager(this.client, this.ns);
+    this.taskRouter.setLearningProfiles(this.learningProfiles);
     this.decisionHistory = new DecisionHistory(this.client, this.ns);
     this.knowledgeTransfer = new KnowledgeTransferService(
       this.client, this.ns, this.fusion, this.nsMgr,
