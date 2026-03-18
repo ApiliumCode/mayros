@@ -226,19 +226,4 @@ export class DistributedVentureManager {
     return newPeers;
   }
 
-  /**
-   * Add a P2P peer to Cortex's connection pool, then register it for the venture.
-   * Combines peer connection + venture registration in one call.
-   */
-  async addAndRegisterPeer(ventureId: string, peerAddr: string): Promise<void> {
-    // Connect via Cortex P2P
-    try {
-      await this.client.p2pAddPeer(peerAddr);
-    } catch {
-      // Connection may fail but registration can still proceed
-    }
-
-    // Register for the venture
-    await this.registerPeer(ventureId, peerAddr);
-  }
 }

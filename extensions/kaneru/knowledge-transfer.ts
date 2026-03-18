@@ -13,6 +13,7 @@ import type { CortexClient } from "../shared/cortex-client.js";
 import type { KnowledgeFusion } from "../agent-mesh/knowledge-fusion.js";
 import type { NamespaceManager } from "../agent-mesh/namespace-manager.js";
 import type { FusionReport, MergeStrategy } from "../agent-mesh/mesh-protocol.js";
+import { stripBrackets } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -50,10 +51,6 @@ function transferSubject(ns: string, id: string): string {
 
 function transferPredicate(ns: string, field: string): string {
   return `${ns}:transfer:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 // ============================================================================

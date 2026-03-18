@@ -22,6 +22,7 @@
  *   mission list       — List missions for a venture
  *   mission claim      — Claim a mission for an agent run
  *   mission transition — Transition a mission to a new status
+ *   mission complete-with-learning — Complete with learning + knowledge transfer
  *   pulse register  — Register a pulse schedule for an agent
  *   pulse trigger   — Trigger a pulse event for an agent
  *   pulse list      — List pulse schedules for an agent
@@ -603,6 +604,50 @@ export function registerKaneruCli(program: Command) {
         handleError(err);
       } finally {
         mgrs.destroy();
+      }
+    });
+
+  // mayros kaneru mission complete-with-learning
+  mission
+    .command("complete-with-learning")
+    .description("Complete a mission with learning profile update and knowledge transfer")
+    .requiredOption("--mission <id>", "Mission ID")
+    .requiredOption("--agent <aid>", "Agent ID that completed it")
+    .requiredOption("--venture <vid>", "Venture ID")
+    .requiredOption("--title <text>", "Mission title")
+    .option("--duration <ms>", "Duration in milliseconds", "0")
+    .option("--failed", "Mark as failed instead of success")
+    .option("--squad <sid>", "Squad ID for knowledge transfer")
+    .action(async (opts: {
+      mission: string;
+      agent: string;
+      venture: string;
+      title: string;
+      duration: string;
+      failed?: boolean;
+      squad?: string;
+    }) => {
+      const parent = kaneru.opts();
+      const facade = await createFacade(parent);
+      try {
+        const result = await facade.completeMissionWithLearning({
+          missionId: opts.mission,
+          agentId: opts.agent,
+          ventureId: opts.venture,
+          title: opts.title,
+          success: !opts.failed,
+          durationMs: parseInt(opts.duration, 10) || 0,
+          squadId: opts.squad,
+        });
+        console.log("Mission completed with learning:");
+        console.log(`  Expertise: ${(result.profile.expertise * 100).toFixed(1)}%`);
+        console.log(`  Domain: ${result.profile.domain}`);
+        console.log(`  Task type: ${result.profile.taskType}`);
+        console.log(`  Notification: ${result.notification.message.split("\n")[0]}`);
+      } catch (err) {
+        handleError(err);
+      } finally {
+        facade.destroy();
       }
     });
 

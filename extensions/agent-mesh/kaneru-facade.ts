@@ -23,7 +23,7 @@ import { ConsensusEngine } from "./consensus-engine.js";
 import { DelegationEngine } from "./delegation-engine.js";
 import { TeamDashboardService } from "./team-dashboard.js";
 import { LearningProfileManager } from "../kaneru/learning-profiles.js";
-import type { MissionOutcome, LearningProfile } from "../kaneru/learning-profiles.js";
+import type { LearningProfile } from "../kaneru/learning-profiles.js";
 import { DecisionHistory } from "../kaneru/decision-history.js";
 import type { DecisionRecord, DecisionContext, ConsensusResultLike } from "../kaneru/decision-history.js";
 import { KnowledgeTransferService } from "../kaneru/knowledge-transfer.js";
@@ -225,7 +225,7 @@ export class KaneruFacade {
       throw new Error(`Squad not found: ${opts.squadId}`);
     }
     const agentIds = squad.members.map((m) => m.agentId);
-    return this.consensus.resolve({
+    const result = await this.consensus.resolve({
       id: `consensus-${randomUUID()}`,
       conflicts: [
         {
@@ -238,6 +238,15 @@ export class KaneruFacade {
       agentIds,
       strategy: opts.strategy ?? "weighted",
     });
+
+    // Auto-record decision for audit trail
+    try {
+      await this.decisionHistory.record(result);
+    } catch {
+      // Non-fatal: decision recording failure should not block consensus
+    }
+
+    return result;
   }
 
   /** Route a mission to the best agent via Q-learning. */
@@ -339,11 +348,6 @@ export class KaneruFacade {
 
   // ---- Learning Profiles ----
 
-  /** Record a mission outcome and update agent learning profile. */
-  async recordMissionOutcome(outcome: MissionOutcome): Promise<LearningProfile> {
-    return this.learningProfiles.recordOutcome(outcome);
-  }
-
   /** Get all learning profiles for an agent. */
   async getAgentExpertise(agentId: string): Promise<LearningProfile[]> {
     return this.learningProfiles.getAgentProfiles(agentId);
@@ -406,11 +410,6 @@ export class KaneruFacade {
   /** Auto-discover P2P peers and register them for a venture. */
   async discoverPeers(ventureId: string): Promise<string[]> {
     return this.distributed.discoverPeers(ventureId);
-  }
-
-  /** Install a Dojo template from the Skill Hub marketplace. */
-  async dojoInstallFromHub(slug: string, ventureName: string): Promise<DojoInstallResult> {
-    return this.dojo.installFromHub(slug, ventureName);
   }
 
   // ---- Mission Comments ----

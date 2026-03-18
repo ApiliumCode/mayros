@@ -45,17 +45,6 @@ const TREE_BRANCH_STYLE = `
   margin: 8px 0;
 `;
 
-const TREE_LINE_STYLE = `
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 50%;
-  border-left: 2px solid var(--border-color, #444);
-  border-bottom: 2px solid var(--border-color, #444);
-  width: 16px;
-`;
-
 // ============================================================================
 // Render functions
 // ============================================================================
