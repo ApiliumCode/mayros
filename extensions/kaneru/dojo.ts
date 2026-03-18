@@ -227,6 +227,19 @@ export class DojoService {
       throw new Error(`Invalid template "${slug}" — missing required fields`);
     }
 
+    if (template.agents.length > 20) {
+      throw new Error(`Template "${slug}" has too many agents (${template.agents.length}, max 20)`);
+    }
+    if (template.directives.length > 50) {
+      throw new Error(`Template "${slug}" has too many directives (${template.directives.length}, max 50)`);
+    }
+    // Validate agent IDs are alphanumeric
+    for (const agent of template.agents) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(agent.agentId)) {
+        throw new Error(`Template "${slug}" has invalid agent ID: "${agent.agentId}"`);
+      }
+    }
+
     return this.installTemplate(template, ventureName);
   }
 

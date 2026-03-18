@@ -10,6 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -39,11 +40,6 @@ export type VentureCreateOpts = {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/** Strip angle brackets from Cortex RDF notation. `<foo:bar>` → `foo:bar` */
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
-}
 
 function ventureSubject(ns: string, id: string): string {
   return `${ns}:venture:${id}`;
@@ -117,8 +113,8 @@ export class VentureManager {
     const subject = ventureSubject(this.ns, id);
 
     const fields: Array<[string, string | number]> = [
-      ["name", opts.name],
-      ["directive", opts.directive],
+      ["name", sanitizeTripleValue(opts.name)],
+      ["directive", sanitizeTripleValue(opts.directive)],
       ["fuelLimit", opts.fuelLimit ?? 0],
       ["status", "active"],
       ["prefix", opts.prefix.toUpperCase()],
@@ -192,8 +188,8 @@ export class VentureManager {
 
     const updates: Array<[string, string | number]> = [["updatedAt", now]];
 
-    if (patch.name !== undefined) updates.push(["name", patch.name]);
-    if (patch.directive !== undefined) updates.push(["directive", patch.directive]);
+    if (patch.name !== undefined) updates.push(["name", sanitizeTripleValue(patch.name)]);
+    if (patch.directive !== undefined) updates.push(["directive", sanitizeTripleValue(patch.directive)]);
     if (patch.fuelLimit !== undefined) updates.push(["fuelLimit", patch.fuelLimit]);
     if (patch.prefix !== undefined) updates.push(["prefix", patch.prefix.toUpperCase()]);
 

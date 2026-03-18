@@ -13,6 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 import type { VentureManager } from "./venture.js";
 
 // ============================================================================
@@ -74,11 +75,6 @@ function missionSubject(ns: string, id: string): string {
 
 function missionPredicate(ns: string, field: string): string {
   return `${ns}:mission:${field}`;
-}
-
-/** Strip angle brackets from Cortex RDF notation. `<foo:bar>` → `foo:bar` */
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseMissionTriples(
@@ -178,8 +174,8 @@ export class MissionManager {
 
     const fields: Array<[string, string | number | { node: string }]> = [
       ["identifier", identifier],
-      ["title", opts.title],
-      ["description", opts.description ?? ""],
+      ["title", sanitizeTripleValue(opts.title)],
+      ["description", sanitizeTripleValue(opts.description ?? "")],
       ["status", "queued"],
       ["priority", priority],
       ["venture", { node: `${this.ns}:venture:${opts.ventureId}` }],

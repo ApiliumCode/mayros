@@ -3,14 +3,12 @@
  *
  * Comments on missions stored as Cortex RDF triples. Enables discussion
  * threads on missions — agents report findings, operators provide feedback,
- * and decisions are recorded inline.
- *
- * Paperclip stores comments in Postgres. We store them in Cortex —
- * queryable by any agent, DAG-auditable.
+ * and decisions are recorded inline. Queryable by any agent, DAG-auditable.
  */
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -36,10 +34,6 @@ function commentPredicate(ns: string, field: string): string {
   return `${ns}:comment:${field}`;
 }
 
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
-}
-
 // ============================================================================
 // MissionCommentService
 // ============================================================================
@@ -62,8 +56,8 @@ export class MissionCommentService {
 
     const fields: Array<[string, string]> = [
       ["missionId", missionId],
-      ["author", author],
-      ["content", content],
+      ["author", sanitizeTripleValue(author)],
+      ["content", sanitizeTripleValue(content)],
       ["createdAt", now],
     ];
 

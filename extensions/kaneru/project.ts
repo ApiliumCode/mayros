@@ -10,6 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -49,10 +50,6 @@ function projectSubject(ns: string, id: string): string {
 
 function projectPredicate(ns: string, field: string): string {
   return `${ns}:project:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseProjectTriples(
@@ -116,16 +113,16 @@ export class ProjectManager {
     const subject = projectSubject(this.ns, id);
 
     const fields: Array<[string, string | { node: string }]> = [
-      ["name", opts.name],
+      ["name", sanitizeTripleValue(opts.name)],
       ["ventureId", { node: `${this.ns}:venture:${opts.ventureId}` }],
       ["status", "planning"],
-      ["category", opts.category ?? "general"],
-      ["description", opts.description ?? ""],
+      ["category", sanitizeTripleValue(opts.category ?? "general")],
+      ["description", sanitizeTripleValue(opts.description ?? "")],
       ["createdAt", now],
       ["updatedAt", now],
     ];
 
-    if (opts.owner) fields.push(["owner", opts.owner]);
+    if (opts.owner) fields.push(["owner", sanitizeTripleValue(opts.owner)]);
     if (opts.targetDate) fields.push(["targetDate", opts.targetDate]);
 
     for (const [field, value] of fields) {
@@ -189,12 +186,12 @@ export class ProjectManager {
     const now = new Date().toISOString();
 
     const updates: Array<[string, string]> = [["updatedAt", now]];
-    if (patch.name !== undefined) updates.push(["name", patch.name]);
-    if (patch.owner !== undefined) updates.push(["owner", patch.owner]);
+    if (patch.name !== undefined) updates.push(["name", sanitizeTripleValue(patch.name)]);
+    if (patch.owner !== undefined) updates.push(["owner", sanitizeTripleValue(patch.owner ?? "")]);
     if (patch.status !== undefined) updates.push(["status", patch.status]);
     if (patch.targetDate !== undefined) updates.push(["targetDate", patch.targetDate]);
-    if (patch.category !== undefined) updates.push(["category", patch.category]);
-    if (patch.description !== undefined) updates.push(["description", patch.description]);
+    if (patch.category !== undefined) updates.push(["category", sanitizeTripleValue(patch.category)]);
+    if (patch.description !== undefined) updates.push(["description", sanitizeTripleValue(patch.description)]);
 
     for (const [field, value] of updates) {
       const existing = await this.client.listTriples({

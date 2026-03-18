@@ -10,6 +10,7 @@
  */
 
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets } from "../shared/rdf-utils.js";
 import { classifyMission } from "../shared/task-classification.js";
 
 // ============================================================================
@@ -53,10 +54,6 @@ function profileSubject(ns: string, agentId: string, domain: string, taskType: s
 
 function profilePredicate(ns: string, field: string): string {
   return `${ns}:profile:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseProfileTriples(

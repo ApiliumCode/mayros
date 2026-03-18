@@ -11,6 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -54,10 +55,6 @@ function terminalPredicate(ns: string, field: string): string {
   return `${ns}:terminal:${field}`;
 }
 
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
-}
-
 // ============================================================================
 // AgentTerminalService
 // ============================================================================
@@ -95,10 +92,10 @@ export class AgentTerminalService {
 
     const fields: Array<[string, string | number]> = [
       ["agentId", agentId],
-      ["command", command],
+      ["command", sanitizeTripleValue(command)],
       ["exitCode", result.exitCode],
-      ["stdout", result.stdout.slice(0, 2000)],
-      ["stderr", result.stderr.slice(0, 1000)],
+      ["stdout", sanitizeTripleValue(result.stdout.slice(0, 2000))],
+      ["stderr", sanitizeTripleValue(result.stderr.slice(0, 1000))],
       ["durationMs", result.durationMs],
       ["executedAt", now],
     ];

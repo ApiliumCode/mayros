@@ -7,12 +7,10 @@
  *
  * Supports auto-discovery via Cortex P2P (mDNS or manual peers)
  * using the existing p2pListPeers() API.
- *
- * Paperclip: single Postgres, no distribution.
- * Kaneru: DAG-synced ventures across devices.
  */
 
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -43,10 +41,6 @@ function peerSubject(ns: string, ventureId: string): string {
 
 function peerPredicate(ns: string, field: string): string {
   return `${ns}:peers:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 // ============================================================================

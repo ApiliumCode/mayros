@@ -5,12 +5,13 @@
  * question, votes, strategy, outcome, participants, and confidence.
  *
  * Every decision is queryable — "Why did we block v2.1?" becomes a
- * triple query. Impossible in Paperclip where decisions are lost in
- * ticket comments.
+ * triple query. Not possible with stateless architectures where decisions
+ * are lost in ticket comments.
  */
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -56,10 +57,6 @@ function decisionSubject(ns: string, id: string): string {
 
 function decisionPredicate(ns: string, field: string): string {
   return `${ns}:decision:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseDecisionTriples(
@@ -131,7 +128,7 @@ export class DecisionHistory {
     const participants = [...new Set(Object.keys(votes))];
 
     const fields: Array<[string, string | number]> = [
-      ["question", question],
+      ["question", sanitizeTripleValue(question)],
       ["strategy", result.strategy],
       ["resolvedValue", resolvedValue],
       ["confidence", Math.round(result.confidence * 1000) / 1000],

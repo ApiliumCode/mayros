@@ -5,8 +5,7 @@
  * overview, mission kanban, chain tree, and fuel analytics.
  *
  * These surfaces work on macOS, iOS, Android (native WebView) AND
- * the web portal (embedded A2UI host). No other product has venture-aware
- * canvas — OpenClaw has canvas but no org context, Paperclip has no canvas.
+ * the web portal (embedded A2UI host).
  */
 
 // ============================================================================
@@ -195,22 +194,24 @@ export function generateMissionsSurface(data: CanvasVentureData): string {
       const mid = `m-${status}-${i}`;
       const claimInfo = m.claimedBy ? `Agent: ${m.claimedBy}` : "Unclaimed";
 
-      components.push(card(mid, [`${mid}-id`, `${mid}-title`, `${mid}-meta`]));
+      // Build card children list upfront, including action button if applicable
+      const cardChildren = [`${mid}-id`, `${mid}-title`, `${mid}-meta`];
+
+      if (status === "ready") {
+        cardChildren.push(`${mid}-claim`);
+      } else if (status === "active") {
+        cardChildren.push(`${mid}-complete`);
+      }
+
+      components.push(card(mid, cardChildren));
       components.push(text(`${mid}-id`, `${m.identifier} [${priorityLabel(m.priority)}]`, "caption"));
       components.push(text(`${mid}-title`, m.title, "body"));
       components.push(text(`${mid}-meta`, claimInfo, "caption"));
 
-      // Add action button for claimable missions
       if (status === "ready") {
         components.push(button(`${mid}-claim`, "Claim", `claim:${m.id}`));
-        components[components.length - 4].component.Card = {
-          children: { explicitList: [`${mid}-id`, `${mid}-title`, `${mid}-meta`, `${mid}-claim`] },
-        };
       } else if (status === "active") {
         components.push(button(`${mid}-complete`, "Complete", `complete:${m.id}`));
-        components[components.length - 4].component.Card = {
-          children: { explicitList: [`${mid}-id`, `${mid}-title`, `${mid}-meta`, `${mid}-complete`] },
-        };
       }
 
       cardIds.push(mid);

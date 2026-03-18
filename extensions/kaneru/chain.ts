@@ -8,6 +8,7 @@
  */
 
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -37,11 +38,6 @@ function agentSubject(ns: string, agentId: string): string {
 
 function agentPredicate(ns: string, field: string): string {
   return `${ns}:agent:${field}`;
-}
-
-/** Strip angle brackets from Cortex RDF notation. `<foo:bar>` → `foo:bar` */
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 // ============================================================================

@@ -11,6 +11,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -69,11 +70,6 @@ function fuelSubject(ns: string, id: string): string {
 
 function fuelPredicate(ns: string, field: string): string {
   return `${ns}:fuel:${field}`;
-}
-
-/** Strip angle brackets from Cortex RDF notation. `<foo:bar>` → `foo:bar` */
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseFuelTriples(
@@ -141,8 +137,8 @@ export class FuelController {
       ["costCents", opts.costCents],
       ["inputTokens", opts.inputTokens ?? 0],
       ["outputTokens", opts.outputTokens ?? 0],
-      ["provider", opts.provider],
-      ["model", opts.model],
+      ["provider", sanitizeTripleValue(opts.provider)],
+      ["model", sanitizeTripleValue(opts.model)],
       ["occurredAt", now],
     ];
 

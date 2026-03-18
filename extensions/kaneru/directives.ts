@@ -8,6 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets, sanitizeTripleValue } from "../shared/rdf-utils.js";
 
 // ============================================================================
 // Types
@@ -50,11 +51,6 @@ function directiveSubject(ns: string, id: string): string {
 
 function directivePredicate(ns: string, field: string): string {
   return `${ns}:directive:${field}`;
-}
-
-/** Strip angle brackets from Cortex RDF notation. `<foo:bar>` → `foo:bar` */
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function parseDirectiveTriples(
@@ -130,8 +126,8 @@ export class DirectiveManager {
     const level = opts.level ?? "task";
 
     const fields: Array<[string, string | number | { node: string }]> = [
-      ["title", opts.title],
-      ["description", opts.description ?? ""],
+      ["title", sanitizeTripleValue(opts.title)],
+      ["description", sanitizeTripleValue(opts.description ?? "")],
       ["level", level],
       ["status", "active"],
       ["venture", { node: `${this.ns}:venture:${opts.ventureId}` }],

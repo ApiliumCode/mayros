@@ -5,11 +5,11 @@
  * efficiency metrics, and burn rate forecasting.
  *
  * Builds on FuelController's event-sourced data to provide dashboardable
- * analytics. Paperclip has per-call cost tracking; we match and exceed
- * with semantic query-powered analytics.
+ * analytics with semantic query-powered insights.
  */
 
 import type { CortexClient } from "../shared/cortex-client.js";
+import { stripBrackets } from "../shared/rdf-utils.js";
 import type { FuelEvent } from "./fuel.js";
 
 // ============================================================================
@@ -68,10 +68,6 @@ export type CostAnalytics = {
 
 function fuelPredicate(ns: string, field: string): string {
   return `${ns}:fuel:${field}`;
-}
-
-function stripBrackets(s: string): string {
-  return s.startsWith("<") && s.endsWith(">") ? s.slice(1, -1) : s;
 }
 
 function dateKey(date: string, period: "daily" | "weekly" | "monthly"): string {

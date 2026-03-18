@@ -2116,6 +2116,8 @@ const agentMeshPlugin = {
     // Gateway Method — Kaneru Setup Wizard
     // ========================================================================
 
+    // Note: Gateway methods are only accessible to authenticated WebSocket clients.
+    // The gateway enforces device-token auth at the connection level.
     api.registerGatewayMethod("kaneru.setup", async ({ params, respond }) => {
       try {
         const p = params as {
