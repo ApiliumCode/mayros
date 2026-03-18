@@ -917,6 +917,20 @@ export function renderApp(state: AppViewState) {
                 onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
                 assistantName: state.assistantName,
                 assistantAvatar: state.assistantAvatar,
+                voiceRecording: (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false,
+                onToggleVoice: isVoiceAvailable() ? () => {
+                  const recording = (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false;
+                  if (recording) {
+                    stopVoiceRecognition(state.commandBar);
+                    (state as Record<string, unknown>).chatVoiceRecording = false;
+                  } else {
+                    startVoiceRecognition(state.commandBar, (text) => {
+                      state.chatMessage = (state.chatMessage ? state.chatMessage + " " : "") + text;
+                      (state as Record<string, unknown>).chatVoiceRecording = false;
+                    });
+                    (state as Record<string, unknown>).chatVoiceRecording = true;
+                  }
+                } : undefined,
               })
             : nothing
         }

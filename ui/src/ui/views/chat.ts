@@ -80,6 +80,9 @@ export type ChatProps = {
   onCloseSidebar?: () => void;
   onSplitRatioChange?: (ratio: number) => void;
   onChatScroll?: (event: Event) => void;
+  // Voice input
+  voiceRecording?: boolean;
+  onToggleVoice?: () => void;
 };
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
@@ -465,6 +468,15 @@ export function renderChat(props: ChatProps) {
             >
               ${canAbort ? "Stop" : "New session"}
             </button>
+            ${props.onToggleVoice ? html`
+              <button
+                class="btn"
+                style="padding: 6px 10px; font-size: 18px; ${props.voiceRecording ? `color: var(--accent, #ff5c5c); animation: pulse-mic 1s infinite;` : ""}"
+                ?disabled=${!props.connected}
+                @click=${props.onToggleVoice}
+                title=${props.voiceRecording ? "Stop recording" : "Voice input"}
+              >${props.voiceRecording ? "⏹" : "🎤"}</button>
+            ` : nothing}
             <button
               class="btn primary"
               ?disabled=${!props.connected}
