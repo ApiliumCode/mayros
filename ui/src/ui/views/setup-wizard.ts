@@ -48,43 +48,46 @@ const OVERLAY_STYLE = `
 
 const CARD_STYLE = `
   max-width: 520px; width: 100%; padding: 32px;
-  background: var(--bg-secondary); border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  position: relative;
+  background: #1a1a2e; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  position: relative; color: #e0e0e0;
 `;
 
 const INPUT_STYLE = `
   width: 100%; padding: 10px 12px;
-  background: var(--bg-primary); border: 1px solid var(--border-color);
-  border-radius: 6px; color: var(--text-primary); font-size: 14px;
+  background: #0f0f1a; border: 1px solid #333;
+  border-radius: 6px; color: #e0e0e0; font-size: 14px;
   box-sizing: border-box;
 `;
 
 const TEXTAREA_STYLE = `
-  ${INPUT_STYLE}
+  width: 100%; padding: 10px 12px;
+  background: #0f0f1a; border: 1px solid #333;
+  border-radius: 6px; color: #e0e0e0; font-size: 14px;
+  box-sizing: border-box;
   min-height: 80px; resize: vertical; font-family: inherit;
 `;
 
 const LABEL_STYLE = `
-  font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; display: block;
+  font-size: 13px; color: #999; margin-bottom: 4px; display: block;
 `;
 
 const FIELD_STYLE = `margin-bottom: 16px;`;
 
 const NEXT_BTN_STYLE = `
-  background: var(--color-accent, #10b981); color: white;
+  background: #10b981; color: white;
   padding: 8px 20px; border-radius: 6px; border: none;
   cursor: pointer; font-size: 14px; font-weight: 500;
 `;
 
 const BACK_BTN_STYLE = `
-  background: none; border: none; color: var(--text-secondary);
+  background: none; border: none; color: #999;
   cursor: pointer; font-size: 14px; padding: 8px 12px;
 `;
 
 const CLOSE_BTN_STYLE = `
   position: absolute; top: 12px; right: 16px;
-  background: none; border: none; color: var(--text-secondary);
+  background: none; border: none; color: #999;
   cursor: pointer; font-size: 18px; line-height: 1;
 `;
 
@@ -113,9 +116,9 @@ function renderStepIndicators(current: SetupWizardStep) {
         const completed = stepIndex(s.key) < stepIndex(current);
         const indicatorStyle = `
           padding-bottom: 8px;
-          border-bottom: 2px solid ${active ? "var(--color-accent, #10b981)" : "transparent"};
+          border-bottom: 2px solid ${active ? "#10b981" : "transparent"};
           font-weight: ${active ? "bold" : "normal"};
-          color: ${active ? "var(--text-primary)" : completed ? "var(--color-accent, #10b981)" : "var(--text-secondary)"};
+          color: ${active ? "#e0e0e0" : completed ? "#10b981" : "#777"};
           font-size: 13px;
         `;
         return html`
@@ -136,7 +139,7 @@ function renderVentureStep(props: SetupWizardProps) {
   const s = props.state;
   return html`
     <div>
-      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Name your venture</h2>
+      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Name your venture</h2>
       <p class="muted" style="margin: 0 0 24px 0; font-size: 14px;">
         This is the organization your agents will work for.
       </p>
@@ -205,7 +208,7 @@ function renderAgentStep(props: SetupWizardProps) {
   const s = props.state;
   return html`
     <div>
-      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Create your first agent</h2>
+      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Create your first agent</h2>
       <p class="muted" style="margin: 0 0 24px 0; font-size: 14px;">
         Choose a name and role for your agent.
       </p>
@@ -256,7 +259,7 @@ function renderMissionStep(props: SetupWizardProps) {
   const s = props.state;
   return html`
     <div>
-      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Give it something to do</h2>
+      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Give it something to do</h2>
       <p class="muted" style="margin: 0 0 24px 0; font-size: 14px;">
         Give your agent a small task to start with.
       </p>
@@ -316,18 +319,18 @@ function renderLaunchStep(props: SetupWizardProps) {
   const s = props.state;
 
   const checkStyle = `
-    color: var(--color-accent, #10b981); font-weight: bold; margin-right: 8px;
+    color: #10b981; font-weight: bold; margin-right: 8px;
   `;
 
   const summaryItemStyle = `
-    padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 14px;
+    padding: 10px 0; border-bottom: 1px solid #333; font-size: 14px;
   `;
 
   // Success state
   if (s.result) {
     return html`
       <div>
-        <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Launched</h2>
+        <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Launched</h2>
         <p class="muted" style="margin: 0 0 24px 0; font-size: 14px;">
           Your venture, agent, and mission have been created.
         </p>
@@ -358,7 +361,7 @@ function renderLaunchStep(props: SetupWizardProps) {
   if (s.error) {
     return html`
       <div>
-        <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Launch failed</h2>
+        <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Launch failed</h2>
         <div class="card" style="padding: 16px; margin: 16px 0;">
           <div class="stat-value warn" style="font-size: 14px; word-break: break-word;">${s.error}</div>
         </div>
@@ -375,7 +378,7 @@ function renderLaunchStep(props: SetupWizardProps) {
   // Default — ready to launch
   return html`
     <div>
-      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: var(--text-primary);">Ready to launch</h2>
+      <h2 style="margin: 0 0 4px 0; font-size: 20px; color: #e0e0e0;">Ready to launch</h2>
       <p class="muted" style="margin: 0 0 24px 0; font-size: 14px;">
         Everything is set up. Launching will create the venture, deploy the agent, and create the first mission.
       </p>
