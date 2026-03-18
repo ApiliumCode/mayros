@@ -426,7 +426,7 @@ export function renderChat(props: ChatProps) {
       <div class="chat-compose">
         ${renderAttachmentPreview(props)}
         <div class="chat-compose__row">
-          <label class="field chat-compose__field">
+          <label class="field chat-compose__field" style="position: relative;">
             <span>Message</span>
             <textarea
               ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
@@ -459,6 +459,23 @@ export function renderChat(props: ChatProps) {
               @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
               placeholder=${composePlaceholder}
             ></textarea>
+            ${props.onToggleVoice ? html`
+              <button
+                style="
+                  position: absolute; right: 8px; bottom: 8px;
+                  width: 32px; height: 32px; border-radius: 50%;
+                  border: none; cursor: pointer; display: flex;
+                  align-items: center; justify-content: center;
+                  font-size: 16px; transition: all 0.2s;
+                  ${props.voiceRecording
+                    ? `background: var(--accent, #ff5c5c); color: white; box-shadow: 0 0 12px var(--accent, #ff5c5c);`
+                    : `background: var(--bg-hover, #262a35); color: var(--card-foreground, #f4f4f5);`}
+                "
+                ?disabled=${!props.connected}
+                @click=${props.onToggleVoice}
+                title=${props.voiceRecording ? "Stop recording" : "Voice input (dictation)"}
+              >${props.voiceRecording ? "■" : "🎙"}</button>
+            ` : nothing}
           </label>
           <div class="chat-compose__actions">
             <button
@@ -468,15 +485,6 @@ export function renderChat(props: ChatProps) {
             >
               ${canAbort ? "Stop" : "New session"}
             </button>
-            ${props.onToggleVoice ? html`
-              <button
-                class="btn"
-                style="padding: 6px 10px; font-size: 18px; ${props.voiceRecording ? `color: var(--accent, #ff5c5c); animation: pulse-mic 1s infinite;` : ""}"
-                ?disabled=${!props.connected}
-                @click=${props.onToggleVoice}
-                title=${props.voiceRecording ? "Stop recording" : "Voice input"}
-              >${props.voiceRecording ? "⏹" : "🎤"}</button>
-            ` : nothing}
             <button
               class="btn primary"
               ?disabled=${!props.connected}
