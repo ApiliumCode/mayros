@@ -20,6 +20,8 @@ import {
   removeQueuedMessage as removeQueuedMessageInternal,
 } from "./app-chat.ts";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
+import { createInitialWizardState } from "./controllers/setup-wizard.ts";
+import type { SetupWizardState } from "./views/setup-wizard.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import { connectGateway as connectGatewayInternal } from "./app-gateway.ts";
 import {
@@ -228,6 +230,8 @@ export class MayrosApp extends LitElement {
   @state() venturesLoading = false;
   @state() venturesError: string | null = null;
   @state() venturesDashboard: VentureDashboardResponse | null = null;
+
+  @state() setupWizard: SetupWizardState = createInitialWizardState();
 
   @state() cortexLoading = false;
   @state() cortexStatus: CortexStatusResponse | null = null;

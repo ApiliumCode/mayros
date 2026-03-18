@@ -11,6 +11,7 @@ export type VentureDashboardProps = {
   error: string | null;
   dashboard: VentureDashboardResponse | null;
   onRefresh: () => void;
+  onNewVenture?: () => void;
 };
 
 // ============================================================================
@@ -260,6 +261,13 @@ export function renderVenturesDashboard(props: VentureDashboardProps) {
         <div style="flex: 1;">
           <span class="muted">Ventures: ${d.ventures.length} | Missions: ${d.missions.length}</span>
         </div>
+        ${props.onNewVenture
+          ? html`<button
+              class="btn btn--sm"
+              style="background: var(--color-accent, #10b981); color: white;"
+              @click=${() => props.onNewVenture!()}
+            >New Venture</button>`
+          : nothing}
         <button class="btn btn--sm" ?disabled=${props.loading} @click=${() => props.onRefresh()}>
           Refresh
         </button>

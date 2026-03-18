@@ -1974,6 +1974,31 @@ const agentMeshPlugin = {
         const routeTable = fullTable
           .sort((a, b) => b.qValue - a.qValue)
           .slice(0, 100);
+
+        // Collect available agents from all venture chains
+        const availableAgents: Array<{ agentId: string; role: string }> = [];
+        try {
+          const { VentureManager } = await import("../kaneru/venture.js");
+          const { ChainManager } = await import("../kaneru/chain.js");
+          const vm = new VentureManager(client, ns);
+          const cm = new ChainManager(client, ns);
+          const ventures = await vm.list();
+          for (const v of ventures.slice(0, 10)) {
+            const chain = await cm.getChain(v.id);
+            const extractAgents = (nodes: Array<{ agentId: string; role: string; children: unknown[] }>) => {
+              for (const n of nodes) {
+                if (!availableAgents.some((a) => a.agentId === n.agentId)) {
+                  availableAgents.push({ agentId: n.agentId, role: n.role });
+                }
+                extractAgents(n.children as typeof nodes);
+              }
+            };
+            extractAgents(chain);
+          }
+        } catch {
+          // No ventures or chain data available
+        }
+
         respond(true, {
           squads: summary.teams.map((t) => ({
             id: t.teamId,
@@ -1983,6 +2008,7 @@ const agentMeshPlugin = {
             updatedAt: t.updatedAt,
           })),
           routeTable,
+          availableAgents,
           stats: {
             activeSquads: summary.activeTeams,
             qTableSize: taskRouter?.size() ?? 0,
@@ -2080,6 +2106,66 @@ const agentMeshPlugin = {
             activeMissions,
             totalFuelSpent,
           },
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
+    // Gateway Method — Kaneru Setup Wizard
+    // ========================================================================
+
+    api.registerGatewayMethod("kaneru.setup", async ({ params, respond }) => {
+      try {
+        const p = params as {
+          ventureName: string;
+          ventureDirective: string;
+          venturePrefix: string;
+          ventureFuelLimit: number;
+          agentName: string;
+          agentRole: string;
+          missionTitle: string;
+          missionDescription: string;
+          missionPriority: string;
+        };
+
+        const { VentureManager } = await import("../kaneru/venture.js");
+        const { ChainManager } = await import("../kaneru/chain.js");
+        const { MissionManager } = await import("../kaneru/mission.js");
+
+        const vm = new VentureManager(client, ns);
+        const cm = new ChainManager(client, ns);
+        const mm = new MissionManager(client, ns, vm);
+
+        // 1. Create venture
+        const venture = await vm.create({
+          name: p.ventureName,
+          directive: p.ventureDirective,
+          prefix: p.venturePrefix,
+          fuelLimit: p.ventureFuelLimit || 0,
+        });
+
+        // 2. Deploy agent to the venture chain
+        await cm.deploy(p.agentName, venture.id, p.agentRole);
+
+        // 3. Create first mission
+        const validPriorities = ["critical", "high", "medium", "low"] as const;
+        const priority = validPriorities.includes(p.missionPriority as typeof validPriorities[number])
+          ? (p.missionPriority as typeof validPriorities[number])
+          : "medium";
+        const mission = await mm.create({
+          ventureId: venture.id,
+          title: p.missionTitle,
+          description: p.missionDescription || "",
+          priority,
+        });
+
+        respond(true, {
+          ventureId: venture.id,
+          agentId: p.agentName,
+          missionId: mission.id,
+          missionIdentifier: mission.identifier,
         });
       } catch (err) {
         respond(false, { error: err instanceof Error ? err.message : String(err) });

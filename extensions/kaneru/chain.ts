@@ -85,7 +85,7 @@ export class ChainManager {
     await this.client.createTriple({
       subject,
       predicate: agentPredicate(this.ns, "deployedAt"),
-      object: ventureNode,
+      object: { node: ventureNode },
     });
 
     await this.client.createTriple({
@@ -216,12 +216,20 @@ export class ChainManager {
   async getChain(ventureId: string): Promise<ChainNode[]> {
     const ventureNode = `${this.ns}:venture:${ventureId}`;
 
-    // Find all agents deployed to this venture
-    const deployments = await this.client.patternQuery({
+    // Find all agents deployed to this venture (try node ref first, fall back to string)
+    let deployments = await this.client.patternQuery({
       predicate: agentPredicate(this.ns, "deployedAt"),
       object: { node: ventureNode },
       limit: 200,
     });
+    // Fallback: legacy data stored as plain string
+    if (deployments.matches.length === 0) {
+      deployments = await this.client.patternQuery({
+        predicate: agentPredicate(this.ns, "deployedAt"),
+        object: ventureNode,
+        limit: 200,
+      });
+    }
 
     const agentPrefix = `${this.ns}:agent:`;
     const agentIds: string[] = [];

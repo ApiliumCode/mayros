@@ -79,6 +79,8 @@ import { renderKaneruDashboard } from "./views/kaneru.ts";
 import { loadKaneruDashboard } from "./controllers/kaneru.ts";
 import { renderVenturesDashboard } from "./views/ventures.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
+import { renderSetupWizard } from "./views/setup-wizard.ts";
+import { wizardNext, wizardBack, wizardCreate } from "./controllers/setup-wizard.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -1028,6 +1030,9 @@ export function renderApp(state: AppViewState) {
                 error: state.venturesError,
                 dashboard: state.venturesDashboard,
                 onRefresh: () => void loadVenturesDashboard(state),
+                onNewVenture: () => {
+                  state.setupWizard = { ...state.setupWizard, open: true, step: "venture", error: null, result: null };
+                },
               })
             : nothing
         }
@@ -1039,12 +1044,63 @@ export function renderApp(state: AppViewState) {
                 error: state.kaneruError,
                 dashboard: state.kaneruDashboard,
                 onRefresh: () => void loadKaneruDashboard(state),
+                squadBuilder: (state as Record<string, unknown>).squadBuilderAgents
+                  ? {
+                      availableAgents: (state as Record<string, unknown>).squadBuilderAgents as Array<{ agentId: string; role: string }>,
+                      selectedAgents: ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [],
+                      squadName: ((state as Record<string, unknown>).squadBuilderName as string) ?? "",
+                      strategy: ((state as Record<string, unknown>).squadBuilderStrategy as string) ?? "additive",
+                      onToggleAgent: (agentId: string) => {
+                        const sel = ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [];
+                        (state as Record<string, unknown>).squadBuilderSelected = sel.includes(agentId)
+                          ? sel.filter((id) => id !== agentId)
+                          : [...sel, agentId];
+                      },
+                      onNameChange: (name: string) => { (state as Record<string, unknown>).squadBuilderName = name; },
+                      onStrategyChange: (strategy: string) => { (state as Record<string, unknown>).squadBuilderStrategy = strategy; },
+                      onCreate: () => {},
+                      creating: false,
+                    }
+                  : undefined,
               })
             : nothing
         }
       </main>
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
+      ${renderSetupWizard({
+        state: state.setupWizard,
+        onFieldChange: (field, value) => {
+          state.setupWizard = { ...state.setupWizard, [field]: value };
+        },
+        onNext: () => {
+          const next = { ...state.setupWizard };
+          wizardNext(next);
+          state.setupWizard = next;
+        },
+        onBack: () => {
+          const next = { ...state.setupWizard };
+          wizardBack(next);
+          state.setupWizard = next;
+        },
+        onClose: () => {
+          state.setupWizard = { ...state.setupWizard, open: false };
+          // Refresh ventures dashboard after wizard closes if a venture was created
+          if (state.setupWizard.result) {
+            void loadVenturesDashboard(state);
+          }
+        },
+        onCreate: () => {
+          if (!state.client) {
+            return;
+          }
+          const next = { ...state.setupWizard };
+          void wizardCreate(next, state.client).then(() => {
+            state.setupWizard = { ...next };
+          });
+          state.setupWizard = next;
+        },
+      })}
     </div>
   `;
 }
