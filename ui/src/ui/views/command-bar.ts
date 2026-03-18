@@ -365,7 +365,7 @@ export function renderCommandBar(props: CommandBarProps) {
 
         <!-- Footer -->
         <div style=${FOOTER_STYLE}>
-          ESC to close &middot; Ctrl+K to toggle &middot; Tab to navigate
+          ESC to close &middot; Ctrl+/ to toggle &middot; Tab to navigate
         </div>
       </div>
     </div>

@@ -135,7 +135,7 @@ export function renderApp(state: AppViewState) {
   return html`
     <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}"
       @keydown=${(e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        if ((e.ctrlKey || e.metaKey) && e.key === "/") {
           e.preventDefault();
           const wasOpen = state.commandBar.open;
           state.commandBar = {
