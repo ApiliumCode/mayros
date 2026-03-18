@@ -9,16 +9,10 @@ import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
 import type { PerformanceTracker } from "./performance-tracker.js";
 import type { LearningProfileManager } from "../kaneru/learning-profiles.js";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type TaskClassification = {
-  taskType: string; // e.g., "code-review", "security-scan", "implementation"
-  complexity: "low" | "medium" | "high";
-  domain: string; // e.g., "typescript", "python", "general"
-};
+import {
+  classifyTask as sharedClassifyTask,
+  type TaskClassification,
+} from "../shared/task-classification.js";
 
 export type RoutingDecision = {
   routingId: string;
@@ -49,77 +43,8 @@ const EPSILON_DECAY = 0.995;
 const EPSILON_MIN = 0.05;
 const CORTEX_PREFIX = "miteru:qtable:";
 
-// ============================================================================
-// Task classification helpers
-// ============================================================================
-
-const TASK_TYPE_KEYWORDS: Record<string, string[]> = {
-  "code-review": ["review", "check", "lint", "inspect"],
-  "security-scan": ["security", "vulnerability", "cve", "audit", "pentest"],
-  implementation: ["implement", "build", "create", "add", "feature"],
-  refactoring: ["refactor", "clean", "simplify", "restructure"],
-  testing: ["test", "spec", "coverage", "assertion"],
-  documentation: ["document", "docs", "readme", "explain"],
-  debugging: ["debug", "fix", "bug", "error", "crash"],
-  analysis: ["analyze", "report", "benchmark", "profile"],
-};
-
-const DOMAIN_EXTENSIONS: Record<string, string[]> = {
-  typescript: [".ts", ".tsx"],
-  javascript: [".js", ".jsx", ".mjs"],
-  python: [".py"],
-  rust: [".rs"],
-  go: [".go"],
-  java: [".java"],
-};
-
-function detectTaskType(description: string): string {
-  const lower = description.toLowerCase();
-  let bestType = "general";
-  let bestScore = 0;
-
-  for (const [type, keywords] of Object.entries(TASK_TYPE_KEYWORDS)) {
-    let score = 0;
-    for (const kw of keywords) {
-      if (lower.includes(kw)) score++;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestType = type;
-    }
-  }
-
-  return bestType;
-}
-
-function detectComplexity(description: string): "low" | "medium" | "high" {
-  const words = description.split(/\s+/).length;
-  const hasScope = /\b(all|entire|full|complete|whole)\b/i.test(description);
-  const hasMultiple = /\b(multiple|several|many|each|every)\b/i.test(description);
-
-  if (words > 100 || (hasScope && hasMultiple)) return "high";
-  if (words > 30 || hasScope || hasMultiple) return "medium";
-  return "low";
-}
-
-function detectDomain(description: string, path?: string): string {
-  // Check path first
-  if (path) {
-    for (const [domain, exts] of Object.entries(DOMAIN_EXTENSIONS)) {
-      for (const ext of exts) {
-        if (path.endsWith(ext)) return domain;
-      }
-    }
-  }
-
-  // Check description keywords
-  const lower = description.toLowerCase();
-  for (const domain of Object.keys(DOMAIN_EXTENSIONS)) {
-    if (lower.includes(domain)) return domain;
-  }
-
-  return "general";
-}
+// Re-export TaskClassification for consumers that import from this module
+export type { TaskClassification } from "../shared/task-classification.js";
 
 // ============================================================================
 // TaskRouter
@@ -145,13 +70,10 @@ export class TaskRouter {
 
   /**
    * Classify a task description into structured classification.
+   * Delegates to shared task-classification module.
    */
   classifyTask(description: string, path?: string): TaskClassification {
-    return {
-      taskType: detectTaskType(description),
-      complexity: detectComplexity(description),
-      domain: detectDomain(description, path),
-    };
+    return sharedClassifyTask(description, path);
   }
 
   /**

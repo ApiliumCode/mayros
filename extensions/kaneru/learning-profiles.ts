@@ -10,6 +10,7 @@
  */
 
 import type { CortexClient } from "../shared/cortex-client.js";
+import { classifyMission } from "../shared/task-classification.js";
 
 // ============================================================================
 // Types
@@ -91,46 +92,8 @@ function parseProfileTriples(
   };
 }
 
-// ============================================================================
-// Task classification (reusable from task-router patterns)
-// ============================================================================
-
-const TASK_TYPE_KEYWORDS: Record<string, string[]> = {
-  "code-review": ["review", "pr", "pull request", "approve", "feedback"],
-  "security-scan": ["security", "vulnerability", "cve", "owasp", "audit"],
-  implementation: ["implement", "build", "create", "add", "feature", "develop"],
-  refactoring: ["refactor", "clean", "simplify", "extract", "restructure"],
-  testing: ["test", "spec", "coverage", "assertion"],
-  documentation: ["document", "docs", "readme", "explain"],
-  debugging: ["debug", "fix", "bug", "error", "crash"],
-  analysis: ["analyze", "report", "benchmark", "profile"],
-};
-
-export function classifyMission(title: string): { domain: string; taskType: string } {
-  const lower = title.toLowerCase();
-
-  let bestType = "general";
-  let bestScore = 0;
-  for (const [type, keywords] of Object.entries(TASK_TYPE_KEYWORDS)) {
-    let score = 0;
-    for (const kw of keywords) {
-      if (lower.includes(kw)) score++;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestType = type;
-    }
-  }
-
-  // Simple domain detection from title keywords
-  const domains = ["typescript", "javascript", "python", "rust", "go", "java"];
-  let domain = "general";
-  for (const d of domains) {
-    if (lower.includes(d)) { domain = d; break; }
-  }
-
-  return { domain, taskType: bestType };
-}
+// Re-export classifyMission from shared module
+export { classifyMission } from "../shared/task-classification.js";
 
 // ============================================================================
 // LearningProfileManager
