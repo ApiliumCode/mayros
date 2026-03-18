@@ -83,6 +83,13 @@ import { renderVenturesDashboard } from "./views/ventures.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { renderSetupWizard } from "./views/setup-wizard.ts";
 import { wizardNext, wizardBack, wizardCreate } from "./controllers/setup-wizard.ts";
+import { renderCommandBar } from "./views/command-bar.ts";
+import {
+  loadCommandBarContext,
+  executeCommand as executeCommandBar,
+  startVoiceRecognition,
+  stopVoiceRecognition,
+} from "./controllers/command-bar.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -126,7 +133,23 @@ export function renderApp(state: AppViewState) {
     null;
 
   return html`
-    <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}">
+    <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}"
+      @keydown=${(e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+          e.preventDefault();
+          const wasOpen = state.commandBar.open;
+          state.commandBar = {
+            ...state.commandBar,
+            open: !wasOpen,
+            query: wasOpen ? state.commandBar.query : "",
+            result: wasOpen ? state.commandBar.result : null,
+            error: wasOpen ? state.commandBar.error : null,
+          };
+          if (!wasOpen && state.client) {
+            void loadCommandBarContext(state.commandBar, state.client);
+          }
+        }
+      }}>
       <header class="topbar">
         <div class="topbar-left">
           <button
@@ -1117,6 +1140,46 @@ export function renderApp(state: AppViewState) {
             state.setupWizard = { ...next };
           });
           state.setupWizard = next;
+        },
+      })}
+      ${renderCommandBar({
+        state: state.commandBar,
+        onQueryChange: (query: string) => {
+          state.commandBar = { ...state.commandBar, query };
+        },
+        onSubmit: (query: string) => {
+          if (!state.client) return;
+          void executeCommandBar(state.commandBar, state.client, query);
+        },
+        onClose: () => {
+          state.commandBar = { ...state.commandBar, open: false };
+        },
+        onToggleMic: () => {
+          if (state.commandBar.recording) {
+            stopVoiceRecognition(state.commandBar);
+          } else {
+            startVoiceRecognition(state.commandBar, (text: string) => {
+              state.commandBar = { ...state.commandBar, query: text };
+              if (state.client) {
+                void executeCommandBar(state.commandBar, state.client, text);
+              }
+            });
+          }
+        },
+        onQuickAction: (action: string) => {
+          const labels: Record<string, string> = {
+            "create-mission": "create mission",
+            "check-fuel": "check fuel",
+            "route-task": "route task",
+            "list-agents": "list agents",
+            "squad-status": "squad status",
+            "decisions": "recent decisions",
+          };
+          const query = labels[action] ?? action;
+          state.commandBar = { ...state.commandBar, query };
+          if (state.client) {
+            void executeCommandBar(state.commandBar, state.client, query);
+          }
         },
       })}
     </div>
