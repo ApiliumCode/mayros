@@ -264,7 +264,7 @@ export function renderVenturesDashboard(props: VentureDashboardProps) {
         ${props.onNewVenture
           ? html`<button
               class="btn btn--sm"
-              style="background: var(--color-accent, #10b981); color: white;"
+              style="background: var(--accent, #ff5c5c); color: var(--accent-foreground, #fff);"
               @click=${() => props.onNewVenture!()}
             >New Venture</button>`
           : nothing}
