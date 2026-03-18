@@ -89,6 +89,7 @@ import {
   executeCommand as executeCommandBar,
   startVoiceRecognition,
   stopVoiceRecognition,
+  isVoiceAvailable,
 } from "./controllers/command-bar.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
