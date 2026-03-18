@@ -39,6 +39,7 @@ export const en: TranslationMap = {
     mcp: "MCP",
     ventures: "Ventures",
     kaneru: "Kaneru",
+    canvas: "Canvas",
   },
   subtitles: {
     agents: "Manage agent workspaces, tools, and identities.",
@@ -58,6 +59,7 @@ export const en: TranslationMap = {
     mcp: "MCP server metrics, tool usage, and connection status.",
     ventures: "Venture projects, mission boards, and fuel budgets.",
     kaneru: "Multi-agent squads, Q-learning routing, and consensus decisions.",
+    canvas: "Venture-aware A2UI surfaces: overview, missions, chain, and fuel.",
   },
   overview: {
     access: {

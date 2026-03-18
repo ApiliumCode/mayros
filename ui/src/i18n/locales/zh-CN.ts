@@ -39,6 +39,7 @@ export const zh_CN: TranslationMap = {
     mcp: "MCP",
     ventures: "Ventures",
     kaneru: "Kaneru",
+    canvas: "Canvas",
   },
   subtitles: {
     agents: "管理代理工作区、工具和身份。",
@@ -58,6 +59,7 @@ export const zh_CN: TranslationMap = {
     mcp: "MCP 服务器指标、工具使用情况和连接状态。",
     ventures: "风险项目、任务板和燃料预算。",
     kaneru: "多代理小队、Q-learning 路由和共识决策。",
+    canvas: "感知风险的 A2UI 画布：概览、任务、指挥链和燃料。",
   },
   overview: {
     access: {

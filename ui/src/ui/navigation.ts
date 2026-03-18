@@ -16,6 +16,7 @@ export const TAB_GROUPS = [
       "mcp",
       "ventures",
       "kaneru",
+      "canvas",
     ],
   },
   { label: "agent", tabs: ["agents", "skills", "nodes"] },
@@ -34,6 +35,7 @@ export type Tab =
   | "mcp"
   | "ventures"
   | "kaneru"
+  | "canvas"
   | "skills"
   | "nodes"
   | "chat"
@@ -53,6 +55,7 @@ const TAB_PATHS: Record<Tab, string> = {
   mcp: "/mcp",
   ventures: "/ventures",
   kaneru: "/kaneru",
+  canvas: "/canvas",
   skills: "/skills",
   nodes: "/nodes",
   chat: "/chat",
@@ -168,6 +171,8 @@ export function iconForTab(tab: Tab): IconName {
       return "globe";
     case "kaneru":
       return "zap";
+    case "canvas":
+      return "monitor";
     case "skills":
       return "zap";
     case "nodes":

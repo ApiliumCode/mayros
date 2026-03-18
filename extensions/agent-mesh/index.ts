@@ -2173,6 +2173,28 @@ const agentMeshPlugin = {
     });
 
     // ========================================================================
+    // Gateway Method — Kaneru Canvas (A2UI surfaces)
+    // ========================================================================
+
+    api.registerGatewayMethod("kaneru.canvas", async ({ params, respond }) => {
+      try {
+        const { loadCanvasData } = await import("../kaneru/canvas-gateway.js");
+        const { generateSurface, generateAllSurfaces } = await import("../kaneru/canvas-surfaces.js");
+
+        const data = await loadCanvasData(client, ns);
+        const surfaceId = (params as { surface?: string })?.surface;
+
+        const jsonl = surfaceId
+          ? generateSurface(surfaceId as Parameters<typeof generateSurface>[0], data)
+          : generateAllSurfaces(data);
+
+        respond(true, { jsonl, surfaceId: surfaceId ?? "all" });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
     // Service
     // ========================================================================
 

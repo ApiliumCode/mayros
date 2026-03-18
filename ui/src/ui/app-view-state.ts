@@ -16,6 +16,7 @@ import type {
 } from "./controllers/cortex.ts";
 import type { McpDashboardResponse } from "./controllers/mcp.ts";
 import type { KaneruDashboardResponse } from "./controllers/kaneru.ts";
+import type { CanvasState } from "./controllers/canvas.ts";
 import type { VentureDashboardResponse } from "./controllers/ventures.ts";
 import type {
   AgentsListResult,
@@ -139,6 +140,10 @@ export type AppViewState = {
   kaneruLoading: boolean;
   kaneruError: string | null;
   kaneruDashboard: KaneruDashboardResponse | null;
+  canvasLoading: boolean;
+  canvasError: string | null;
+  canvasJsonl: string | null;
+  canvasActiveSurface: string;
   venturesLoading: boolean;
   venturesError: string | null;
   venturesDashboard: VentureDashboardResponse | null;

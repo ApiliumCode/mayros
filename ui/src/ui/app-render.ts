@@ -77,6 +77,8 @@ import { renderMcpDashboard } from "./views/mcp.ts";
 import { loadMcpDashboard } from "./controllers/mcp.ts";
 import { renderKaneruDashboard } from "./views/kaneru.ts";
 import { loadKaneruDashboard } from "./controllers/kaneru.ts";
+import { renderCanvasEmbed } from "./views/canvas-embed.ts";
+import { loadCanvasSurface } from "./controllers/canvas.ts";
 import { renderVenturesDashboard } from "./views/ventures.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { renderSetupWizard } from "./views/setup-wizard.ts";
@@ -1062,6 +1064,22 @@ export function renderApp(state: AppViewState) {
                       creating: false,
                     }
                   : undefined,
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "canvas"
+            ? renderCanvasEmbed({
+                loading: state.canvasLoading,
+                error: state.canvasError,
+                jsonl: state.canvasJsonl,
+                activeSurface: (state as Record<string, unknown>).canvasActiveSurface as string ?? "all",
+                onSurfaceChange: (surface: string) => {
+                  (state as Record<string, unknown>).canvasActiveSurface = surface;
+                  void loadCanvasSurface(state, surface === "all" ? undefined : surface);
+                },
+                onRefresh: () => void loadCanvasSurface(state, ((state as Record<string, unknown>).canvasActiveSurface as string) === "all" ? undefined : (state as Record<string, unknown>).canvasActiveSurface as string),
               })
             : nothing
         }

@@ -19,6 +19,7 @@ import {
 } from "./controllers/cortex.ts";
 import { loadMcpDashboard } from "./controllers/mcp.ts";
 import { loadKaneruDashboard } from "./controllers/kaneru.ts";
+import { loadCanvasSurface } from "./controllers/canvas.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
 import { loadCronJobs, loadCronStatus } from "./controllers/cron.ts";
@@ -264,6 +265,9 @@ export async function refreshActiveTab(host: SettingsHost) {
   }
   if (host.tab === "kaneru") {
     await loadKaneruDashboard(host as unknown as MayrosApp);
+  }
+  if (host.tab === "canvas") {
+    await loadCanvasSurface(host as unknown as MayrosApp);
   }
   if (host.tab === "usage") {
     await loadUsage(host as unknown as MayrosApp);

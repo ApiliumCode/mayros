@@ -227,6 +227,11 @@ export class MayrosApp extends LitElement {
   @state() kaneruError: string | null = null;
   @state() kaneruDashboard: KaneruDashboardResponse | null = null;
 
+  @state() canvasLoading = false;
+  @state() canvasError: string | null = null;
+  @state() canvasJsonl: string | null = null;
+  @state() canvasActiveSurface = "all";
+
   @state() venturesLoading = false;
   @state() venturesError: string | null = null;
   @state() venturesDashboard: VentureDashboardResponse | null = null;
