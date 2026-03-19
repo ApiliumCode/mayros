@@ -15,6 +15,7 @@ import {
   unlinkSync,
   renameSync,
   readdirSync,
+  copyFileSync,
 } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { homedir, platform, arch } from "node:os";
@@ -26,6 +27,7 @@ const REPO = "ApiliumCode/aingle";
 const INSTALL_DIR = join(homedir(), ".mayros", "bin");
 const IS_WIN = platform() === "win32";
 const BINARY_NAME = IS_WIN ? "aingle-cortex.exe" : "aingle-cortex";
+const REQUIRED_VERSION = "0.6.3";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
@@ -53,7 +55,7 @@ function getPlatformAsset() {
   const osKey = osMap[platform()];
   const archKey = archMap[arch()];
   if (!osKey || !archKey) return null;
-  const ext = IS_WIN ? ".zip" : ".tar.gz";
+  const ext = IS_WIN ? ".exe.zip" : ".tar.gz";
   return `aingle-cortex-${osKey}-${archKey}${ext}`;
 }
 
@@ -63,11 +65,31 @@ async function main() {
     return;
   }
 
-  // Already installed?
   const binaryPath = join(INSTALL_DIR, BINARY_NAME);
+
+  // Check installed version — skip only if it meets the minimum
   if (existsSync(binaryPath)) {
-    console.log(`[mayros] AIngle Cortex already installed at ${binaryPath}`);
-    return;
+    try {
+      const versionOut = execFileSync(binaryPath, ["--version"], { timeout: 5000 })
+        .toString()
+        .trim();
+      const match = versionOut.match(/v?(\d+\.\d+\.\d+)/);
+      if (match) {
+        const installed = match[1].split(".").map(Number);
+        const required = REQUIRED_VERSION.split(".").map(Number);
+        const needsUpdate =
+          installed[0] < required[0] ||
+          (installed[0] === required[0] && installed[1] < required[1]) ||
+          (installed[0] === required[0] && installed[1] === required[1] && installed[2] < required[2]);
+        if (!needsUpdate) {
+          console.log(`[mayros] AIngle Cortex v${match[1]} is up to date (requires >=${REQUIRED_VERSION})`);
+          return;
+        }
+        console.log(`[mayros] AIngle Cortex v${match[1]} installed, updating to >=${REQUIRED_VERSION}...`);
+      }
+    } catch {
+      // Can't determine version — proceed with install/update
+    }
   }
 
   const assetName = getPlatformAsset();
@@ -121,33 +143,61 @@ async function main() {
     execFileSync("tar", ["xzf", archivePath, "-C", INSTALL_DIR], { timeout: 30_000 });
   }
 
-  // Verify + rename platform-suffixed binary if needed
-  if (!existsSync(binaryPath)) {
-    const baseName = BINARY_NAME.replace(/\.exe$/, "");
-    const candidates = readdirSync(INSTALL_DIR).filter(
-      (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
-    );
-    if (candidates.length === 1) {
-      renameSync(join(INSTALL_DIR, candidates[0]), binaryPath);
-      console.log(`[mayros] Renamed ${candidates[0]} → ${BINARY_NAME}`);
-    } else {
-      console.warn(
-        `[mayros] Cortex binary not found after extraction. Install later with: mayros update`,
-      );
+  // Find and rename platform-suffixed binary (always check, even on updates)
+  const baseName = BINARY_NAME.replace(/\.exe$/, "");
+  const candidates = readdirSync(INSTALL_DIR).filter(
+    (f) =>
+      f.startsWith(baseName + "-") &&
+      !f.endsWith(".tar.gz") &&
+      !f.endsWith(".zip") &&
+      !f.endsWith(".exe.zip"),
+  );
+
+  if (candidates.length >= 1) {
+    const candidatePath = join(INSTALL_DIR, candidates[0]);
+
+    // On update: move old binary aside before renaming
+    if (existsSync(binaryPath)) {
+      const oldPath = binaryPath + ".old";
       try {
-        unlinkSync(archivePath);
-      } catch {}
-      return;
+        if (existsSync(oldPath)) unlinkSync(oldPath);
+        renameSync(binaryPath, oldPath);
+      } catch {
+        // If locked, try direct copy (Windows)
+        copyFileSync(candidatePath, binaryPath);
+        try { unlinkSync(candidatePath); } catch {}
+        console.log(`[mayros] Overwrote ${BINARY_NAME} with ${candidates[0]}`);
+        candidates.length = 0;
+      }
     }
+
+    if (candidates.length >= 1) {
+      renameSync(candidatePath, binaryPath);
+      console.log(`[mayros] Renamed ${candidates[0]} → ${BINARY_NAME}`);
+    }
+
+    // Clean up .old
+    const oldPath = binaryPath + ".old";
+    try { if (existsSync(oldPath)) unlinkSync(oldPath); } catch {}
+  } else if (!existsSync(binaryPath)) {
+    console.warn(
+      `[mayros] Cortex binary not found after extraction. Install later with: mayros update`,
+    );
+    try { unlinkSync(archivePath); } catch {}
+    return;
   }
+
   if (!IS_WIN) {
     chmodSync(binaryPath, 0o755);
   }
 
-  // Cleanup archive
-  try {
-    unlinkSync(archivePath);
-  } catch {}
+  // Cleanup archive and leftover suffixed binaries
+  try { unlinkSync(archivePath); } catch {}
+  for (const leftover of readdirSync(INSTALL_DIR).filter(
+    (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
+  )) {
+    try { unlinkSync(join(INSTALL_DIR, leftover)); } catch {}
+  }
 
   console.log(`[mayros] AIngle Cortex installed at ${binaryPath}`);
 }

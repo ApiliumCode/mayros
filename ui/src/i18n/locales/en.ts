@@ -36,6 +36,10 @@ export const en: TranslationMap = {
     debug: "Debug",
     logs: "Logs",
     cortex: "Cortex",
+    mcp: "MCP",
+    ventures: "Ventures",
+    kaneru: "Kaneru",
+    canvas: "Canvas",
   },
   subtitles: {
     agents: "Manage agent workspaces, tools, and identities.",
@@ -52,6 +56,10 @@ export const en: TranslationMap = {
     debug: "Gateway snapshots, events, and manual RPC calls.",
     logs: "Live tail of the gateway file logs.",
     cortex: "Browse the knowledge graph: triples, subjects, and predicates.",
+    mcp: "MCP server metrics, tool usage, and connection status.",
+    ventures: "Venture projects, mission boards, and fuel budgets.",
+    kaneru: "Multi-agent squads, Q-learning routing, and consensus decisions.",
+    canvas: "Venture-aware A2UI surfaces: overview, missions, chain, and fuel.",
   },
   overview: {
     access: {

@@ -73,6 +73,24 @@ import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderCortex } from "./views/cortex.ts";
+import { renderMcpDashboard } from "./views/mcp.ts";
+import { loadMcpDashboard } from "./controllers/mcp.ts";
+import { renderKaneruDashboard } from "./views/kaneru.ts";
+import { loadKaneruDashboard } from "./controllers/kaneru.ts";
+import { renderCanvasEmbed } from "./views/canvas-embed.ts";
+import { loadCanvasSurface } from "./controllers/canvas.ts";
+import { renderVenturesDashboard } from "./views/ventures.ts";
+import { loadVenturesDashboard } from "./controllers/ventures.ts";
+import { renderSetupWizard } from "./views/setup-wizard.ts";
+import { wizardNext, wizardBack, wizardCreate } from "./controllers/setup-wizard.ts";
+import { renderCommandBar } from "./views/command-bar.ts";
+import {
+  loadCommandBarContext,
+  executeCommand as executeCommandBar,
+  startVoiceRecognition,
+  stopVoiceRecognition,
+  isVoiceAvailable,
+} from "./controllers/command-bar.ts";
 import { renderOverview } from "./views/overview.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
@@ -116,7 +134,23 @@ export function renderApp(state: AppViewState) {
     null;
 
   return html`
-    <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}">
+    <div class="shell ${isChat ? "shell--chat" : ""} ${chatFocus ? "shell--chat-focus" : ""} ${state.settings.navCollapsed ? "shell--nav-collapsed" : ""} ${state.onboarding ? "shell--onboarding" : ""}"
+      @keydown=${(e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+          e.preventDefault();
+          const wasOpen = state.commandBar.open;
+          state.commandBar = {
+            ...state.commandBar,
+            open: !wasOpen,
+            query: wasOpen ? state.commandBar.query : "",
+            result: wasOpen ? state.commandBar.result : null,
+            error: wasOpen ? state.commandBar.error : null,
+          };
+          if (!wasOpen && state.client) {
+            void loadCommandBarContext(state.commandBar, state.client);
+          }
+        }
+      }}>
       <header class="topbar">
         <div class="topbar-left">
           <button
@@ -322,6 +356,7 @@ export function renderApp(state: AppViewState) {
                   state.sessionsFilterLimit = next.limit;
                   state.sessionsIncludeGlobal = next.includeGlobal;
                   state.sessionsIncludeUnknown = next.includeUnknown;
+                  void loadSessions(state);
                 },
                 onRefresh: () => loadSessions(state),
                 onPatch: (key, patch) => patchSession(state, key, patch),
@@ -883,6 +918,20 @@ export function renderApp(state: AppViewState) {
                 onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
                 assistantName: state.assistantName,
                 assistantAvatar: state.assistantAvatar,
+                voiceRecording: (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false,
+                onToggleVoice: isVoiceAvailable() ? () => {
+                  const recording = (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false;
+                  if (recording) {
+                    stopVoiceRecognition(state.commandBar);
+                    (state as Record<string, unknown>).chatVoiceRecording = false;
+                  } else {
+                    startVoiceRecognition(state.commandBar, (text) => {
+                      state.chatMessage = (state.chatMessage ? state.chatMessage + " " : "") + text;
+                      (state as Record<string, unknown>).chatVoiceRecording = false;
+                    });
+                    (state as Record<string, unknown>).chatVoiceRecording = true;
+                  }
+                } : undefined,
               })
             : nothing
         }
@@ -1002,9 +1051,152 @@ export function renderApp(state: AppViewState) {
               })
             : nothing
         }
+
+        ${
+          state.tab === "mcp"
+            ? renderMcpDashboard({
+                loading: state.mcpLoading,
+                error: state.mcpError,
+                dashboard: state.mcpDashboard,
+                onRefresh: () => void loadMcpDashboard(state),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "ventures"
+            ? renderVenturesDashboard({
+                loading: state.venturesLoading,
+                error: state.venturesError,
+                dashboard: state.venturesDashboard,
+                onRefresh: () => void loadVenturesDashboard(state),
+                onNewVenture: () => {
+                  state.setupWizard = { ...state.setupWizard, open: true, step: "venture", error: null, result: null };
+                },
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "kaneru"
+            ? renderKaneruDashboard({
+                loading: state.kaneruLoading,
+                error: state.kaneruError,
+                dashboard: state.kaneruDashboard,
+                onRefresh: () => void loadKaneruDashboard(state),
+                squadBuilder: (state as Record<string, unknown>).squadBuilderAgents
+                  ? {
+                      availableAgents: (state as Record<string, unknown>).squadBuilderAgents as Array<{ agentId: string; role: string }>,
+                      selectedAgents: ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [],
+                      squadName: ((state as Record<string, unknown>).squadBuilderName as string) ?? "",
+                      strategy: ((state as Record<string, unknown>).squadBuilderStrategy as string) ?? "additive",
+                      onToggleAgent: (agentId: string) => {
+                        const sel = ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [];
+                        (state as Record<string, unknown>).squadBuilderSelected = sel.includes(agentId)
+                          ? sel.filter((id) => id !== agentId)
+                          : [...sel, agentId];
+                      },
+                      onNameChange: (name: string) => { (state as Record<string, unknown>).squadBuilderName = name; },
+                      onStrategyChange: (strategy: string) => { (state as Record<string, unknown>).squadBuilderStrategy = strategy; },
+                      onCreate: () => {},
+                      creating: false,
+                    }
+                  : undefined,
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "canvas"
+            ? renderCanvasEmbed({
+                loading: state.canvasLoading,
+                error: state.canvasError,
+                jsonl: state.canvasJsonl,
+                activeSurface: (state as Record<string, unknown>).canvasActiveSurface as string ?? "all",
+                onSurfaceChange: (surface: string) => {
+                  (state as Record<string, unknown>).canvasActiveSurface = surface;
+                  void loadCanvasSurface(state, surface === "all" ? undefined : surface);
+                },
+                onRefresh: () => void loadCanvasSurface(state, ((state as Record<string, unknown>).canvasActiveSurface as string) === "all" ? undefined : (state as Record<string, unknown>).canvasActiveSurface as string),
+              })
+            : nothing
+        }
       </main>
       ${renderExecApprovalPrompt(state)}
       ${renderGatewayUrlConfirmation(state)}
+      ${renderSetupWizard({
+        state: state.setupWizard,
+        onFieldChange: (field, value) => {
+          state.setupWizard = { ...state.setupWizard, [field]: value };
+        },
+        onNext: () => {
+          const next = { ...state.setupWizard };
+          wizardNext(next);
+          state.setupWizard = next;
+        },
+        onBack: () => {
+          const next = { ...state.setupWizard };
+          wizardBack(next);
+          state.setupWizard = next;
+        },
+        onClose: () => {
+          state.setupWizard = { ...state.setupWizard, open: false };
+          // Refresh ventures dashboard after wizard closes if a venture was created
+          if (state.setupWizard.result) {
+            void loadVenturesDashboard(state);
+          }
+        },
+        onCreate: () => {
+          if (!state.client) {
+            return;
+          }
+          const next = { ...state.setupWizard };
+          void wizardCreate(next, state.client).then(() => {
+            state.setupWizard = { ...next };
+          });
+          state.setupWizard = next;
+        },
+      })}
+      ${renderCommandBar({
+        state: state.commandBar,
+        onQueryChange: (query: string) => {
+          state.commandBar = { ...state.commandBar, query };
+        },
+        onSubmit: (query: string) => {
+          if (!state.client) return;
+          void executeCommandBar(state.commandBar, state.client, query);
+        },
+        onClose: () => {
+          state.commandBar = { ...state.commandBar, open: false };
+        },
+        onToggleMic: () => {
+          if (state.commandBar.recording) {
+            stopVoiceRecognition(state.commandBar);
+          } else {
+            startVoiceRecognition(state.commandBar, (text: string) => {
+              state.commandBar = { ...state.commandBar, query: text };
+              if (state.client) {
+                void executeCommandBar(state.commandBar, state.client, text);
+              }
+            });
+          }
+        },
+        onQuickAction: (action: string) => {
+          const labels: Record<string, string> = {
+            "create-mission": "create mission",
+            "check-fuel": "check fuel",
+            "route-task": "route task",
+            "list-agents": "list agents",
+            "squad-status": "squad status",
+            "decisions": "recent decisions",
+          };
+          const query = labels[action] ?? action;
+          state.commandBar = { ...state.commandBar, query };
+          if (state.client) {
+            void executeCommandBar(state.commandBar, state.client, query);
+          }
+        },
+      })}
     </div>
   `;
 }

@@ -24,17 +24,31 @@ export async function loadDebug(state: DebugState) {
   }
   state.debugLoading = true;
   try {
-    const [status, health, models, heartbeat] = await Promise.all([
+    const results = await Promise.allSettled([
       state.client.request("status", {}),
       state.client.request("health", {}),
       state.client.request("models.list", {}),
       state.client.request("last-heartbeat", {}),
     ]);
-    state.debugStatus = status as StatusSummary;
-    state.debugHealth = health as HealthSnapshot;
-    const modelPayload = models as { models?: unknown[] } | undefined;
-    state.debugModels = Array.isArray(modelPayload?.models) ? modelPayload?.models : [];
-    state.debugHeartbeat = heartbeat;
+    if (results[0].status === "fulfilled") {
+      state.debugStatus = results[0].value as StatusSummary;
+    }
+    if (results[1].status === "fulfilled") {
+      state.debugHealth = results[1].value as HealthSnapshot;
+    }
+    if (results[2].status === "fulfilled") {
+      const modelPayload = results[2].value as { models?: unknown[] } | undefined;
+      state.debugModels = Array.isArray(modelPayload?.models) ? modelPayload?.models : [];
+    }
+    if (results[3].status === "fulfilled") {
+      state.debugHeartbeat = results[3].value;
+    }
+    const errors = results.filter((r) => r.status === "rejected");
+    if (errors.length > 0) {
+      state.debugCallError = errors
+        .map((r) => String((r as PromiseRejectedResult).reason))
+        .join("; ");
+    }
   } catch (err) {
     state.debugCallError = String(err);
   } finally {

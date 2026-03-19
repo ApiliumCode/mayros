@@ -24,8 +24,8 @@ async function isBinaryFile(filePath: string): Promise<boolean> {
   }
 }
 
-/** Regex to match @file mentions in user text */
-const FILE_MENTION_PATTERN = /@((?:~\/|\.\/|\/|[\w][\w.-]*\/)[\w./-]+)/g;
+/** Regex to match @file mentions in user text (supports Unix and Windows paths) */
+const FILE_MENTION_PATTERN = /@((?:~[/\\]|\.[/\\]|\/|[A-Za-z]:[/\\]|[\w][\w.-]*[/\\])[\w./\\:-]+)/g;
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const MAX_MENTIONS_PER_MESSAGE = 10;
@@ -61,7 +61,7 @@ export async function expandFileMentions(
     const filePath = match[1];
     const resolved = filePath.startsWith("~")
       ? path.join(process.env.HOME ?? "", filePath.slice(1))
-      : filePath.startsWith("/")
+      : path.isAbsolute(filePath)
         ? filePath
         : path.resolve(workDir, filePath);
 
@@ -77,7 +77,7 @@ export async function expandFileMentions(
         const attachment = await resolveMediaMention(resolved);
         if (attachment) {
           mediaAttachments.push(attachment);
-          const fileName = resolved.split("/").pop() ?? resolved;
+          const fileName = path.basename(resolved);
           mentions.push({
             original: `@${filePath}`,
             resolvedPath: resolved,

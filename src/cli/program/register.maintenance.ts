@@ -92,7 +92,8 @@ export function registerMaintenanceCommands(program: Command) {
     .option("--state", "Remove state + config", false)
     .option("--workspace", "Remove workspace dirs", false)
     .option("--app", "Remove the macOS app", false)
-    .option("--all", "Remove service + state + workspace + app", false)
+    .option("--cortex", "Remove Cortex binary + graph database", false)
+    .option("--all", "Remove service + state + workspace + app + cortex", false)
     .option("--yes", "Skip confirmation prompts", false)
     .option("--non-interactive", "Disable prompts (requires --yes)", false)
     .option("--dry-run", "Print actions without removing files", false)
@@ -103,6 +104,7 @@ export function registerMaintenanceCommands(program: Command) {
           state: Boolean(opts.state),
           workspace: Boolean(opts.workspace),
           app: Boolean(opts.app),
+          cortex: Boolean(opts.cortex),
           all: Boolean(opts.all),
           yes: Boolean(opts.yes),
           nonInteractive: Boolean(opts.nonInteractive),

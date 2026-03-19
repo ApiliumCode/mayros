@@ -59,7 +59,6 @@ export type ConsensusBreakdown = {
 // ============================================================================
 
 const ARBITRATE_MARGIN = 0.15;
-const CORTEX_PREFIX = "kimeru:consensus:";
 
 // ============================================================================
 // ConsensusEngine
@@ -112,8 +111,8 @@ export class ConsensusEngine {
       },
     };
 
-    // Persist result
-    await this.persistResult(result);
+    // Decision persistence handled by DecisionHistory (extensions/kaneru/decision-history.ts)
+    // to avoid double-storage with richer context (question, votes, venture/mission linking).
 
     return result;
   }
@@ -367,24 +366,4 @@ export class ConsensusEngine {
     return fallback;
   }
 
-  private async persistResult(result: ConsensusResult): Promise<void> {
-    if (!this.client) return;
-
-    try {
-      const subject = `${this.ns}:${CORTEX_PREFIX}${result.id}`;
-      await this.client.createTriple({
-        subject,
-        predicate: `${this.ns}:kimeru:result`,
-        object: JSON.stringify({
-          resolved: result.resolved,
-          strategy: result.strategy,
-          confidence: result.confidence,
-          totalConflicts: result.breakdown.totalConflicts,
-          resolvedCount: result.breakdown.resolvedCount,
-        }),
-      });
-    } catch {
-      // best-effort
-    }
-  }
 }

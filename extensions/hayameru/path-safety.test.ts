@@ -5,7 +5,7 @@ import path from "node:path";
 // Mock the plugin API to capture the hook handler, then invoke it with various paths.
 
 describe("hayameru path safety", () => {
-  const workDir = "/workspace/project";
+  const workDir = path.resolve("/workspace/project");
 
   // Helper: validate path like hayameru does
   function isPathSafe(filePath: string, baseDir: string): boolean {
@@ -26,16 +26,16 @@ describe("hayameru path safety", () => {
   });
 
   it("blocks absolute paths outside workspace", () => {
-    expect(isPathSafe("/etc/passwd", workDir)).toBe(false);
-    expect(isPathSafe("/tmp/evil.ts", workDir)).toBe(false);
+    expect(isPathSafe(path.resolve("/etc/passwd"), workDir)).toBe(false);
+    expect(isPathSafe(path.resolve("/tmp/evil.ts"), workDir)).toBe(false);
   });
 
   it("allows absolute paths inside workspace", () => {
-    expect(isPathSafe("/workspace/project/src/foo.ts", workDir)).toBe(true);
+    expect(isPathSafe(path.join(workDir, "src/foo.ts"), workDir)).toBe(true);
   });
 
   it("blocks paths that are prefix but not child", () => {
     // /workspace/project-evil/foo.ts starts with /workspace/project but is NOT a child
-    expect(isPathSafe("/workspace/project-evil/foo.ts", workDir)).toBe(false);
+    expect(isPathSafe(path.resolve("/workspace/project-evil/foo.ts"), workDir)).toBe(false);
   });
 });

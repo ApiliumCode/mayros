@@ -20,6 +20,10 @@ import {
   removeQueuedMessage as removeQueuedMessageInternal,
 } from "./app-chat.ts";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
+import { createInitialWizardState } from "./controllers/setup-wizard.ts";
+import { createInitialCommandBarState } from "./controllers/command-bar.ts";
+import type { SetupWizardState } from "./views/setup-wizard.ts";
+import type { CommandBarState } from "./views/command-bar.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import { connectGateway as connectGatewayInternal } from "./app-gateway.ts";
 import {
@@ -58,6 +62,9 @@ import type {
   CortexBrowseFilter,
   TripleEntry,
 } from "./controllers/cortex.ts";
+import type { McpDashboardResponse } from "./controllers/mcp.ts";
+import type { KaneruDashboardResponse } from "./controllers/kaneru.ts";
+import type { VentureDashboardResponse } from "./controllers/ventures.ts";
 import type { DevicePairingList } from "./controllers/devices.ts";
 import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
@@ -213,6 +220,26 @@ export class MayrosApp extends LitElement {
   @state() presenceEntries: PresenceEntry[] = [];
   @state() presenceError: string | null = null;
   @state() presenceStatus: string | null = null;
+
+  @state() mcpLoading = false;
+  @state() mcpError: string | null = null;
+  @state() mcpDashboard: McpDashboardResponse | null = null;
+
+  @state() kaneruLoading = false;
+  @state() kaneruError: string | null = null;
+  @state() kaneruDashboard: KaneruDashboardResponse | null = null;
+
+  @state() canvasLoading = false;
+  @state() canvasError: string | null = null;
+  @state() canvasJsonl: string | null = null;
+  @state() canvasActiveSurface = "all";
+
+  @state() venturesLoading = false;
+  @state() venturesError: string | null = null;
+  @state() venturesDashboard: VentureDashboardResponse | null = null;
+
+  @state() setupWizard: SetupWizardState = createInitialWizardState();
+  @state() commandBar: CommandBarState = createInitialCommandBarState();
 
   @state() cortexLoading = false;
   @state() cortexStatus: CortexStatusResponse | null = null;

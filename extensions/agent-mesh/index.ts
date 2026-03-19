@@ -51,9 +51,9 @@ import { RaftLeader } from "./raft-leader.js";
 
 const agentMeshPlugin = {
   id: "agent-mesh",
-  name: "Agent Mesh",
+  name: "Kaneru",
   description:
-    "Multi-agent coordination mesh with shared namespaces, delegation, and knowledge fusion via AIngle Cortex",
+    "Kaneru — multi-agent coordination with squads, missions, consensus, and Q-learning routing via AIngle Cortex",
   kind: "coordination" as const,
   configSchema: agentMeshConfigSchema,
 
@@ -1962,6 +1962,239 @@ const agentMeshPlugin = {
       },
       { commands: ["mesh"] },
     );
+
+    // ========================================================================
+    // Gateway Method — Kaneru Dashboard
+    // ========================================================================
+
+    api.registerGatewayMethod("kaneru.dashboard", async ({ respond }) => {
+      try {
+        const summary = await dashboard.getSummary();
+        const fullTable = taskRouter?.getRouteTable?.() ?? [];
+        const routeTable = fullTable
+          .sort((a, b) => b.qValue - a.qValue)
+          .slice(0, 100);
+
+        // Collect available agents from all venture chains
+        const availableAgents: Array<{ agentId: string; role: string }> = [];
+        try {
+          const { VentureManager } = await import("../kaneru/venture.js");
+          const { ChainManager } = await import("../kaneru/chain.js");
+          const vm = new VentureManager(client, ns);
+          const cm = new ChainManager(client, ns);
+          const ventures = await vm.list();
+          for (const v of ventures.slice(0, 10)) {
+            const chain = await cm.getChain(v.id);
+            const extractAgents = (nodes: Array<{ agentId: string; role: string; children: unknown[] }>) => {
+              for (const n of nodes) {
+                if (!availableAgents.some((a) => a.agentId === n.agentId)) {
+                  availableAgents.push({ agentId: n.agentId, role: n.role });
+                }
+                extractAgents(n.children as typeof nodes);
+              }
+            };
+            extractAgents(chain);
+          }
+        } catch {
+          // No ventures or chain data available
+        }
+
+        respond(true, {
+          squads: summary.teams.map((t) => ({
+            id: t.teamId,
+            name: t.teamName,
+            status: t.teamStatus,
+            memberCount: t.members.length,
+            updatedAt: t.updatedAt,
+          })),
+          routeTable,
+          availableAgents,
+          stats: {
+            activeSquads: summary.activeTeams,
+            qTableSize: taskRouter?.size() ?? 0,
+            epsilon: taskRouter?.getEpsilon() ?? 0,
+          },
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
+    // Gateway Method — Ventures Dashboard
+    // ========================================================================
+
+    function countChainNodes(nodes: Array<{ children: Array<unknown> }>): number {
+      let count = 0;
+      for (const n of nodes) {
+        count += 1;
+        count += countChainNodes(n.children as Array<{ children: Array<unknown> }>);
+      }
+      return count;
+    }
+
+    api.registerGatewayMethod("ventures.dashboard", async ({ respond }) => {
+      try {
+        const { VentureManager } = await import("../kaneru/venture.js");
+        const { MissionManager } = await import("../kaneru/mission.js");
+        const { FuelController } = await import("../kaneru/fuel.js");
+        const { ChainManager } = await import("../kaneru/chain.js");
+
+        const vm = new VentureManager(client, ns);
+        const mm = new MissionManager(client, ns, vm);
+        const fc = new FuelController(client, ns);
+        const cm = new ChainManager(client, ns);
+
+        const ventures = await vm.list();
+        const venturesSummary = [];
+        const allMissions: Array<{ id: string; identifier: string; title: string; status: string; priority: string; claimedBy: string | null }> = [];
+
+        let totalFuelSpent = 0;
+        let activeMissions = 0;
+
+        // Cap at 20 ventures to limit round-trips
+        for (const v of ventures.slice(0, 20)) {
+          const missions = await mm.list(v.id, { limit: 50 });
+          const fuel = await fc.summary(v.id, v.fuelLimit);
+          const chain = await cm.getChain(v.id);
+
+          totalFuelSpent += fuel.totalCents;
+          const active = missions.filter((m) => m.status === "active").length;
+          activeMissions += active;
+
+          venturesSummary.push({
+            id: v.id,
+            name: v.name,
+            status: v.status,
+            prefix: v.prefix,
+            fuelLimit: v.fuelLimit,
+            fuelSpent: fuel.totalCents,
+            agentCount: countChainNodes(chain),
+            missionCount: missions.length,
+          });
+
+          // Reuse the missions we already loaded
+          for (const m of missions) {
+            allMissions.push({
+              id: m.id,
+              identifier: m.identifier,
+              title: m.title,
+              status: m.status,
+              priority: m.priority,
+              claimedBy: m.claimedBy,
+            });
+          }
+        }
+
+        // Collect chain data from all ventures for visualization
+        const allChainNodes: Array<{ agentId: string; role: string; escalatesTo: string | null; children: unknown[] }> = [];
+        for (const v of ventures.slice(0, 20)) {
+          try {
+            const chain = await cm.getChain(v.id);
+            allChainNodes.push(...chain);
+          } catch {
+            // skip ventures with no chain
+          }
+        }
+
+        respond(true, {
+          ventures: venturesSummary,
+          missions: allMissions.slice(0, 100),
+          chain: allChainNodes,
+          stats: {
+            totalVentures: ventures.length,
+            activeMissions,
+            totalFuelSpent,
+          },
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
+    // Gateway Method — Kaneru Setup Wizard
+    // ========================================================================
+
+    // Note: Gateway methods are only accessible to authenticated WebSocket clients.
+    // The gateway enforces device-token auth at the connection level.
+    api.registerGatewayMethod("kaneru.setup", async ({ params, respond }) => {
+      try {
+        const p = params as {
+          ventureName: string;
+          ventureDirective: string;
+          venturePrefix: string;
+          ventureFuelLimit: number;
+          agentName: string;
+          agentRole: string;
+          missionTitle: string;
+          missionDescription: string;
+          missionPriority: string;
+        };
+
+        const { VentureManager } = await import("../kaneru/venture.js");
+        const { ChainManager } = await import("../kaneru/chain.js");
+        const { MissionManager } = await import("../kaneru/mission.js");
+
+        const vm = new VentureManager(client, ns);
+        const cm = new ChainManager(client, ns);
+        const mm = new MissionManager(client, ns, vm);
+
+        // 1. Create venture
+        const venture = await vm.create({
+          name: p.ventureName,
+          directive: p.ventureDirective,
+          prefix: p.venturePrefix,
+          fuelLimit: p.ventureFuelLimit || 0,
+        });
+
+        // 2. Deploy agent to the venture chain
+        await cm.deploy(p.agentName, venture.id, p.agentRole);
+
+        // 3. Create first mission
+        const validPriorities = ["critical", "high", "medium", "low"] as const;
+        const priority = validPriorities.includes(p.missionPriority as typeof validPriorities[number])
+          ? (p.missionPriority as typeof validPriorities[number])
+          : "medium";
+        const mission = await mm.create({
+          ventureId: venture.id,
+          title: p.missionTitle,
+          description: p.missionDescription || "",
+          priority,
+        });
+
+        respond(true, {
+          ventureId: venture.id,
+          agentId: p.agentName,
+          missionId: mission.id,
+          missionIdentifier: mission.identifier,
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
+    // Gateway Method — Kaneru Canvas (A2UI surfaces)
+    // ========================================================================
+
+    api.registerGatewayMethod("kaneru.canvas", async ({ params, respond }) => {
+      try {
+        const { loadCanvasData } = await import("../kaneru/canvas-gateway.js");
+        const { generateSurface, generateAllSurfaces } = await import("../kaneru/canvas-surfaces.js");
+
+        const data = await loadCanvasData(client, ns);
+        const surfaceId = (params as { surface?: string })?.surface;
+
+        const jsonl = surfaceId
+          ? generateSurface(surfaceId as Parameters<typeof generateSurface>[0], data)
+          : generateAllSurfaces(data);
+
+        respond(true, { jsonl, surfaceId: surfaceId ?? "all" });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
 
     // ========================================================================
     // Service
