@@ -9,32 +9,35 @@ import { isPathInside, resolveSafePath, isImageFile, isBinaryBuffer } from "../p
 // ============================================================================
 
 describe("isPathInside", () => {
+  const workspace = path.resolve("/workspace");
   it("returns true for child path", () => {
-    expect(isPathInside("/workspace/src/file.ts", "/workspace")).toBe(true);
+    expect(isPathInside(path.join(workspace, "src/file.ts"), workspace)).toBe(true);
   });
 
   it("returns false for parent path", () => {
-    expect(isPathInside("/other/file.ts", "/workspace")).toBe(false);
+    expect(isPathInside(path.resolve("/other/file.ts"), workspace)).toBe(false);
   });
 
   it("returns false for traversal", () => {
-    expect(isPathInside("/workspace/../etc/passwd", "/workspace")).toBe(false);
+    expect(isPathInside(path.join(workspace, "../etc/passwd"), workspace)).toBe(false);
   });
 });
 
 describe("resolveSafePath", () => {
+  const workspace = path.resolve("/workspace");
   it("resolves relative path within workspace", () => {
-    const result = resolveSafePath("src/index.ts", "/workspace");
-    expect(result).toBe("/workspace/src/index.ts");
+    const result = resolveSafePath("src/index.ts", workspace);
+    expect(result).toBe(path.join(workspace, "src/index.ts"));
   });
 
   it("rejects path outside workspace", () => {
-    expect(() => resolveSafePath("../../etc/passwd", "/workspace")).toThrow("outside workspace");
+    expect(() => resolveSafePath("../../etc/passwd", workspace)).toThrow("outside workspace");
   });
 
   it("accepts absolute path inside workspace", () => {
-    const result = resolveSafePath("/workspace/file.ts", "/workspace");
-    expect(result).toBe("/workspace/file.ts");
+    const absPath = path.join(workspace, "file.ts");
+    const result = resolveSafePath(absPath, workspace);
+    expect(result).toBe(absPath);
   });
 });
 

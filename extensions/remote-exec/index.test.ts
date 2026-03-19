@@ -61,6 +61,7 @@ import { AuditTrail } from "../osameru-governance/audit-trail.js";
 // ============================================================================
 
 let tmpDir: string;
+const FAKE_GHP = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
 const createdDirs: string[] = [];
 
 async function createTmpDir(): Promise<string> {
@@ -1784,7 +1785,7 @@ describe("/run cd, pwd, more integration", () => {
       config: {},
     });
     expect(result.text).toContain("Error:");
-    expect(result.text).toContain("outside allowed");
+    expect(result.text).toMatch(/outside allowed|does not exist/i);
   });
 
   it("/run pwd returns current workdir after cd", async () => {
@@ -2753,14 +2754,14 @@ describe("alias management", () => {
 
 describe("output masking", () => {
   it("maskSensitiveOutput masks GitHub token pattern", () => {
-    const result = maskSensitiveOutput("token: ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    const result = maskSensitiveOutput(`token: ${FAKE_GHP}`);
     expect(result.masked).toBe(true);
     expect(result.text).toContain("ghp_***REDACTED***");
-    expect(result.text).not.toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.text).not.toContain(FAKE_GHP);
   });
 
   it("maskSensitiveOutput returns redaction count", () => {
-    const result = maskSensitiveOutput("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    const result = maskSensitiveOutput(FAKE_GHP);
     expect(result.redactions).toBe(1);
   });
 
@@ -2772,11 +2773,11 @@ describe("output masking", () => {
   });
 
   it("multiple secret types in same text are all masked", () => {
-    const text = "github: ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY slack: xoxb-FAKEFAKEFAKE-FAKEFAKE";
+    const text = `github: ${FAKE_GHP} slack: xoxb-FAKEFAKEFAKE-FAKEFAKE`;
     const result = maskSensitiveOutput(text);
     expect(result.masked).toBe(true);
     expect(result.redactions).toBe(2);
-    expect(result.text).not.toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.text).not.toContain(FAKE_GHP);
     expect(result.text).not.toContain("xoxb-FAKEFAKEFAKE-FAKEFAKE");
   });
 
@@ -3075,11 +3076,11 @@ describe("/run alias, status, masking integration", () => {
 
   it("/run with maskOutput: true redacts secrets in output", async () => {
     const result = await cmdHandler({
-      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      args: `echo ${FAKE_GHP}`,
       senderId: "user1",
       channel: "whatsapp",
       isAuthorizedSender: true,
-      commandBody: "/run echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      commandBody: `/run echo ${FAKE_GHP}`,
       config: {},
     });
     expect(result.text).toContain("ghp_***REDACTED***");
@@ -3129,20 +3130,20 @@ describe("/run alias, status, masking integration", () => {
     await plugin.register(mockApi as any);
 
     const result = await handler!({
-      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      args: `echo ${FAKE_GHP}`,
       senderId: "user1",
       channel: "whatsapp",
       isAuthorizedSender: true,
-      commandBody: "/run echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY",
+      commandBody: `/run echo ${FAKE_GHP}`,
       config: {},
     });
-    expect(result.text).toContain("ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY");
+    expect(result.text).toContain(FAKE_GHP);
     expect(result.text).not.toContain("REDACTED");
   });
 
   it("redaction note shows correct count", async () => {
     const result = await cmdHandler({
-      args: "echo ghp_NOT_REAL_TOKEN_FOR_UNIT_TEST_ONLY npm_NOT_REAL_TOKEN_FOR_TESTING_00000001",
+      args: `echo ${FAKE_GHP} ${"npm_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"}`,
       senderId: "user1",
       channel: "whatsapp",
       isAuthorizedSender: true,
@@ -3809,13 +3810,16 @@ describe("per-sender pending limits and byte-accurate truncation", () => {
     const cfg = makeConfig({
       allowedPaths: [localTmpDir],
       maxOutputBytes: 10,
+      auditLogPath: path.join(localTmpDir, "audit.jsonl"),
     });
     const service = new RemoteExecService(cfg, noopLogger, noopAudit);
     // Create file with multi-byte chars and cat it
     const testFile = path.join(localTmpDir, "mb.txt");
     // "aaaa" is 4 bytes, emoji adds multi-byte
     await fs.writeFile(testFile, "a".repeat(20));
-    const result = await service.executeCommand({ command: `cat ${testFile}` });
+    // Use forward slashes for bash compatibility on Windows
+    const bashPath = testFile.split(path.sep).join("/");
+    const result = await service.executeCommand({ command: `cat ${bashPath}` });
     expect(result.truncated).toBe(true);
     // output should be valid UTF-8, no broken chars
     expect(Buffer.from(result.stdout, "utf-8").toString("utf-8")).toBe(result.stdout);

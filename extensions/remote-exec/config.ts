@@ -6,6 +6,7 @@
  */
 
 import os from "node:os";
+import path from "node:path";
 import { assertAllowedKeys } from "../shared/cortex-config.js";
 import type { RiskLevel } from "../interactive-permissions/intent-classifier.js";
 import type { PinConfig } from "./pin-auth.js";
@@ -353,7 +354,7 @@ export const remoteExecConfigSchema = {
         allowedPaths: [],
         commandTimeout: DEFAULT_COMMAND_TIMEOUT,
         maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
-        auditLogPath: DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir()),
+        auditLogPath: path.join(os.homedir(), DEFAULT_AUDIT_LOG_PATH.slice(1)),
         rateLimits: { ...DEFAULT_RATE_LIMITS },
         confirmation: { ...DEFAULT_CONFIRMATION },
         session: { ...DEFAULT_SESSION },
@@ -417,8 +418,10 @@ export const remoteExecConfigSchema = {
 
     const auditLogPath =
       typeof cfg.auditLogPath === "string" && cfg.auditLogPath.trim()
-        ? cfg.auditLogPath.trim().replace(/^~/, os.homedir())
-        : DEFAULT_AUDIT_LOG_PATH.replace(/^~/, os.homedir());
+        ? cfg.auditLogPath.trim().startsWith("~")
+          ? path.join(os.homedir(), cfg.auditLogPath.trim().slice(1))
+          : cfg.auditLogPath.trim()
+        : path.join(os.homedir(), DEFAULT_AUDIT_LOG_PATH.slice(1));
 
     const rateLimits = parseRateLimits(cfg.rateLimits);
     const confirmation = parseConfirmation(cfg.confirmation);

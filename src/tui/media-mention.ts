@@ -6,7 +6,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
 import type { ChatAttachmentInput } from "./gateway-chat.js";
 
 const MEDIA_EXTENSIONS = new Set([
@@ -84,7 +84,7 @@ export async function resolveMediaMention(filePath: string): Promise<ChatAttachm
     if (buffer.length > MAX_MEDIA_SIZE) return null;
 
     const content = buffer.toString("base64");
-    const fileName = filePath.split("/").pop() ?? filePath;
+    const fileName = basename(filePath);
 
     return { mimeType, fileName, content };
   } catch (err) {

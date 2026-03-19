@@ -6,7 +6,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 
 export type TrustLevel = "full" | "read-only" | "ask";
@@ -93,7 +93,7 @@ export class TrustedFolderStore {
     // Parent match — if a parent folder is trusted, children inherit
     for (const f of this.folders) {
       const trustedPath = resolve(f.path);
-      if (normalized.startsWith(trustedPath + "/") || normalized === trustedPath) {
+      if (normalized.startsWith(trustedPath + sep) || normalized === trustedPath) {
         return { trusted: true, level: f.trustLevel, path: normalized };
       }
     }

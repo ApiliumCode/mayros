@@ -122,10 +122,10 @@ describe("Output Masking", () => {
 
   // 16
   it("masks Stripe live keys", () => {
-    const result = maskSensitiveOutput("STRIPE_KEY=sk_live_NOT_REAL_FOR_TESTING_XX");
+    const result = maskSensitiveOutput("STRIPE_KEY=sk_live_NOTREALFORTESTINGXXYYZZAA");
     expect(result.masked).toBe(true);
     expect(result.text).toContain("***REDACTED_STRIPE***");
-    expect(result.text).not.toContain("sk_live_NOT_REAL_FOR_TESTING_XX");
+    expect(result.text).not.toContain("sk_live_NOTREALFORTESTINGXXYYZZAA");
   });
 
   // 17

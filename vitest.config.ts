@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -9,7 +10,25 @@ const isWindows = process.platform === "win32";
 const localWorkers = Math.max(4, Math.min(16, os.cpus().length));
 const ciWorkers = isWindows ? 2 : 3;
 
+/**
+ * Strip shebangs from .mjs/.js files so vitest can process them.
+ * Node.js strips shebangs natively, but vitest's module transform
+ * does not, which causes SyntaxError on Windows.
+ */
+function stripShebangPlugin(): Plugin {
+  return {
+    name: "strip-shebang",
+    enforce: "pre",
+    transform(code, id) {
+      if (/\.m?js$/.test(id) && code.startsWith("#!")) {
+        return { code: code.replace(/^#![^\n]*\n/, "\n"), map: null };
+      }
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [stripShebangPlugin()],
   resolve: {
     // Keep this ordered: the base `mayros/plugin-sdk` alias is a prefix match.
     alias: [
@@ -41,6 +60,12 @@ export default defineConfig({
       "packages/**/*.test.ts",
       "ui/src/ui/views/usage-render-details.test.ts",
     ],
+    deps: {
+      // Transform scripts/ through Vite pipeline so the strip-shebang
+      // plugin can strip #!/usr/bin/env node lines that would otherwise
+      // cause SyntaxError in vitest's VM module compilation.
+      inline: [/scripts[/\\].*\.m?js$/],
+    },
     setupFiles: ["test/setup.ts"],
     exclude: [
       "dist/**",
