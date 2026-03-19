@@ -75,7 +75,26 @@ mayros onboard --install-daemon
 
 The wizard sets up the Gateway, workspace, channels, and skills. It installs the Gateway as a background daemon (launchd/systemd) so it stays running.
 
+The installer automatically downloads [AIngle Cortex](https://github.com/ApiliumCode/aingle) (the semantic memory sidecar). No separate install needed.
+
 New install? Start here: **[Getting Started](https://apilium.com/en/doc/mayros/start/getting-started)** · Upgrading? **[Updating guide](https://apilium.com/en/doc/mayros/install/updating)** (and run `mayros doctor`)
+
+### Update
+
+```bash
+mayros update          # updates Mayros + Cortex automatically
+# or: npm install -g @apilium/mayros@latest
+```
+
+### Uninstall
+
+```bash
+mayros uninstall           # interactive — choose what to remove
+mayros uninstall --all     # remove everything (service, state, workspace, cortex)
+mayros uninstall --dry-run # preview without deleting
+```
+
+A detailed data loss warning is always shown before deletion — listing every category of data (knowledge graph, ventures, agent memory, decision history, etc.).
 
 ---
 
