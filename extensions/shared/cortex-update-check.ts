@@ -224,29 +224,70 @@ export async function installOrUpdateCortex(
   }
 
   const binaryPath = join(installDir, binaryName);
-  if (!existsSync(binaryPath)) {
-    // The archive may contain a platform-suffixed binary (e.g. aingle-cortex-macos-aarch64).
-    // Find it and rename to the expected name.
-    const baseName = binaryName.replace(/\.exe$/, "");
-    const candidates = readdirSync(installDir).filter(
-      (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
-    );
-    if (candidates.length === 1) {
-      await rename(join(installDir, candidates[0]), binaryPath);
-      log(`Renamed ${candidates[0]} → ${binaryName}`);
-    } else {
-      throw new Error(`Binary not found after extraction: ${binaryPath}`);
+
+  // Find the extracted binary — archives contain platform-suffixed names
+  // (e.g. aingle-cortex-windows-x86_64.exe, aingle-cortex-macos-aarch64).
+  // Always look for suffixed candidates, even if the target already exists
+  // (this is an update, not first install).
+  const baseName = binaryName.replace(/\.exe$/, "");
+  const candidates = readdirSync(installDir).filter(
+    (f) =>
+      f.startsWith(baseName + "-") &&
+      !f.endsWith(".tar.gz") &&
+      !f.endsWith(".zip") &&
+      !f.endsWith(".exe.zip"),
+  );
+
+  if (candidates.length >= 1) {
+    const candidate = join(installDir, candidates[0]);
+
+    // On Windows the old binary may be locked. Rename it aside first.
+    if (existsSync(binaryPath)) {
+      const oldPath = binaryPath + ".old";
+      try {
+        if (existsSync(oldPath)) await unlink(oldPath);
+        await rename(binaryPath, oldPath);
+      } catch {
+        // If rename fails (binary locked), try direct overwrite via copy
+        const { copyFile } = await import("node:fs/promises");
+        await copyFile(candidate, binaryPath);
+        try { await unlink(candidate); } catch { /* best-effort */ }
+        log(`Overwrote ${binaryName} with ${candidates[0]}`);
+        // Skip the rename below
+        candidates.length = 0;
+      }
     }
+
+    if (candidates.length >= 1) {
+      await rename(candidate, binaryPath);
+      log(`Renamed ${candidates[0]} → ${binaryName}`);
+    }
+
+    // Clean up .old file
+    const oldPath = binaryPath + ".old";
+    try {
+      if (existsSync(oldPath)) await unlink(oldPath);
+    } catch {
+      // best-effort — may still be locked briefly on Windows
+    }
+  } else if (!existsSync(binaryPath)) {
+    throw new Error(`Binary not found after extraction: ${binaryPath}`);
   }
 
   if (process.platform !== "win32") {
     await chmod(binaryPath, 0o755);
   }
 
+  // Clean up downloaded archive and leftover suffixed binaries
   try {
     await unlink(archivePath);
   } catch {
     // best-effort cleanup
+  }
+  for (const leftover of readdirSync(installDir).filter(
+    (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
+  )) {
+    try { await unlink(join(installDir, leftover)); } catch { /* best-effort */ }
   }
 
   const version = getCortexBinaryVersion(binaryPath);
