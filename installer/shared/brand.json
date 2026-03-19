@@ -1,0 +1,26 @@
+{
+  "name": "Mayros",
+  "tagline": "AI agent framework — Your terminal, your channels, your devices.",
+  "colors": {
+    "primary": "#E53935",
+    "primaryDark": "#C62828",
+    "primaryDarker": "#8E1318",
+    "primaryLight": "#EF5350",
+    "background": "#0D1B2A",
+    "backgroundLight": "#12141a",
+    "card": "#181b22",
+    "accent": "#ff5c5c",
+    "gold": "#B8860B",
+    "border": "#27272a",
+    "text": "#f4f4f5",
+    "textMuted": "#52525b",
+    "white": "#ffffff"
+  },
+  "version": "0.3.1",
+  "cortexVersion": "0.6.3",
+  "nodeVersion": "22",
+  "gatewayPort": 18789,
+  "website": "https://mayros.apilium.com",
+  "hub": "https://hub.apilium.com",
+  "github": "https://github.com/ApiliumCode/mayros"
+}
