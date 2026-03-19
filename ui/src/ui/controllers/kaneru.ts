@@ -21,6 +21,7 @@ export type RouteTableEntry = {
 export type KaneruDashboardResponse = {
   squads: SquadSummary[];
   routeTable: RouteTableEntry[];
+  availableAgents?: AvailableAgent[];
   stats: {
     activeSquads: number;
     qTableSize: number;
@@ -66,7 +67,12 @@ export async function loadKaneruDashboard(state: KaneruDashboardState): Promise<
   state.kaneruLoading = true;
   state.kaneruError = null;
   try {
-    state.kaneruDashboard = await state.client.request("kaneru.dashboard", {});
+    const response = await state.client.request("kaneru.dashboard", {}) as KaneruDashboardResponse;
+    state.kaneruDashboard = response;
+    // Populate squad builder agents from response
+    if (response.availableAgents) {
+      state.squadBuilderAgents = response.availableAgents;
+    }
   } catch (err) {
     state.kaneruError = String(err);
   } finally {
