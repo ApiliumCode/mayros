@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { homedir } from "node:os";
 import { cancel, confirm, isCancel, multiselect } from "@clack/prompts";
 import { isNixMode } from "../config/config.js";
 import { resolveGatewayService } from "../daemon/service.js";
@@ -8,13 +10,14 @@ import { resolveHomeDir } from "../utils.js";
 import { resolveCleanupPlanFromDisk } from "./cleanup-plan.js";
 import { removePath } from "./cleanup-utils.js";
 
-type UninstallScope = "service" | "state" | "workspace" | "app";
+type UninstallScope = "service" | "state" | "workspace" | "app" | "cortex";
 
 export type UninstallOptions = {
   service?: boolean;
   state?: boolean;
   workspace?: boolean;
   app?: boolean;
+  cortex?: boolean;
   all?: boolean;
   yes?: boolean;
   nonInteractive?: boolean;
@@ -47,6 +50,9 @@ function buildScopeSelection(opts: UninstallOptions): {
   }
   if (opts.all || opts.app) {
     scopes.add("app");
+  }
+  if (opts.all || opts.cortex) {
+    scopes.add("cortex");
   }
   return { scopes, hadExplicit };
 }
@@ -122,6 +128,11 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
           label: "macOS app",
           hint: "/Applications/Mayros.app",
         },
+        {
+          value: "cortex",
+          label: "Cortex (AIngle)",
+          hint: "binary + graph database",
+        },
       ],
       initialValues: ["service", "state", "workspace"],
     });
@@ -140,9 +151,53 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
     return;
   }
 
+  // Always show what will be lost — even with --yes
+  const warnings: string[] = [];
+  if (scopes.has("service")) warnings.push("Gateway service (background daemon)");
+  if (scopes.has("state")) {
+    warnings.push("Configuration and credentials (~/.mayros)");
+    warnings.push("  - API keys and OAuth tokens");
+    warnings.push("  - Channel configurations (WhatsApp, Telegram, etc.)");
+    warnings.push("  - Session history and agent settings");
+  }
+  if (scopes.has("workspace")) {
+    warnings.push("Agent workspaces");
+    warnings.push("  - Custom agents (*.md files)");
+    warnings.push("  - Installed skills and commands");
+    warnings.push("  - AGENTS.md, SOUL.md, TOOLS.md persona files");
+  }
+  if (scopes.has("app")) warnings.push("macOS desktop application (/Applications/Mayros.app)");
+  if (scopes.has("cortex")) {
+    warnings.push("AIngle Cortex — ALL semantic data will be destroyed:");
+    warnings.push("  - Knowledge graph (every triple, every namespace)");
+    warnings.push("  - Ventures, missions, projects, directives");
+    warnings.push("  - Agent learning profiles and expertise history");
+    warnings.push("  - Decision history (consensus votes and reasoning)");
+    warnings.push("  - Semantic memory (STM/LTM, embeddings, recall data)");
+    warnings.push("  - DAG audit trail (all signed actions, time-travel history)");
+    warnings.push("  - Fuel events and cost tracking data");
+    warnings.push("  - Knowledge transfer and fusion records");
+  }
+
+  runtime.log("");
+  runtime.log("========================================");
+  runtime.log("  MAYROS UNINSTALL — DATA LOSS WARNING");
+  runtime.log("========================================");
+  runtime.log("");
+  runtime.log("The following will be PERMANENTLY DELETED:");
+  runtime.log("");
+  for (const w of warnings) {
+    runtime.log(`  ${w}`);
+  }
+  runtime.log("");
+  runtime.log("This action CANNOT be undone. There is no backup.");
+  runtime.log("All your agent memory, learned expertise, ventures,");
+  runtime.log("missions, and decision history will be lost forever.");
+  runtime.log("");
+
   if (interactive && !opts.yes) {
     const ok = await confirm({
-      message: stylePromptMessage("Proceed with uninstall?"),
+      message: stylePromptMessage("I understand the data loss. Proceed with uninstall?"),
     });
     if (isCancel(ok) || !ok) {
       cancel(stylePromptTitle("Uninstall cancelled.") ?? "Uninstall cancelled.");
@@ -181,6 +236,32 @@ export async function uninstallCommand(runtime: RuntimeEnv, opts: UninstallOptio
 
   if (scopes.has("app")) {
     await removeMacApp(runtime, dryRun);
+  }
+
+  if (scopes.has("cortex")) {
+    // Stop running Cortex process
+    if (!dryRun) {
+      try {
+        if (process.platform === "win32") {
+          execFileSync("taskkill", ["/F", "/IM", "aingle-cortex.exe"], { timeout: 5000 });
+        } else {
+          execFileSync("pkill", ["-f", "aingle-cortex"], { timeout: 5000 });
+        }
+        runtime.log("Stopped Cortex process.");
+      } catch {
+        // Not running — that's fine
+      }
+    } else {
+      runtime.log("[dry-run] stop Cortex process");
+    }
+
+    // Remove Cortex binary
+    const cortexBinDir = path.join(homedir(), ".mayros", "bin");
+    await removePath(cortexBinDir, runtime, { dryRun, label: cortexBinDir });
+
+    // Remove Cortex data (graph database, DAG, proofs)
+    const cortexDataDir = path.join(homedir(), ".aingle", "cortex");
+    await removePath(cortexDataDir, runtime, { dryRun, label: cortexDataDir });
   }
 
   runtime.log("CLI still installed. Remove via npm/pnpm if desired.");

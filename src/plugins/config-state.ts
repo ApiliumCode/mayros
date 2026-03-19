@@ -28,6 +28,8 @@ export const BUNDLED_ENABLED_BY_DEFAULT = new Set<string>([
   "code-indexer",
   "agent-mesh",
   "token-economy",
+  // MCP
+  "mcp-server",
   // Analytics
   "analytics",
 ]);

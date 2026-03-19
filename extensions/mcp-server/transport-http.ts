@@ -106,6 +106,16 @@ export class McpHttpTransport {
     return `http://${this.host}:${this.port}`;
   }
 
+  /** Get the count of active SSE sessions. */
+  getSessionCount(): number {
+    return this.sseSessions.size;
+  }
+
+  /** Get active SSE session IDs. */
+  getSessionIds(): string[] {
+    return [...this.sseSessions.keys()];
+  }
+
   // ── Request handling ────────────────────────────────────────────────
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

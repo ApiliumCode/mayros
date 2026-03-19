@@ -14,6 +14,10 @@ import type {
   CortexBrowseFilter,
   TripleEntry,
 } from "./controllers/cortex.ts";
+import type { McpDashboardResponse } from "./controllers/mcp.ts";
+import type { KaneruDashboardResponse } from "./controllers/kaneru.ts";
+import type { CanvasState } from "./controllers/canvas.ts";
+import type { VentureDashboardResponse } from "./controllers/ventures.ts";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
@@ -39,6 +43,8 @@ import type {
 import type { ChatAttachment, ChatQueueItem, CronFormState } from "./ui-types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { SessionLogEntry } from "./views/usage.ts";
+import type { SetupWizardState } from "./views/setup-wizard.ts";
+import type { CommandBarState } from "./views/command-bar.ts";
 
 export type AppViewState = {
   settings: UiSettings;
@@ -129,6 +135,21 @@ export type AppViewState = {
   presenceEntries: PresenceEntry[];
   presenceError: string | null;
   presenceStatus: string | null;
+  mcpLoading: boolean;
+  mcpError: string | null;
+  mcpDashboard: McpDashboardResponse | null;
+  kaneruLoading: boolean;
+  kaneruError: string | null;
+  kaneruDashboard: KaneruDashboardResponse | null;
+  canvasLoading: boolean;
+  canvasError: string | null;
+  canvasJsonl: string | null;
+  canvasActiveSurface: string;
+  venturesLoading: boolean;
+  venturesError: string | null;
+  venturesDashboard: VentureDashboardResponse | null;
+  setupWizard: SetupWizardState;
+  commandBar: CommandBarState;
   cortexLoading: boolean;
   cortexStatus: CortexStatusResponse | null;
   cortexError: string | null;

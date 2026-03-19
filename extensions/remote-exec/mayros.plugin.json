@@ -1,0 +1,56 @@
+{
+  "id": "remote-exec",
+  "kind": "integration",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "allowedPaths": { "type": "array", "items": { "type": "string" } },
+      "commandTimeout": { "type": "integer", "minimum": 1000, "maximum": 120000 },
+      "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 1000000 },
+      "auditLogPath": { "type": "string" },
+      "rateLimits": {
+        "type": "object",
+        "properties": {
+          "maxCallsPerWindow": { "type": "integer" },
+          "windowMs": { "type": "integer" }
+        }
+      },
+      "confirmation": {
+        "type": "object",
+        "properties": {
+          "autoApproveMaxRisk": {
+            "type": "string",
+            "enum": ["safe", "low", "medium", "high", "critical"]
+          },
+          "approvalTtlMs": { "type": "integer" },
+          "maxPending": { "type": "integer" },
+          "showRiskLevel": { "type": "boolean" }
+        }
+      },
+      "session": {
+        "type": "object",
+        "properties": {
+          "sessionTtlMs": { "type": "integer" },
+          "outputPageSize": { "type": "integer" },
+          "outputCacheTtlMs": { "type": "integer" },
+          "maxHistorySize": { "type": "integer" },
+          "maxEnvVars": { "type": "integer" },
+          "maxAliases": { "type": "integer" }
+        }
+      },
+      "maskOutput": { "type": "boolean" },
+      "blockedPatterns": { "type": "array", "items": { "type": "string" } },
+      "pin": {
+        "type": "object",
+        "properties": {
+          "pinHash": { "type": ["string", "null"] },
+          "pinLockoutMs": { "type": "integer" },
+          "pinMaxAttempts": { "type": "integer" },
+          "pinAutoLockMs": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

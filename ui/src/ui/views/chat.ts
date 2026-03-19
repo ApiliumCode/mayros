@@ -80,6 +80,9 @@ export type ChatProps = {
   onCloseSidebar?: () => void;
   onSplitRatioChange?: (ratio: number) => void;
   onChatScroll?: (event: Event) => void;
+  // Voice input
+  voiceRecording?: boolean;
+  onToggleVoice?: () => void;
 };
 
 const COMPACTION_TOAST_DURATION_MS = 5000;
@@ -420,58 +423,106 @@ export function renderChat(props: ChatProps) {
           : nothing
       }
 
-      <div class="chat-compose">
+      <div class="chat-compose" style="padding: 12px 16px;">
         ${renderAttachmentPreview(props)}
-        <div class="chat-compose__row">
-          <label class="field chat-compose__field">
-            <span>Message</span>
-            <textarea
-              ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
-              .value=${props.draft}
-              dir=${detectTextDirection(props.draft)}
-              ?disabled=${!props.connected}
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key !== "Enter") {
-                  return;
-                }
-                if (e.isComposing || e.keyCode === 229) {
-                  return;
-                }
-                if (e.shiftKey) {
-                  return;
-                } // Allow Shift+Enter for line breaks
-                if (!props.connected) {
-                  return;
-                }
-                e.preventDefault();
-                if (canCompose) {
-                  props.onSend();
-                }
-              }}
-              @input=${(e: Event) => {
-                const target = e.target as HTMLTextAreaElement;
-                adjustTextareaHeight(target);
-                props.onDraftChange(target.value);
-              }}
-              @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
-              placeholder=${composePlaceholder}
-            ></textarea>
-          </label>
-          <div class="chat-compose__actions">
+        <div style="
+          border: 1px solid var(--border, #27272a);
+          border-radius: 16px;
+          background: var(--card, #181b22);
+          overflow: hidden;
+          transition: border-color 0.2s;
+        ">
+          <!-- Textarea area -->
+          <textarea
+            ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
+            .value=${props.draft}
+            dir=${detectTextDirection(props.draft)}
+            ?disabled=${!props.connected}
+            style="
+              width: 100%; border: none; outline: none; resize: none;
+              background: transparent; color: var(--card-foreground, #f4f4f5);
+              padding: 14px 16px 8px 16px; font-size: 15px; line-height: 1.5;
+              font-family: inherit; min-height: 44px; max-height: 150px;
+              box-sizing: border-box;
+            "
+            @keydown=${(e: KeyboardEvent) => {
+              if (e.key !== "Enter") return;
+              if (e.isComposing || e.keyCode === 229) return;
+              if (e.shiftKey) return;
+              if (!props.connected) return;
+              e.preventDefault();
+              if (canCompose) { props.onSend(); }
+            }}
+            @input=${(e: Event) => {
+              const target = e.target as HTMLTextAreaElement;
+              adjustTextareaHeight(target);
+              props.onDraftChange(target.value);
+            }}
+            @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
+            placeholder=${composePlaceholder}
+          ></textarea>
+
+          <!-- Bottom toolbar inside the box -->
+          <div style="
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 8px 8px 12px; gap: 8px;
+          ">
+            <!-- Left side: New session -->
             <button
-              class="btn"
+              style="
+                background: none; border: none; cursor: pointer;
+                color: var(--border-hover, #52525b); font-size: 13px;
+                padding: 4px 8px; border-radius: 6px;
+                transition: color 0.2s;
+              "
               ?disabled=${!props.connected || (!canAbort && props.sending)}
               @click=${canAbort ? props.onAbort : props.onNewSession}
             >
               ${canAbort ? "Stop" : "New session"}
             </button>
-            <button
-              class="btn primary"
-              ?disabled=${!props.connected}
-              @click=${props.onSend}
-            >
-              ${isBusy ? "Queue" : "Send"}<kbd class="btn-kbd">↵</kbd>
-            </button>
+
+            <!-- Right side: mic + send -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${props.onToggleVoice ? html`
+                <button
+                  style="
+                    width: 34px; height: 34px; border-radius: 50%;
+                    border: none; cursor: pointer; display: flex;
+                    align-items: center; justify-content: center;
+                    transition: all 0.2s;
+                    ${props.voiceRecording
+                      ? `background: var(--accent, #ff5c5c); color: white; box-shadow: 0 0 8px rgba(255,92,92,0.4);`
+                      : `background: transparent; color: var(--border-hover, #52525b);`}
+                  "
+                  ?disabled=${!props.connected}
+                  @click=${props.onToggleVoice}
+                  title=${props.voiceRecording ? "Stop recording" : "Dictation"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" x2="12" y1="19" y2="22"/>
+                  </svg>
+                </button>
+              ` : nothing}
+              <button
+                style="
+                  height: 34px; padding: 0 16px; border-radius: 17px;
+                  border: none; cursor: pointer; font-size: 13px; font-weight: 500;
+                  background: var(--accent, #ff5c5c); color: white;
+                  display: flex; align-items: center; gap: 6px;
+                  transition: opacity 0.2s;
+                  ${!props.connected ? 'opacity: 0.5;' : ''}
+                "
+                ?disabled=${!props.connected}
+                @click=${props.onSend}
+              >
+                ${isBusy ? "Queue" : "Send"}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

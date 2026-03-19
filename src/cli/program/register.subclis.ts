@@ -324,6 +324,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "kaneru",
+    description: "Kaneru — multi-agent squads, missions, consensus, and routing",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../kaneru-cli.js");
+      mod.registerKaneruCli(program);
+    },
+  },
+  {
     name: "workflow",
     description: "Multi-agent workflows — run, list, and track workflow execution",
     hasSubcommands: true,

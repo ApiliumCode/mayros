@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/node-%3E%3D22.12.0-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js >= 22.12.0">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/extensions-55-8B5CF6?style=for-the-badge" alt="55 extensions">
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-999?style=for-the-badge" alt="macOS | Linux">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-999?style=for-the-badge" alt="macOS | Linux | Windows">
   <img src="https://img.shields.io/badge/MCP-Compatible-6366F1?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQyIDAtOC0zLjU4LTgtOHMzLjU4LTggOC04IDggMy41OCA4IDgtMy41OCA4LTggOHoiLz48cGF0aCBkPSJNMTIgNmMtMy4zMSAwLTYgMi42OS02IDZzMi42OSA2IDYgNiA2LTIuNjkgNi02LTIuNjktNi02LTZ6Ii8+PC9zdmc+" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/Works_with-Claude-D97706?style=for-the-badge&logo=anthropic&logoColor=white" alt="Works with Claude">
 </p>
@@ -33,9 +33,9 @@
 
 ---
 
-**Mayros** is an open-source AI agent framework that runs on your own devices. It ships with an interactive **coding CLI** (`mayros code`), connects to **17 messaging channels** (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, and more), speaks and listens on **macOS/iOS/Android**, and has a **knowledge graph** that remembers everything across sessions. All backed by a local-first Gateway and an 20-layer security architecture.
+**Mayros** is an open-source AI agent framework that runs on your own devices. It ships with an interactive **coding CLI** (`mayros code`), connects to **17+ messaging channels** (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, and more), speaks and listens on **macOS/iOS/Android**, and has a **knowledge graph** that remembers everything across sessions. **Kaneru** — the multi-agent venture system — lets you build AI companies that learn, remember, and improve over time. All backed by a local-first Gateway and a 20-layer security architecture.
 
-> **55 extensions · 11,700+ tests · 29 hooks · MCP server & client · Multi-model · Multi-agent**
+> **55+ extensions · 12,400+ tests · 29 hooks · MCP server & client · Multi-model · Multi-agent · Kaneru ventures**
 
 ```bash
 npm install -g @apilium/mayros@latest
@@ -56,7 +56,8 @@ mayros code   # interactive coding CLI
 | 🎙️ **Voice**           | Always-on Voice Wake + Talk Mode on macOS, iOS, Android                                              | None                      |
 | 🖥️ **IDE**             | VSCode + JetBrains plugins with chat, plan, traces, KG                                               | VSCode only               |
 | 📊 **Observability**   | Full trace system, decision graph, session fork/rewind                                               | Basic logging             |
-| 🔌 **Extensions**      | 55 plugin extensions, 29 hook types, MCP server + client (4 transports)                              | Limited plugins           |
+| 🔌 **Extensions**      | 55+ plugin extensions, 29 hook types, MCP server + client (4 transports)                             | Limited plugins           |
+| 🏢 **Kaneru**          | AI ventures with missions, squads, Q-learning routing, decision audit, fuel control                  | No organizational layer   |
 | 🗺️ **Plan Mode**       | Cortex-backed semantic planning: explore → assert → approve → execute                                | Simple plan files         |
 
 ---
@@ -74,7 +75,26 @@ mayros onboard --install-daemon
 
 The wizard sets up the Gateway, workspace, channels, and skills. It installs the Gateway as a background daemon (launchd/systemd) so it stays running.
 
+The installer automatically downloads [AIngle Cortex](https://github.com/ApiliumCode/aingle) (the semantic memory sidecar). No separate install needed.
+
 New install? Start here: **[Getting Started](https://apilium.com/en/doc/mayros/start/getting-started)** · Upgrading? **[Updating guide](https://apilium.com/en/doc/mayros/install/updating)** (and run `mayros doctor`)
+
+### Update
+
+```bash
+mayros update          # updates Mayros + Cortex automatically
+# or: npm install -g @apilium/mayros@latest
+```
+
+### Uninstall
+
+```bash
+mayros uninstall           # interactive — choose what to remove
+mayros uninstall --all     # remove everything (service, state, workspace, cortex)
+mayros uninstall --dry-run # preview without deleting
+```
+
+A detailed data loss warning is always shown before deletion — listing every category of data (knowledge graph, ventures, agent memory, decision history, etc.).
 
 ---
 
@@ -258,7 +278,7 @@ Point any MCP client to `http://127.0.0.1:19100/mcp` (Streamable HTTP) or `http:
 
 AI coding CLIs have no memory between sessions. Mayros + [AIngle Cortex](https://github.com/ApiliumCode/aingle) fill that gap: semantic knowledge graph, DAG audit trail, vector search, and ZK proofs — all local-first.
 
-Any MCP-compatible client gets instant access to 21 tools via a single command:
+Any MCP-compatible client gets instant access to 45+ tools via a single command:
 
 ```bash
 claude mcp add mayros -- mayros serve --stdio   # Claude Code
@@ -324,6 +344,93 @@ CLI: `mayros workflow run|list` · `mayros dashboard team|summary|agent` · `may
 
 ---
 
+## Kaneru — AI Venture Management
+
+Kaneru turns Mayros into a full AI venture platform. Create organizations of agents that learn, coordinate, and improve over time — all stored in Cortex, all DAG-auditable.
+
+### Quick Start
+
+```bash
+# Install a pre-built venture template (security-audit, content-pipeline, devops-squad)
+mayros kaneru dojo install --template security-audit --name "My Security Team"
+
+# Or use the web portal Setup Wizard: open dashboard → Ventures → New Venture
+mayros dashboard
+```
+
+### Ventures & Missions
+
+```bash
+mayros kaneru venture create --name "Acme" --prefix ACM --directive "Ship fast" --fuel-limit 10000
+mayros kaneru mission create --venture <id> --title "Audit auth module" --priority critical
+mayros kaneru mission claim --mission <id> --agent scanner --run run-001
+mayros kaneru mission transition --mission <id> --status review --run run-001
+mayros kaneru comment add --mission <id> --author scanner --content "SQL injection found"
+```
+
+### Agents That Learn
+
+Agents build expertise profiles over time. Q-learning + EMA scoring routes missions to the best agent automatically.
+
+```bash
+mayros kaneru learn profile --agent scanner     # see agent expertise
+mayros kaneru learn top --domain typescript --task-type security-scan  # best agents for a task
+mayros kaneru route --mission "Fix SQL injection" --agents scanner,reviewer,fixer  # smart routing
+```
+
+### Cost Analytics & Fuel Control
+
+```bash
+mayros kaneru fuel summary --venture <id>           # spend overview
+mayros kaneru fuel analytics --venture <id> --period weekly  # time-series + provider breakdown
+mayros kaneru fuel forecast --venture <id>           # burn rate + days until exhausted
+```
+
+### Decision Audit
+
+```bash
+mayros kaneru consensus --squad <id> --question "Ship or block?"
+mayros kaneru decisions list --venture <id>
+mayros kaneru decisions explain --decision <id>     # full reasoning with votes
+```
+
+### Distributed Ventures (P2P)
+
+```bash
+mayros kaneru discover --venture <id>    # auto-discover peers via mDNS
+mayros kaneru sync --venture <id>        # DAG-sync venture state with peers
+```
+
+### Web Portal
+
+The portal at `http://localhost:18789` includes:
+
+- **Ventures tab** — venture table, mission kanban, chain of command tree, fuel bars
+- **Kaneru tab** — squads, Q-learning router, squad builder
+- **Canvas tab** — A2UI surfaces (overview, missions, chain, fuel) — interactive, venture-aware
+- **Setup Wizard** — 4-step guided venture creation (Venture → Agent → Mission → Launch)
+- **Command Bar** (Ctrl+/) — Spotlight-style overlay with venture context and voice input
+
+### MCP Tools (24)
+
+Any MCP client (Claude, Cursor, Cline) gets access to 24 Kaneru tools:
+
+| Tool | Purpose |
+|------|---------|
+| `kaneru_venture_create/list` | Venture CRUD |
+| `kaneru_mission_create/claim/list/transition` | Mission lifecycle |
+| `kaneru_fuel_summary/analytics/forecast` | Cost control |
+| `kaneru_dojo_list/install` | Venture templates |
+| `kaneru_learn_profile/top` | Agent expertise |
+| `kaneru_decisions_list/explain` | Decision audit |
+| `kaneru_sync/terminal_exec` | P2P sync + remote execution |
+| `kaneru_squad_create/run/status` | Multi-agent squads |
+| `kaneru_delegate/consensus/route/fuse/mailbox` | Coordination |
+
+CLI: `mayros kaneru` — 18 subcommand groups with 40+ commands total
+
+---
+
 ## IDE Plugins
 
 Mayros lives inside your editor, connected via Gateway WebSocket.
@@ -361,6 +468,7 @@ Both connect to `ws://127.0.0.1:18789`.
 | ------------- | ------------------------- | ------------------------------------------------------------------------- |
 | Skills        | `semantic-skills`         | QuickJS WASM sandbox, 6 semantic tools, skill marketplace                 |
 | Agents        | `agent-mesh`              | Teams, workflows, consensus (majority/weighted/Byzantine/Raft), mailbox   |
+| Ventures      | `kaneru`                  | Ventures, missions, projects, fuel, learning profiles, decision history   |
 | Memory        | `memory-semantic`         | Cortex integration, rules engine, agent memory, contextual awareness      |
 | Observability | `semantic-observability`  | Traces, decision graph, session fork/rewind                               |
 | Indexer       | `code-indexer`            | Codebase scanning + RDF mapping (incremental)                             |

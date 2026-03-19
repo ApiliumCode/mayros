@@ -13,6 +13,7 @@ import { McpResourceProvider, type ResourceDataSources } from "./resource-provid
 import { McpPromptProvider, type PromptDataSources } from "./prompt-provider.js";
 import { McpStdioTransport } from "./transport-stdio.js";
 import { McpHttpTransport } from "./transport-http.js";
+import { McpMetricsCollector, type McpMetricsSnapshot } from "./metrics-collector.js";
 
 // ============================================================================
 // Types
@@ -36,6 +37,8 @@ export type McpServerStatus = {
   address?: string;
   toolCount: number;
   initialized: boolean;
+  uptimeMs: number;
+  sseSessionCount: number;
 };
 
 // ============================================================================
@@ -45,16 +48,19 @@ export type McpServerStatus = {
 export class McpServer {
   private readonly config: McpServerConfig;
   private readonly toolAdapter: McpToolAdapter;
+  private readonly metricsCollector: McpMetricsCollector;
   private readonly resourceProvider: McpResourceProvider;
   private readonly promptProvider: McpPromptProvider;
   private readonly dispatcher: McpProtocolDispatcher;
   private readonly logger: NonNullable<McpServerOptions["logger"]>;
+  private readonly startedAt: number;
 
   private stdioTransport: McpStdioTransport | null = null;
   private httpTransport: McpHttpTransport | null = null;
 
   constructor(options: McpServerOptions) {
     this.config = options.config;
+    this.startedAt = Date.now();
     this.logger = options.logger ?? {
       info: () => {},
       warn: () => {},
@@ -62,7 +68,9 @@ export class McpServer {
     };
 
     // Initialize providers
+    this.metricsCollector = new McpMetricsCollector();
     this.toolAdapter = new McpToolAdapter();
+    this.toolAdapter.setMetrics(this.metricsCollector);
     this.toolAdapter.registerTools(options.tools);
 
     this.resourceProvider = new McpResourceProvider(options.resourceSources);
@@ -131,7 +139,14 @@ export class McpServer {
       address: this.httpTransport?.getAddress(),
       toolCount: this.toolAdapter.listToolNames().length,
       initialized: this.dispatcher.isInitialized(),
+      uptimeMs: running ? Date.now() - this.startedAt : 0,
+      sseSessionCount: this.httpTransport?.getSessionCount() ?? 0,
     };
+  }
+
+  /** Get metrics snapshot for the MCP dashboard. */
+  getMetrics(): McpMetricsSnapshot {
+    return this.metricsCollector.snapshot();
   }
 
   /** Check if server is running. */

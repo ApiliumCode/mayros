@@ -219,6 +219,18 @@ const mcpServerPlugin = {
             );
           }
 
+          // Kaneru tools — multi-agent coordination
+          const { createKaneruTools } = await import("./kaneru-tools.js");
+          mcpTools.push(
+            ...createKaneruTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
+          );
+
+          // Venture tools — ventures, missions, fuel, pulse
+          const { createVentureTools } = await import("./venture-tools.js");
+          mcpTools.push(
+            ...createVentureTools({ cortexBaseUrl: cortexBase, namespace: ns, authToken }),
+          );
+
           // Combine: dedicated MCP tools first, then auto-discovered plugin tools
           const allTools = [...mcpTools, ...pluginTools];
 
@@ -286,6 +298,48 @@ const mcpServerPlugin = {
             });
           },
         );
+    });
+
+    // ── Register gateway method (MCP Dashboard) ────────────────────
+
+    api.registerGatewayMethod("mcp.dashboard", async ({ respond }) => {
+      // Cortex health check with 3s timeout — always runs
+      let cortexHealth: { status: "online" | "offline"; latencyMs: number };
+      try {
+        const cortexPort = cfg.cortex?.port ?? 19090;
+        const cortexUrl = `http://127.0.0.1:${cortexPort}/api/v1/health`;
+        const start = Date.now();
+        const cortexRes = await fetch(cortexUrl, {
+          signal: AbortSignal.timeout(3000),
+        });
+        const latencyMs = Date.now() - start;
+        cortexHealth = {
+          status: cortexRes.ok ? "online" : "offline",
+          latencyMs,
+        };
+      } catch {
+        cortexHealth = { status: "offline", latencyMs: 0 };
+      }
+
+      if (!server) {
+        respond(true, {
+          status: {
+            running: false,
+            transport: cfg.transport ?? "http",
+            toolCount: 0,
+            initialized: false,
+            uptimeMs: 0,
+            sseSessionCount: 0,
+          },
+          metrics: null,
+          cortexHealth,
+        });
+        return;
+      }
+
+      const status = server.status();
+      const metrics = server.getMetrics();
+      respond(true, { status, metrics, cortexHealth });
     });
 
     // ── Register service lifecycle ──────────────────────────────────

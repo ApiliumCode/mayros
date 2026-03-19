@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import path from "node:path";
 
 // Mock child_process before importing the module
 vi.mock("node:child_process", () => ({
@@ -67,9 +68,10 @@ describe("git-worktree", () => {
         return "" as never;
       });
 
-      const result = createWorktree({ repoRoot: "/repo", name: "feature-a" });
+      const repoRoot = path.resolve("/repo");
+      const result = createWorktree({ repoRoot, name: "feature-a" });
 
-      expect(result.path).toBe("/repo/.mayros/worktrees/feature-a");
+      expect(result.path).toBe(path.join(repoRoot, ".mayros/worktrees/feature-a"));
       expect(result.branch).toBe("mayros/worktree/feature-a");
       expect(result.baseBranch).toBe("main");
       expect(result.createdAt).toBeTruthy();
@@ -287,16 +289,18 @@ describe("git-worktree", () => {
   describe("isWorktreePath", () => {
     it("returns true for paths inside worktree base", async () => {
       const { isWorktreePath } = await import("./git-worktree.js");
+      const repoRoot = path.resolve("/repo");
 
-      expect(isWorktreePath("/repo/.mayros/worktrees/feature-a", "/repo")).toBe(true);
-      expect(isWorktreePath("/repo/.mayros/worktrees/feature-a/src/file.ts", "/repo")).toBe(true);
+      expect(isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a"), repoRoot)).toBe(true);
+      expect(isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a/src/file.ts"), repoRoot)).toBe(true);
     });
 
     it("returns false for paths outside worktree base", async () => {
       const { isWorktreePath } = await import("./git-worktree.js");
+      const repoRoot = path.resolve("/repo");
 
-      expect(isWorktreePath("/repo/src/file.ts", "/repo")).toBe(false);
-      expect(isWorktreePath("/other/path", "/repo")).toBe(false);
+      expect(isWorktreePath(path.join(repoRoot, "src/file.ts"), repoRoot)).toBe(false);
+      expect(isWorktreePath(path.resolve("/other/path"), repoRoot)).toBe(false);
     });
   });
 

@@ -8,16 +8,11 @@
 import { randomUUID } from "node:crypto";
 import type { CortexClient } from "../shared/cortex-client.js";
 import type { PerformanceTracker } from "./performance-tracker.js";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-export type TaskClassification = {
-  taskType: string; // e.g., "code-review", "security-scan", "implementation"
-  complexity: "low" | "medium" | "high";
-  domain: string; // e.g., "typescript", "python", "general"
-};
+import type { LearningProfileManager } from "../kaneru/learning-profiles.js";
+import {
+  classifyTask as sharedClassifyTask,
+  type TaskClassification,
+} from "../shared/task-classification.js";
 
 export type RoutingDecision = {
   routingId: string;
@@ -48,77 +43,8 @@ const EPSILON_DECAY = 0.995;
 const EPSILON_MIN = 0.05;
 const CORTEX_PREFIX = "miteru:qtable:";
 
-// ============================================================================
-// Task classification helpers
-// ============================================================================
-
-const TASK_TYPE_KEYWORDS: Record<string, string[]> = {
-  "code-review": ["review", "check", "lint", "inspect"],
-  "security-scan": ["security", "vulnerability", "cve", "audit", "pentest"],
-  implementation: ["implement", "build", "create", "add", "feature"],
-  refactoring: ["refactor", "clean", "simplify", "restructure"],
-  testing: ["test", "spec", "coverage", "assertion"],
-  documentation: ["document", "docs", "readme", "explain"],
-  debugging: ["debug", "fix", "bug", "error", "crash"],
-  analysis: ["analyze", "report", "benchmark", "profile"],
-};
-
-const DOMAIN_EXTENSIONS: Record<string, string[]> = {
-  typescript: [".ts", ".tsx"],
-  javascript: [".js", ".jsx", ".mjs"],
-  python: [".py"],
-  rust: [".rs"],
-  go: [".go"],
-  java: [".java"],
-};
-
-function detectTaskType(description: string): string {
-  const lower = description.toLowerCase();
-  let bestType = "general";
-  let bestScore = 0;
-
-  for (const [type, keywords] of Object.entries(TASK_TYPE_KEYWORDS)) {
-    let score = 0;
-    for (const kw of keywords) {
-      if (lower.includes(kw)) score++;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestType = type;
-    }
-  }
-
-  return bestType;
-}
-
-function detectComplexity(description: string): "low" | "medium" | "high" {
-  const words = description.split(/\s+/).length;
-  const hasScope = /\b(all|entire|full|complete|whole)\b/i.test(description);
-  const hasMultiple = /\b(multiple|several|many|each|every)\b/i.test(description);
-
-  if (words > 100 || (hasScope && hasMultiple)) return "high";
-  if (words > 30 || hasScope || hasMultiple) return "medium";
-  return "low";
-}
-
-function detectDomain(description: string, path?: string): string {
-  // Check path first
-  if (path) {
-    for (const [domain, exts] of Object.entries(DOMAIN_EXTENSIONS)) {
-      for (const ext of exts) {
-        if (path.endsWith(ext)) return domain;
-      }
-    }
-  }
-
-  // Check description keywords
-  const lower = description.toLowerCase();
-  for (const domain of Object.keys(DOMAIN_EXTENSIONS)) {
-    if (lower.includes(domain)) return domain;
-  }
-
-  return "general";
-}
+// Re-export TaskClassification for consumers that import from this module
+export type { TaskClassification } from "../shared/task-classification.js";
 
 // ============================================================================
 // TaskRouter
@@ -129,21 +55,25 @@ export class TaskRouter {
   private epsilon = EPSILON_INIT;
   private pendingDecisions = new Map<string, { stateKey: string; agentId: string }>();
 
+  private learningProfiles: LearningProfileManager | null = null;
+
   constructor(
     private readonly client: CortexClient | null,
     private readonly ns: string,
     private readonly perfTracker: PerformanceTracker,
   ) {}
 
+  /** Attach learning profiles for expertise-blended routing. */
+  setLearningProfiles(profiles: LearningProfileManager): void {
+    this.learningProfiles = profiles;
+  }
+
   /**
    * Classify a task description into structured classification.
+   * Delegates to shared task-classification module.
    */
   classifyTask(description: string, path?: string): TaskClassification {
-    return {
-      taskType: detectTaskType(description),
-      complexity: detectComplexity(description),
-      domain: detectDomain(description, path),
-    };
+    return sharedClassifyTask(description, path);
   }
 
   /**
@@ -197,35 +127,54 @@ export class TaskRouter {
       confidence = 0.5;
       reason = `Exploration (ε=${this.epsilon.toFixed(3)})`;
     } else {
-      // Exploitation
+      // Exploitation: blend Q-values with learning profile expertise
       const stateActions = this.qTable.get(stateKey);
       if (!stateActions || stateActions.size === 0) {
-        // No Q-values: prefer agent with best EMA score
+        // No Q-values: use expertise + EMA score
         let bestAgent = available[0]!;
         let bestScore = -Infinity;
         for (const a of available) {
-          const score = await this.perfTracker.getScore(a);
-          if (score > bestScore) {
-            bestScore = score;
+          const perfScore = await this.perfTracker.getScore(a);
+          const expertise = this.learningProfiles
+            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            : 0.5;
+          // Blend: 40% performance EMA + 60% learned expertise
+          const blended = 0.4 * perfScore + 0.6 * expertise;
+          if (blended > bestScore) {
+            bestScore = blended;
             bestAgent = a;
           }
         }
         agentId = bestAgent;
         confidence = 0.6;
-        reason = `Performance-based (no Q-data for ${stateKey})`;
+        reason = this.learningProfiles
+          ? `Expertise-based (no Q-data for ${stateKey}, score=${bestScore.toFixed(3)})`
+          : `Performance-based (no Q-data for ${stateKey})`;
       } else {
+        // Blend Q-value with expertise from learning profiles
         let bestAgent = available[0]!;
-        let bestQ = -Infinity;
+        let bestBlended = -Infinity;
+        let bestQ = 0;
         for (const a of available) {
           const q = stateActions.get(a) ?? 0;
-          if (q > bestQ) {
-            bestQ = q;
+          const expertise = this.learningProfiles
+            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            : 0.5;
+          // Normalize Q-value to 0-1 range (sigmoid-like: q / (1 + |q|))
+          const qNorm = q / (1 + Math.abs(q));
+          // Blend: 60% Q-value + 40% expertise
+          const blended = 0.6 * qNorm + 0.4 * expertise;
+          if (blended > bestBlended) {
+            bestBlended = blended;
             bestAgent = a;
+            bestQ = q;
           }
         }
         agentId = bestAgent;
         confidence = Math.min(1.0, 0.7 + bestQ * 0.1);
-        reason = `Q-value ${bestQ.toFixed(3)} for state ${stateKey}`;
+        reason = this.learningProfiles
+          ? `Blended Q=${bestQ.toFixed(3)} + expertise (score=${bestBlended.toFixed(3)}) for ${stateKey}`
+          : `Q-value ${bestQ.toFixed(3)} for state ${stateKey}`;
       }
     }
 
@@ -337,6 +286,17 @@ export class TaskRouter {
       count += actions.size;
     }
     return count;
+  }
+
+  /** Export Q-table entries for dashboard visualization. */
+  getRouteTable(): Array<{ stateKey: string; agentId: string; qValue: number }> {
+    const entries: Array<{ stateKey: string; agentId: string; qValue: number }> = [];
+    for (const [stateKey, actions] of this.qTable) {
+      for (const [agentId, qValue] of actions) {
+        entries.push({ stateKey, agentId, qValue });
+      }
+    }
+    return entries;
   }
 
   // ---------- Q-table operations ----------
