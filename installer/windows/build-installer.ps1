@@ -56,13 +56,17 @@ if (-not $SkipDownload) {
         Write-Host "  -> Cortex already downloaded"
     }
 
-    # Mayros npm tarball
-    $mayrosTarball = Join-Path $DepsDir "apilium-mayros-${MayrosVersion}.tgz"
-    if (-not (Test-Path $mayrosTarball)) {
-        Write-Host "  -> npm pack @apilium/mayros@${MayrosVersion}"
+    # Mayros npm tarball — try published version first, fall back to local build
+    $mayrosTarball = Get-ChildItem -Path $DepsDir -Filter "apilium-mayros-*.tgz" | Select-Object -First 1
+    if (-not $mayrosTarball) {
         Push-Location $DepsDir
-        npm pack "@apilium/mayros@${MayrosVersion}" --quiet 2>$null
+        $repoRoot = Split-Path -Parent $InstallerDir
+        Write-Host "  -> Packing Mayros from local build..."
+        $ErrorActionPreference = "Continue"
+        & npm pack $repoRoot 2>&1 | Out-Null
+        $ErrorActionPreference = "Stop"
         Pop-Location
+        $mayrosTarball = Get-ChildItem -Path $DepsDir -Filter "apilium-mayros-*.tgz" | Select-Object -First 1
     } else {
         Write-Host "  -> Mayros tarball already downloaded"
     }
@@ -91,13 +95,36 @@ $binDir = Join-Path $StageDir "bin"
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 Expand-Archive -Path (Join-Path $DepsDir $CortexFile) -DestinationPath $binDir -Force
 
-# Extract Mayros CLI
-Write-Host "  -> Extracting Mayros CLI..."
+# Extract/Copy Mayros CLI
+Write-Host "  -> Preparing Mayros CLI..."
 $cliDir = Join-Path $StageDir "cli"
 New-Item -ItemType Directory -Force -Path $cliDir | Out-Null
 $tarball = Get-ChildItem -Path $DepsDir -Filter "*.tgz" | Select-Object -First 1
 if ($tarball) {
     tar -xzf $tarball.FullName -C $cliDir --strip-components=1
+} else {
+    # No tarball — copy from local repo build
+    $repoRoot = Split-Path -Parent $InstallerDir
+    Write-Host "  -> Copying from local build: $repoRoot"
+    $distDir = Join-Path $repoRoot "dist"
+    if (Test-Path $distDir) {
+        Copy-Item -Recurse "$distDir\*" $cliDir -Force
+        # Copy package.json and other needed files
+        Copy-Item (Join-Path $repoRoot "package.json") $cliDir -Force
+        if (Test-Path (Join-Path $repoRoot "LICENSE")) {
+            Copy-Item (Join-Path $repoRoot "LICENSE") $cliDir -Force
+        }
+        # Copy node_modules using robocopy (handles long paths)
+        $nmDir = Join-Path $repoRoot "node_modules"
+        if (Test-Path $nmDir) {
+            Write-Host "  -> Copying node_modules via robocopy (handles long paths)..."
+            $nmDest = Join-Path $cliDir "node_modules"
+            robocopy $nmDir $nmDest /E /NFL /NDL /NJH /NJS /NC /NS /NP | Out-Null
+        }
+    } else {
+        Write-Host "ERROR: No dist/ directory found. Run 'pnpm build' first." -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Copy wrapper scripts

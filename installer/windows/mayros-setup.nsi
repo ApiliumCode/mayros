@@ -40,10 +40,8 @@ Unicode True
 ; ---------------------------------------------------------------------------
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
-!include "EnvVarUpdate.nsh"
-
-!define MUI_ICON "${ASSETS_DIR}\mayros.ico"
-!define MUI_UNICON "${ASSETS_DIR}\mayros.ico"
+!include "WordFunc.nsh"
+!include "WinMessages.nsh"
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Mayros ${MAYROS_VERSION}"
@@ -55,7 +53,7 @@ Unicode True
 
 ; Pages
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "${STAGING_DIR}\..\..\..\LICENSE"
+!insertmacro MUI_PAGE_LICENSE "${STAGING_DIR}\..\..\..\..\LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -113,8 +111,10 @@ Section "Mayros Core" SecCore
 
   ; --- Add to user PATH ---
   DetailPrint "Adding Mayros to user PATH..."
-  ${EnvVarUpdate} $0 "PATH" "A" "HKCU" "$INSTDIR"
-  ${EnvVarUpdate} $0 "PATH" "A" "HKCU" "$INSTDIR\bin"
+  ReadRegStr $0 HKCU "Environment" "Path"
+  StrCpy $0 "$0;$INSTDIR;$INSTDIR\bin"
+  WriteRegExpandStr HKCU "Environment" "Path" "$0"
+  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=500
 
   ; --- Write registry info ---
   WriteRegStr HKCU "Software\Mayros" "InstallDir" "$INSTDIR"
@@ -180,8 +180,15 @@ Section "Uninstall"
   nsExec::ExecToLog '"$INSTDIR\node\node.exe" "$INSTDIR\cli\dist\index.js" uninstall --all --yes --non-interactive'
 
   ; Remove PATH entries
-  ${un.EnvVarUpdate} $0 "PATH" "R" "HKCU" "$INSTDIR"
-  ${un.EnvVarUpdate} $0 "PATH" "R" "HKCU" "$INSTDIR\bin"
+  ReadRegStr $0 HKCU "Environment" "Path"
+  ${WordReplace} $0 ";$INSTDIR\bin" "" "+" $0
+  ${WordReplace} $0 ";$INSTDIR" "" "+" $0
+  ${WordReplace} $0 "$INSTDIR\bin;" "" "+" $0
+  ${WordReplace} $0 "$INSTDIR;" "" "+" $0
+  ${WordReplace} $0 "$INSTDIR\bin" "" "+" $0
+  ${WordReplace} $0 "$INSTDIR" "" "+" $0
+  WriteRegExpandStr HKCU "Environment" "Path" "$0"
+  SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=500
 
   ; Remove shortcuts
   Delete "$DESKTOP\Mayros Portal.lnk"
