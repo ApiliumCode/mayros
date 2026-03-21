@@ -100,10 +100,10 @@ $installCmd = @"
 @echo off
 echo Installing Mayros v${MayrosVersion}...
 set "PATH=%~dp0node;%PATH%"
-"%~dp0node\npm.cmd" install -g "@apilium/mayros@${MayrosVersion}" --no-fund --no-audit 2>nul
+"%~dp0node\npm.cmd" install -g "@apilium/mayros@${MayrosVersion}" --prefix "%~dp0." --force --no-fund --no-audit 2>nul
 if errorlevel 1 (
     echo Retrying with latest...
-    "%~dp0node\npm.cmd" install -g @apilium/mayros@latest --no-fund --no-audit
+    "%~dp0node\npm.cmd" install -g @apilium/mayros@latest --prefix "%~dp0." --force --no-fund --no-audit
 )
 echo Done.
 "@

@@ -62,9 +62,8 @@ Section "Mayros" SecMain
   SetOutPath "$INSTDIR\bin"
   File "${STAGING_DIR}\bin\aingle-cortex.exe"
 
-  ; --- Wrapper scripts ---
+  ; --- Scripts (npm creates mayros.cmd automatically) ---
   SetOutPath "$INSTDIR"
-  File "${STAGING_DIR}\mayros.cmd"
   File "${STAGING_DIR}\install-mayros.cmd"
   File "${STAGING_DIR}\LICENSE"
 
