@@ -17,6 +17,8 @@
 !include "WordFunc.nsh"
 !include "WinMessages.nsh"
 
+!define MUI_ICON "${ASSETS_DIR}\mayros.ico"
+!define MUI_UNICON "${ASSETS_DIR}\mayros.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Mayros ${MAYROS_VERSION}"
 !define MUI_WELCOMEPAGE_TEXT "Mayros is an open-source AI agent framework.$\r$\n$\r$\nThis installer will set up:$\r$\n  - Node.js ${NODE_VERSION} (portable)$\r$\n  - AIngle Cortex ${CORTEX_VERSION} (semantic memory)$\r$\n  - Mayros CLI and Gateway$\r$\n$\r$\nClick Next to continue."
@@ -62,10 +64,11 @@ Section "Mayros" SecMain
   SetOutPath "$INSTDIR\bin"
   File "${STAGING_DIR}\bin\aingle-cortex.exe"
 
-  ; --- Scripts (npm creates mayros.cmd automatically) ---
+  ; --- Scripts + icon ---
   SetOutPath "$INSTDIR"
   File "${STAGING_DIR}\install-mayros.cmd"
   File "${STAGING_DIR}\LICENSE"
+  File "${ASSETS_DIR}\mayros.ico"
 
   SetOutPath "$INSTDIR\bin"
   File "${STAGING_DIR}\bin\open-portal.cmd"
@@ -104,7 +107,7 @@ Section "Mayros" SecMain
   CreateShortcut "$SMPROGRAMS\Mayros\Mayros Dashboard.lnk" \
     "$INSTDIR\node\node.exe" \
     '"$INSTDIR\bin\open-portal.cmd"' \
-    "" "" "" "" "Open Mayros Control Dashboard"
+    "$INSTDIR\mayros.ico" 0 "" "" "Open Mayros Control Dashboard"
   CreateShortcut "$SMPROGRAMS\Mayros\Uninstall Mayros.lnk" "$INSTDIR\uninstall.exe"
 
   ; --- Uninstaller ---
@@ -153,5 +156,5 @@ Function CreateDesktopShortcut
   CreateShortcut "$DESKTOP\Mayros Dashboard.lnk" \
     "$INSTDIR\node\node.exe" \
     '"$INSTDIR\bin\open-portal.cmd"' \
-    "" "" "" "" "Open Mayros Control Dashboard"
+    "$INSTDIR\mayros.ico" 0 "" "" "Open Mayros Control Dashboard"
 FunctionEnd
