@@ -98,13 +98,10 @@ if (Test-Path (Join-Path $repoRoot "LICENSE")) {
 # Create install.cmd — runs npm install at install time
 $installCmd = @"
 @echo off
-echo Installing Mayros v${MayrosVersion}...
-set "PATH=%~dp0node;%PATH%"
-"%~dp0node\npm.cmd" install -g "@apilium/mayros@${MayrosVersion}" --prefix "%~dp0." --force --no-fund --no-audit 2>nul
-if errorlevel 1 (
-    echo Retrying with latest...
-    "%~dp0node\npm.cmd" install -g @apilium/mayros@latest --prefix "%~dp0." --force --no-fund --no-audit
-)
+set "MAYROS_DIR=%LOCALAPPDATA%\Mayros"
+set "PATH=%MAYROS_DIR%\node;%PATH%"
+echo Installing Mayros...
+call "%MAYROS_DIR%\node\npm.cmd" install -g @apilium/mayros@latest --prefix "%MAYROS_DIR%" --force --no-fund --no-audit
 echo Done.
 "@
 Set-Content -Path (Join-Path $StageDir "install-mayros.cmd") -Value $installCmd -Encoding ASCII
