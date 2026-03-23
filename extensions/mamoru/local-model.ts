@@ -219,24 +219,59 @@ export class LocalModelSetup {
       // rocm-smi not available
     }
 
-    // Apple Silicon: check platform + system memory as unified memory
+    // macOS: detect Apple Silicon vs Intel
     if (process.platform === "darwin") {
-      try {
-        const { stdout } = await execFileAsync("sysctl", ["-n", "hw.memsize"]);
-        const memBytes = parseInt(stdout.trim(), 10);
-        const memMB = Math.round(memBytes / (1024 * 1024));
-        // Apple Silicon shares system memory as GPU VRAM
-        // Allocate ~75% for model loading as a rough estimate
-        return {
-          vendor: "apple",
-          name: "Apple Silicon",
-          vramMB: Math.round(memMB * 0.75),
-        };
-      } catch {
-        return { vendor: "apple", name: "Apple Silicon", vramMB: 8000 };
+      // Check if Apple Silicon (arm64) or Intel (x64)
+      const isAppleSilicon = process.arch === "arm64";
+
+      if (isAppleSilicon) {
+        // Apple Silicon: unified memory shared between CPU and GPU
+        try {
+          const { stdout } = await execFileAsync("sysctl", ["-n", "hw.memsize"]);
+          const memBytes = parseInt(stdout.trim(), 10);
+          const memMB = Math.round(memBytes / (1024 * 1024));
+          // ~75% of unified memory available for model loading
+          return {
+            vendor: "apple",
+            name: `Apple Silicon (${memMB >= 32768 ? "M-series Pro/Max" : memMB >= 16384 ? "M-series" : "M-series Base"})`,
+            vramMB: Math.round(memMB * 0.75),
+          };
+        } catch {
+          return { vendor: "apple", name: "Apple Silicon", vramMB: 8000 };
+        }
+      } else {
+        // Intel Mac: check for discrete AMD GPU via system_profiler
+        try {
+          const { stdout } = await execFileAsync("system_profiler", ["SPDisplaysDataType"]);
+          const vramMatch = stdout.match(/VRAM.*?:\s*(\d+)\s*(MB|GB)/i);
+          if (vramMatch) {
+            const vram = parseInt(vramMatch[1]!, 10);
+            const vramMB = vramMatch[2]!.toUpperCase() === "GB" ? vram * 1024 : vram;
+            const nameMatch = stdout.match(/Chipset Model:\s*(.+)/);
+            const gpuName = nameMatch?.[1]?.trim() ?? "Intel Mac GPU";
+            return { vendor: "amd", name: gpuName, vramMB };
+          }
+        } catch {
+          // system_profiler not available
+        }
+
+        // Intel Mac without discrete GPU: CPU-only, use system RAM as rough guide
+        try {
+          const { stdout } = await execFileAsync("sysctl", ["-n", "hw.memsize"]);
+          const memBytes = parseInt(stdout.trim(), 10);
+          const memMB = Math.round(memBytes / (1024 * 1024));
+          return {
+            vendor: "none",
+            name: `Intel Mac (${Math.round(memMB / 1024)}GB RAM, no dedicated GPU)`,
+            vramMB: Math.min(memMB * 0.5, 8000), // CPU inference uses ~50% RAM max
+          };
+        } catch {
+          return { vendor: "none", name: "Intel Mac", vramMB: 4096 };
+        }
       }
     }
 
+    // Linux/Windows without detected GPU
     return { vendor: "none", name: "No GPU detected", vramMB: 0 };
   }
 
