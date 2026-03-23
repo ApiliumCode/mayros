@@ -16,6 +16,8 @@ export type OnboardingState = {
   selectedActivity: string;
   localModel: string;
   ollamaDetected: boolean;
+  detectedVramMB: number;
+  detectedGpuName: string;
   saving: boolean;
   error: string | null;
   gatewayOk: boolean;
@@ -413,32 +415,53 @@ function renderLocalModelStep(props: OnboardingWizardProps) {
               </div>
             </div>
 
-            <!-- Model list filtered by activity -->
-            <div style="margin-bottom: 20px; max-height: 220px; overflow-y: auto; border: 1px solid var(--border, #27272a); border-radius: 8px;">
+            <!-- GPU info -->
+            ${s.detectedGpuName ? html`
+              <div style="margin-bottom: 12px; padding: 8px 12px; background: rgba(255,92,92,0.08); border-radius: 8px; font-size: 13px; color: #ccc;">
+                Your GPU: <strong>${s.detectedGpuName}</strong> (${(s.detectedVramMB / 1000).toFixed(0)}GB VRAM)
+                ${s.detectedVramMB === 0 ? " — CPU only, limited models available" : ""}
+              </div>
+            ` : nothing}
+
+            <!-- Model list filtered by activity + compatibility -->
+            <div style="margin-bottom: 20px; max-height: 240px; overflow-y: auto; border: 1px solid var(--border, #27272a); border-radius: 8px;">
               ${FULL_CATALOG
                 .filter((m) => s.selectedActivity === "all" || m.activity === s.selectedActivity)
+                .sort((a, b) => {
+                  // Compatible models first, then by VRAM desc
+                  const aOk = a.vram <= s.detectedVramMB ? 1 : 0;
+                  const bOk = b.vram <= s.detectedVramMB ? 1 : 0;
+                  if (aOk !== bOk) return bOk - aOk;
+                  return b.vram - a.vram;
+                })
                 .map(
-                  (m) => html`
-                    <div
-                      style="
-                        padding: 10px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-                        border-bottom: 1px solid var(--border, #27272a);
-                        background: ${s.localModel === m.id ? "rgba(255,92,92,0.1)" : "transparent"};
-                      "
-                      @click=${() => props.onLocalModelChange(m.id)}
-                    >
-                      <div>
-                        <div style="font-size: 14px; font-weight: ${s.localModel === m.id ? "600" : "400"}; color: var(--card-foreground, #f4f4f5);">
-                          ${m.name}
-                          <span style="font-size: 11px; color: #888; margin-left: 6px;">${m.params} | ${m.provider}</span>
+                  (m) => {
+                    const canRun = m.vram <= s.detectedVramMB;
+                    const isSelected = s.localModel === m.id;
+                    return html`
+                      <div
+                        style="
+                          padding: 10px 14px; cursor: ${canRun ? "pointer" : "not-allowed"}; display: flex; justify-content: space-between; align-items: center;
+                          border-bottom: 1px solid var(--border, #27272a);
+                          background: ${isSelected ? "rgba(255,92,92,0.1)" : "transparent"};
+                          opacity: ${canRun ? "1" : "0.4"};
+                        "
+                        @click=${() => canRun && props.onLocalModelChange(m.id)}
+                      >
+                        <div>
+                          <div style="font-size: 14px; font-weight: ${isSelected ? "600" : "400"}; color: var(--card-foreground, #f4f4f5);">
+                            ${canRun ? "" : "🔒 "}${m.name}
+                            <span style="font-size: 11px; color: #888; margin-left: 6px;">${m.params} | ${m.provider}</span>
+                          </div>
+                          <div style="font-size: 12px; color: #777; margin-top: 2px;">${m.desc}</div>
                         </div>
-                        <div style="font-size: 12px; color: #777; margin-top: 2px;">${m.desc}</div>
+                        <div style="font-size: 11px; white-space: nowrap; margin-left: 12px; color: ${canRun ? "#4ade80" : "#ef4444"};">
+                          ${m.vram > 0 ? `${(m.vram / 1000).toFixed(0)}GB` : "CPU"}
+                          ${canRun ? " ✓" : " ✗"}
+                        </div>
                       </div>
-                      <div style="font-size: 11px; color: #888; white-space: nowrap; margin-left: 12px;">
-                        ${m.vram > 0 ? `${(m.vram / 1000).toFixed(0)}GB GPU` : "CPU OK"}
-                      </div>
-                    </div>
-                  `,
+                    `;
+                  },
                 )}
             </div>
           `

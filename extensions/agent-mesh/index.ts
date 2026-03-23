@@ -2286,6 +2286,17 @@ const agentMeshPlugin = {
       }
     });
 
+    api.registerGatewayMethod("onboarding.detectGPU", async ({ respond }) => {
+      try {
+        const { LocalModelSetup } = await import("../mamoru/local-model.js");
+        const setup = new LocalModelSetup();
+        const gpu = await setup.detectGPU();
+        respond(true, gpu);
+      } catch {
+        respond(true, { vendor: "none", name: "Unknown", vramMB: 4096 });
+      }
+    });
+
     api.registerGatewayMethod("onboarding.detectOllama", async ({ respond }) => {
       try {
         const res = await fetch("http://127.0.0.1:11434/api/tags", {

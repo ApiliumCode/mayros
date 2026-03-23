@@ -89,6 +89,7 @@ import {
   onboardingBack,
   saveOnboardingConfig,
   detectOllama,
+  detectGPU,
 } from "./controllers/onboarding.ts";
 import { renderCommandBar } from "./views/command-bar.ts";
 import {
@@ -1240,7 +1241,11 @@ export function renderApp(state: AppViewState) {
           if (next.step === "provider" && next.provider === "local") {
             onboardingNext(next);
             state.onboardingWizard = next;
-            void detectOllama(next, state.client).then(() => {
+            // Detect Ollama + GPU in parallel
+            Promise.all([
+              detectOllama(next, state.client),
+              detectGPU(next, state.client),
+            ]).then(() => {
               state.onboardingWizard = { ...next };
             });
             return;

@@ -14,6 +14,8 @@ export function createInitialOnboardingState(): OnboardingState {
     selectedActivity: "all",
     localModel: "llama3.1:8b",
     ollamaDetected: false,
+    detectedVramMB: 4096,
+    detectedGpuName: "",
     saving: false,
     error: null,
     gatewayOk: false,
@@ -144,5 +146,27 @@ export async function detectOllama(
       }
     }
     state.ollamaDetected = false;
+  }
+}
+
+// ============================================================================
+// Detect GPU via gateway
+// ============================================================================
+
+export async function detectGPU(
+  state: OnboardingState,
+  client?: GatewayBrowserClient | null,
+): Promise<void> {
+  if (!client) return;
+  try {
+    const result = (await client.request("onboarding.detectGPU", {})) as {
+      vendor: string;
+      name: string;
+      vramMB: number;
+    };
+    state.detectedVramMB = result.vramMB;
+    state.detectedGpuName = result.name || `${result.vendor} (${result.vramMB}MB)`;
+  } catch {
+    // Gateway doesn't support GPU detection — keep defaults
   }
 }
