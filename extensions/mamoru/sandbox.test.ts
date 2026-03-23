@@ -75,4 +75,45 @@ describe("MamoruSandbox", () => {
   it("getAppliedPolicy returns null before apply", () => {
     expect(sandbox.getAppliedPolicy()).toBeNull();
   });
+
+  // 9
+  it("apply stores the policy regardless of platform", async () => {
+    const policy = sandbox.getDefaultPolicy();
+    await sandbox.apply(policy);
+    expect(sandbox.getAppliedPolicy()).toEqual(policy);
+  });
+
+  // 10
+  it("apply on linux with enforce mode throws when no primitives", async () => {
+    if (process.platform === "linux") {
+      const policy = sandbox.getDefaultPolicy();
+      policy.compatibility = "enforce";
+      // This test is platform-dependent — on Linux with kernel support it passes
+      // On Linux without Landlock/seccomp it should throw
+      const avail = await sandbox.checkAvailability();
+      if (!avail.landlock && !avail.seccomp) {
+        await expect(sandbox.apply(policy)).rejects.toThrow("sandbox enforcement requested");
+      }
+    }
+  });
+
+  // 11
+  it("getStatusSummary includes namespace", () => {
+    const summary = sandbox.getStatusSummary();
+    expect(summary.ns).toBe("test");
+    expect(summary.status).toBe("inactive");
+    expect(summary.hasPolicy).toBe(false);
+  });
+
+  // 12
+  it("apply result contains appliedLayers array", async () => {
+    const policy = sandbox.getDefaultPolicy();
+    const result = await sandbox.apply(policy);
+    expect(Array.isArray(result.appliedLayers)).toBe(true);
+    // On Linux, we expect at least umask-077 to be applied
+    if (process.platform === "linux") {
+      expect(result.appliedLayers).toContain("umask-077");
+      expect(result.status).not.toBe("unsupported");
+    }
+  });
 });

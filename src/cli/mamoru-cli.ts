@@ -500,20 +500,66 @@ export function registerMamoruCli(program: Command) {
   model
     .command("suggest")
     .description("Suggest local models based on GPU capabilities")
-    .action(async () => {
+    .option("--activity <type>", "Filter by activity: coding, chat, reasoning, creative, analysis, multilingual, vision, agents")
+    .action(async (opts: { activity?: string }) => {
       const parent = mamoru.opts();
       try {
         const { stack } = await loadMamoruStack(parent);
         const gpu = await stack.localModel.detectGPU();
-        const suggestions = stack.localModel.suggestModels(gpu);
-        console.log(`Suggested Models (VRAM: ${gpu.vramMB}MB ${gpu.vendor}):`);
-        if (suggestions.length === 0) {
-          console.log("  No models found for your hardware.");
-        } else {
-          for (const s of suggestions) {
-            console.log(`  ${s.model}  runtime=${s.runtime}  vram=${s.vramRequired}MB  — ${s.reason}`);
+
+        if (opts.activity) {
+          // Activity-specific suggestions using the new catalog
+          const validActivities = stack.localModel.listActivities().map((a) => a.activity);
+          if (!validActivities.includes(opts.activity as never)) {
+            console.error(`Unknown activity: ${opts.activity}`);
+            console.error(`Valid activities: ${validActivities.join(", ")}`);
+            process.exitCode = 1;
+            return;
           }
+          const activity = opts.activity as Parameters<typeof stack.localModel.suggestByActivity>[0];
+          const models = stack.localModel.suggestByActivity(activity, gpu);
+          const activityInfo = stack.localModel.listActivities().find((a) => a.activity === activity);
+          console.log(`Models for "${activityInfo?.label ?? activity}" (VRAM: ${gpu.vramMB}MB ${gpu.vendor}):`);
+          console.log(`  ${activityInfo?.description ?? ""}\n`);
+          if (models.length === 0) {
+            console.log("  No models found for your hardware and selected activity.");
+          } else {
+            for (const m of models) {
+              console.log(`  ${m.id}  ${m.parameters}  ${m.provider}  vram=${m.vramRequired}MB  ctx=${m.contextLength}  ${m.runtime}`);
+              console.log(`    ${m.strengths}`);
+            }
+          }
+        } else {
+          // Legacy behavior — flat suggestions
+          const suggestions = stack.localModel.suggestModels(gpu);
+          console.log(`Suggested Models (VRAM: ${gpu.vramMB}MB ${gpu.vendor}):`);
+          if (suggestions.length === 0) {
+            console.log("  No models found for your hardware.");
+          } else {
+            for (const s of suggestions) {
+              console.log(`  ${s.model}  runtime=${s.runtime}  vram=${s.vramRequired}MB  — ${s.reason}`);
+            }
+          }
+          console.log("\n  Tip: Use --activity <type> to filter by task. Run 'mayros mamoru model activities' for a list.");
         }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  model
+    .command("activities")
+    .description("List available model activities for --activity filtering")
+    .action(async () => {
+      const parent = mamoru.opts();
+      try {
+        const { stack } = await loadMamoruStack(parent);
+        const activities = stack.localModel.listActivities();
+        console.log("Available Model Activities:\n");
+        for (const a of activities) {
+          console.log(`  ${a.activity.padEnd(14)} ${a.label.padEnd(14)} ${a.description}`);
+        }
+        console.log("\nUsage: mayros mamoru model suggest --activity <activity>");
       } catch (err) {
         handleError(err);
       }

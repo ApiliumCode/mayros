@@ -49,17 +49,122 @@ export type ModelSuggestion = {
   vramRequired: number;
 };
 
-// ── Model catalog ────────────────────────────────────────────────────────
+// ── Activity-segmented model types ──────────────────────────────────────
 
-const MODEL_CATALOG: ModelSuggestion[] = [
-  { model: "llama3.2:3b", runtime: "ollama", reason: "Lightweight, runs on CPU", vramRequired: 0 },
-  { model: "llama3.3:8b", runtime: "ollama", reason: "Good balance of quality and speed", vramRequired: 6000 },
-  { model: "llama3.3:70b", runtime: "ollama", reason: "High quality, needs GPU", vramRequired: 40000 },
-  { model: "codellama:13b", runtime: "ollama", reason: "Optimized for code generation", vramRequired: 10000 },
-  { model: "deepseek-coder-v2:16b", runtime: "ollama", reason: "Strong coding model", vramRequired: 12000 },
-  { model: "mistral:7b", runtime: "ollama", reason: "Fast, efficient for general tasks", vramRequired: 6000 },
-  { model: "qwen2.5:14b", runtime: "ollama", reason: "Multilingual, good for diverse tasks", vramRequired: 10000 },
+export type ModelActivity =
+  | "coding"       // code generation, debugging, refactoring
+  | "chat"         // general conversation, Q&A
+  | "reasoning"    // complex logic, math, planning
+  | "creative"     // writing, storytelling, content
+  | "analysis"     // data analysis, research, summarization
+  | "multilingual" // translation, cross-language tasks
+  | "vision"       // image understanding (multimodal)
+  | "agents";      // autonomous agent tasks, tool use
+
+export type ModelTier = "small" | "medium" | "large" | "xlarge";
+
+export type CatalogModel = {
+  id: string;                    // ollama/nim model ID
+  name: string;                  // human-readable name
+  provider: "meta" | "nvidia" | "mistral" | "google" | "deepseek" | "qwen" | "microsoft" | "cohere";
+  activities: ModelActivity[];   // what it's good at
+  tier: ModelTier;
+  parameters: string;            // "3B", "8B", "70B", etc.
+  vramRequired: number;          // MB
+  contextLength: number;         // tokens
+  quantization: string;          // "Q4_K_M", "Q8_0", "FP16"
+  runtime: "ollama" | "vllm" | "nim";
+  strengths: string;             // 1-line description
+};
+
+export type ActivityDescription = {
+  activity: ModelActivity;
+  label: string;
+  description: string;
+};
+
+// ── Activity descriptions ────────────────────────────────────────────────
+
+const ACTIVITY_DESCRIPTIONS: ActivityDescription[] = [
+  { activity: "coding",       label: "Coding",        description: "Code generation, debugging, refactoring, and completion" },
+  { activity: "chat",         label: "Chat",          description: "General conversation, Q&A, and instruction following" },
+  { activity: "reasoning",    label: "Reasoning",     description: "Complex logic, math, planning, and chain-of-thought" },
+  { activity: "creative",     label: "Creative",      description: "Writing, storytelling, content generation, and brainstorming" },
+  { activity: "analysis",     label: "Analysis",      description: "Data analysis, research, summarization, and extraction" },
+  { activity: "multilingual", label: "Multilingual",  description: "Translation, cross-language tasks, and polyglot support" },
+  { activity: "vision",       label: "Vision",        description: "Image understanding, visual QA, and multimodal reasoning" },
+  { activity: "agents",       label: "Agents",        description: "Autonomous agent tasks, tool use, and function calling" },
 ];
+
+// ── Model catalog (activity-segmented) ──────────────────────────────────
+
+const CATALOG: CatalogModel[] = [
+  // ── Coding models ─────────────────────────────────────────────────
+  { id: "codellama:7b",           name: "Code Llama 7B",            provider: "meta",     activities: ["coding"],                              tier: "small",  parameters: "7B",   vramRequired: 5000,   contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Fast code completion and infilling, low VRAM" },
+  { id: "codellama:13b",          name: "Code Llama 13B",           provider: "meta",     activities: ["coding"],                              tier: "medium", parameters: "13B",  vramRequired: 10000,  contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong code generation with better accuracy than 7B" },
+  { id: "codellama:34b",          name: "Code Llama 34B",           provider: "meta",     activities: ["coding", "reasoning"],                  tier: "large",  parameters: "34B",  vramRequired: 22000,  contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Best Code Llama for complex code tasks" },
+  { id: "deepseek-coder-v2:16b",  name: "DeepSeek Coder V2 16B",   provider: "deepseek", activities: ["coding", "reasoning"],                  tier: "medium", parameters: "16B",  vramRequired: 12000,  contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "MoE architecture, 128K context, strong on benchmarks" },
+  { id: "deepseek-coder-v2:33b",  name: "DeepSeek Coder V2 33B",   provider: "deepseek", activities: ["coding", "reasoning", "analysis"],      tier: "large",  parameters: "33B",  vramRequired: 22000,  contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "Top-tier code model with extended context window" },
+  { id: "qwen2.5-coder:7b",       name: "Qwen 2.5 Coder 7B",      provider: "qwen",     activities: ["coding"],                              tier: "small",  parameters: "7B",   vramRequired: 5000,   contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Competitive with larger models on code tasks" },
+  { id: "qwen2.5-coder:14b",      name: "Qwen 2.5 Coder 14B",     provider: "qwen",     activities: ["coding", "agents"],                    tier: "medium", parameters: "14B",  vramRequired: 10000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong code + tool-use capabilities" },
+  { id: "qwen2.5-coder:32b",      name: "Qwen 2.5 Coder 32B",     provider: "qwen",     activities: ["coding", "reasoning", "agents"],        tier: "large",  parameters: "32B",  vramRequired: 22000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Best Qwen coder, rivals GPT-4 on code benchmarks" },
+  { id: "starcoder2:7b",          name: "StarCoder2 7B",            provider: "microsoft",activities: ["coding"],                              tier: "small",  parameters: "7B",   vramRequired: 5000,   contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Trained on The Stack v2, fast completions" },
+  { id: "starcoder2:15b",         name: "StarCoder2 15B",           provider: "microsoft",activities: ["coding"],                              tier: "medium", parameters: "15B",  vramRequired: 11000,  contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Larger StarCoder2 with improved accuracy" },
+
+  // ── Chat / General models ─────────────────────────────────────────
+  { id: "llama3.2:3b",            name: "Llama 3.2 3B",             provider: "meta",     activities: ["chat"],                                tier: "small",  parameters: "3B",   vramRequired: 0,      contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Lightweight, runs on CPU, fast responses" },
+  { id: "llama3.3:8b",            name: "Llama 3.3 8B",             provider: "meta",     activities: ["chat", "creative", "agents"],           tier: "small",  parameters: "8B",   vramRequired: 6000,   contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "Excellent general model with function calling" },
+  { id: "llama3.3:70b",           name: "Llama 3.3 70B",            provider: "meta",     activities: ["chat", "reasoning", "analysis", "agents"], tier: "xlarge", parameters: "70B", vramRequired: 40000,  contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "Flagship Llama, near-frontier quality across all tasks" },
+  { id: "mistral:7b",             name: "Mistral 7B",               provider: "mistral",  activities: ["chat", "creative"],                    tier: "small",  parameters: "7B",   vramRequired: 6000,   contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Fast, efficient, strong for its size" },
+  { id: "mistral-nemo:12b",       name: "Mistral Nemo 12B",         provider: "mistral",  activities: ["chat", "agents", "multilingual"],       tier: "medium", parameters: "12B",  vramRequired: 9000,   contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "128K context, function calling, multilingual" },
+  { id: "mixtral:8x7b",           name: "Mixtral 8x7B",             provider: "mistral",  activities: ["chat", "reasoning", "coding"],          tier: "large",  parameters: "47B",  vramRequired: 28000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "MoE with 8 experts, fast inference for its quality" },
+  { id: "phi-4:14b",              name: "Phi-4 14B",                provider: "microsoft",activities: ["chat", "reasoning", "coding"],          tier: "medium", parameters: "14B",  vramRequired: 10000,  contextLength: 16384,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong reasoning for its size, efficient architecture" },
+  { id: "gemma2:9b",              name: "Gemma 2 9B",               provider: "google",   activities: ["chat", "creative"],                    tier: "small",  parameters: "9B",   vramRequired: 7000,   contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Google's efficient model, strong on benchmarks" },
+  { id: "gemma2:27b",             name: "Gemma 2 27B",              provider: "google",   activities: ["chat", "reasoning", "analysis"],        tier: "large",  parameters: "27B",  vramRequired: 18000,  contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Best Gemma, competitive with much larger models" },
+
+  // ── Reasoning models ──────────────────────────────────────────────
+  { id: "deepseek-r1:7b",         name: "DeepSeek R1 7B",           provider: "deepseek", activities: ["reasoning", "analysis"],                tier: "small",  parameters: "7B",   vramRequired: 5000,   contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Chain-of-thought reasoning at small scale" },
+  { id: "deepseek-r1:14b",        name: "DeepSeek R1 14B",          provider: "deepseek", activities: ["reasoning", "analysis", "coding"],      tier: "medium", parameters: "14B",  vramRequired: 10000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong reasoning with code understanding" },
+  { id: "deepseek-r1:70b",        name: "DeepSeek R1 70B",          provider: "deepseek", activities: ["reasoning", "analysis", "coding"],      tier: "xlarge", parameters: "70B",  vramRequired: 40000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Frontier-level reasoning, rivals o1 on math benchmarks" },
+  { id: "qwen2.5:72b",            name: "Qwen 2.5 72B",            provider: "qwen",     activities: ["reasoning", "analysis", "multilingual"], tier: "xlarge", parameters: "72B",  vramRequired: 42000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Top-tier reasoning and multilingual capabilities" },
+
+  // ── Creative / Writing models ─────────────────────────────────────
+  { id: "yi:34b",                  name: "Yi 34B",                  provider: "deepseek", activities: ["creative", "chat", "multilingual"],     tier: "large",  parameters: "34B",  vramRequired: 22000,  contextLength: 4096,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong creative writing and bilingual (EN/ZH)" },
+
+  // ── Multilingual models ───────────────────────────────────────────
+  { id: "qwen2.5:7b",             name: "Qwen 2.5 7B",             provider: "qwen",     activities: ["multilingual", "chat"],                 tier: "small",  parameters: "7B",   vramRequired: 5000,   contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong multilingual support including CJK languages" },
+  { id: "qwen2.5:14b",            name: "Qwen 2.5 14B",            provider: "qwen",     activities: ["multilingual", "chat", "agents", "analysis"], tier: "medium", parameters: "14B", vramRequired: 10000, contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Best mid-size multilingual model with tool use" },
+  { id: "qwen2.5:32b",            name: "Qwen 2.5 32B",            provider: "qwen",     activities: ["multilingual", "analysis", "reasoning"], tier: "large",  parameters: "32B",  vramRequired: 22000,  contextLength: 32768,  quantization: "Q4_K_M", runtime: "ollama", strengths: "Strong analysis and multilingual reasoning" },
+  { id: "aya:8b",                  name: "Aya 8B",                  provider: "cohere",   activities: ["multilingual", "chat"],                 tier: "small",  parameters: "8B",   vramRequired: 6000,   contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Covers 23+ languages including underrepresented ones" },
+  { id: "aya:35b",                 name: "Aya 35B",                 provider: "cohere",   activities: ["multilingual", "chat", "analysis"],     tier: "large",  parameters: "35B",  vramRequired: 24000,  contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Best multilingual coverage with strong quality" },
+
+  // ── Vision (multimodal) models ────────────────────────────────────
+  { id: "llava:7b",                name: "LLaVA 7B",               provider: "meta",     activities: ["vision", "chat"],                       tier: "small",  parameters: "7B",   vramRequired: 6000,   contextLength: 4096,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Fast visual QA with image understanding" },
+  { id: "llava:13b",               name: "LLaVA 13B",              provider: "meta",     activities: ["vision", "chat"],                       tier: "medium", parameters: "13B",  vramRequired: 10000,  contextLength: 4096,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Better image reasoning than 7B variant" },
+  { id: "llama3.2-vision:11b",     name: "Llama 3.2 Vision 11B",   provider: "meta",     activities: ["vision", "chat", "analysis"],            tier: "medium", parameters: "11B",  vramRequired: 8000,   contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "Native multimodal with 128K context" },
+
+  // ── Agent-focused models ───────────────────────────────────────────
+  { id: "granite3-dense:8b",       name: "Granite 3 Dense 8B",      provider: "microsoft",activities: ["agents", "coding", "chat"],             tier: "small",  parameters: "8B",   vramRequired: 6000,   contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Enterprise-grade with strong tool-use support" },
+  { id: "granite3-moe:3b",        name: "Granite 3 MoE 3B",        provider: "microsoft",activities: ["agents", "chat"],                       tier: "small",  parameters: "3B",   vramRequired: 3000,   contextLength: 8192,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Lightweight MoE architecture for agent workloads" },
+
+  // ── Analysis-focused additions ────────────────────────────────────
+  { id: "solar:10.7b",            name: "Solar 10.7B",              provider: "deepseek", activities: ["analysis", "chat", "creative"],          tier: "medium", parameters: "10.7B",vramRequired: 8000,   contextLength: 4096,   quantization: "Q4_K_M", runtime: "ollama", strengths: "Depth-upscaled architecture, strong summarization" },
+  { id: "command-r:35b",          name: "Command R 35B",            provider: "cohere",   activities: ["analysis", "agents", "multilingual"],    tier: "large",  parameters: "35B",  vramRequired: 24000,  contextLength: 128000, quantization: "Q4_K_M", runtime: "ollama", strengths: "RAG-optimized with grounded generation and citations" },
+
+  // ── NVIDIA NIM models ─────────────────────────────────────────────
+  { id: "nvidia/nemotron-mini:4b",   name: "Nemotron Mini 4B",     provider: "nvidia",   activities: ["chat", "agents"],                       tier: "small",  parameters: "4B",   vramRequired: 4000,   contextLength: 8192,   quantization: "FP16",   runtime: "nim",    strengths: "Optimized for NIM runtime, low-latency inference" },
+  { id: "nvidia/nemotron-nano:8b",   name: "Nemotron Nano 8B",     provider: "nvidia",   activities: ["chat", "coding", "agents"],              tier: "small",  parameters: "8B",   vramRequired: 8000,   contextLength: 8192,   quantization: "FP16",   runtime: "nim",    strengths: "TensorRT-LLM optimized, fast for coding tasks" },
+  { id: "nvidia/nemotron-super:49b", name: "Nemotron Super 49B",   provider: "nvidia",   activities: ["chat", "reasoning", "coding", "agents"], tier: "xlarge", parameters: "49B",  vramRequired: 48000,  contextLength: 32768,  quantization: "FP16",   runtime: "nim",    strengths: "High-quality with NIM optimizations, strong reasoning" },
+  { id: "nvidia/nemotron-ultra:253b",name: "Nemotron Ultra 253B",  provider: "nvidia",   activities: ["chat", "reasoning", "coding", "analysis", "agents"], tier: "xlarge", parameters: "253B", vramRequired: 320000, contextLength: 32768, quantization: "FP16", runtime: "nim", strengths: "Frontier-class performance, requires multi-GPU" },
+];
+
+// Legacy flat catalog — derived from CATALOG for backward compatibility
+const MODEL_CATALOG: ModelSuggestion[] = CATALOG.map((m) => ({
+  model: m.id,
+  runtime: m.runtime,
+  reason: m.strengths,
+  vramRequired: m.vramRequired,
+}));
 
 // ── Implementation ───────────────────────────────────────────────────────
 
@@ -258,7 +363,31 @@ export class LocalModelSetup {
   }
 
   /**
-   * Get the full model catalog.
+   * Suggest models for a specific activity, filtered by GPU capabilities.
+   * Results are sorted by VRAM descending (best models first within hardware limits).
+   */
+  suggestByActivity(activity: ModelActivity, gpu: GPUInfo): CatalogModel[] {
+    return CATALOG
+      .filter((m) => m.activities.includes(activity) && m.vramRequired <= gpu.vramMB)
+      .sort((a, b) => b.vramRequired - a.vramRequired);
+  }
+
+  /**
+   * Return all available activities with human-readable descriptions.
+   */
+  listActivities(): ActivityDescription[] {
+    return [...ACTIVITY_DESCRIPTIONS];
+  }
+
+  /**
+   * Get the full activity-segmented model catalog.
+   */
+  getFullCatalog(): CatalogModel[] {
+    return [...CATALOG];
+  }
+
+  /**
+   * Get the legacy flat model catalog (backward compatible).
    */
   getCatalog(): ModelSuggestion[] {
     return [...MODEL_CATALOG];
