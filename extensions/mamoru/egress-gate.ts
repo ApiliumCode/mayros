@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { promises as dns } from "node:dns";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,8 @@ const PRESET_DESCRIPTIONS: Record<string, string> = {
 };
 
 const MAX_PENDING_REQUESTS = 100;
+const MAX_SESSION_APPROVALS = 500;
+const MAX_PATTERN_LENGTH = 200;
 
 // ── Implementation ───────────────────────────────────────────────────────
 
@@ -122,9 +125,11 @@ export class MamoruGate {
   checkEgress(
     host: string,
     port: number,
-    opts?: { binary?: string; method?: string; path?: string },
+    opts?: { binary?: string; method?: string; path?: string; protocol?: "https" | "http" | "tcp" },
   ): { allowed: boolean; reason: string; requestId?: string } {
-    const key = `${host}:${port}`;
+    const method = opts?.method?.toUpperCase();
+    const path = opts?.path;
+    const key = `${host}:${port}:${method ?? "*"}:${path ?? "*"}`;
 
     // Check session approvals first
     if (this.sessionApprovals.has(key)) {
@@ -136,9 +141,14 @@ export class MamoruGate {
 
     for (const rule of allRules) {
       if (rule.host === host && rule.port === port) {
+        // Check protocol restriction
+        if (opts?.protocol && rule.protocol !== opts.protocol) {
+          continue;
+        }
+
         // Check method restriction
-        if (opts?.method && rule.methods && rule.methods.length > 0) {
-          if (!rule.methods.includes(opts.method.toUpperCase())) {
+        if (method && rule.methods && rule.methods.length > 0) {
+          if (!rule.methods.includes(method)) {
             continue;
           }
         }
@@ -149,8 +159,8 @@ export class MamoruGate {
         }
 
         // Check path restriction
-        if (opts?.path && rule.paths && rule.paths.length > 0) {
-          const pathAllowed = rule.paths.some((p) => matchPath(p, opts.path!));
+        if (path && rule.paths && rule.paths.length > 0) {
+          const pathAllowed = rule.paths.some((p) => matchPath(p, path));
           if (!pathAllowed) continue;
         }
 
@@ -198,7 +208,7 @@ export class MamoruGate {
   approve(requestId: string, opts?: { sessionScoped?: boolean }): void {
     const request = this.pendingRequests.get(requestId);
     if (!request) {
-      throw new Error(`mamoru-gate: no pending request "${requestId}"`);
+      throw new Error("mamoru-gate: request not found");
     }
 
     request.status = "approved";
@@ -207,7 +217,14 @@ export class MamoruGate {
     request.sessionScoped = opts?.sessionScoped ?? true;
 
     if (request.sessionScoped) {
-      this.sessionApprovals.add(`${request.host}:${request.port}`);
+      const method = request.method?.toUpperCase() ?? "*";
+      const path = request.path ?? "*";
+      // Enforce max cap on session approvals
+      if (this.sessionApprovals.size >= MAX_SESSION_APPROVALS) {
+        const oldest = this.sessionApprovals.values().next().value;
+        if (oldest) this.sessionApprovals.delete(oldest);
+      }
+      this.sessionApprovals.add(`${request.host}:${request.port}:${method}:${path}`);
     } else {
       // Permanent rule
       this.addRule({
@@ -226,7 +243,7 @@ export class MamoruGate {
   deny(requestId: string): void {
     const request = this.pendingRequests.get(requestId);
     if (!request) {
-      throw new Error(`mamoru-gate: no pending request "${requestId}"`);
+      throw new Error("mamoru-gate: request not found");
     }
 
     request.status = "denied";
@@ -306,9 +323,10 @@ export class MamoruGate {
 
   /**
    * Validate an endpoint URL for SSRF safety.
+   * Resolves DNS to check all resulting IPs against private ranges.
    * Blocks private IPs, non-HTTP schemes, and metadata endpoints.
    */
-  validateEndpoint(url: string): { safe: boolean; reason?: string } {
+  async validateEndpoint(url: string): Promise<{ safe: boolean; reason?: string }> {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -321,9 +339,9 @@ export class MamoruGate {
       return { safe: false, reason: `Blocked scheme: ${parsed.protocol}` };
     }
 
-    // Check for private IP in hostname
     const hostname = parsed.hostname;
 
+    // Check the hostname itself first (catches IP literals and "localhost")
     if (isPrivateIP(hostname)) {
       // Allow explicit cortex preset
       if (hostname === "127.0.0.1" && parsed.port === "19090") {
@@ -336,8 +354,32 @@ export class MamoruGate {
       return { safe: false, reason: `Private IP detected: ${hostname}` };
     }
 
-    // Block cloud metadata endpoints
-    if (hostname === "169.254.169.254" || hostname === "metadata.google.internal") {
+    // Resolve DNS and check ALL resolved IPs to prevent DNS rebinding / TOCTOU
+    let resolvedIPs: string[];
+    try {
+      const result = await dns.resolve4(hostname);
+      resolvedIPs = result;
+      // Also try IPv6
+      try {
+        const v6 = await dns.resolve6(hostname);
+        resolvedIPs.push(...v6);
+      } catch {
+        // No AAAA records — that's fine
+      }
+    } catch {
+      // DNS resolution failed — might be an IP literal already checked above
+      resolvedIPs = [hostname];
+    }
+
+    // Check ALL resolved IPs against private ranges
+    for (const ip of resolvedIPs) {
+      if (isPrivateIP(ip)) {
+        return { safe: false, reason: `Hostname "${hostname}" resolves to private IP ${ip}` };
+      }
+    }
+
+    // Block cloud metadata endpoints (hostname check for DNS aliases)
+    if (hostname === "metadata.google.internal") {
       return { safe: false, reason: "Cloud metadata endpoint blocked" };
     }
 
@@ -370,24 +412,40 @@ export class MamoruGate {
 
 /**
  * Check if an IP address is a private/reserved address.
+ * Handles IPv6-mapped IPv4 addresses (::ffff:127.0.0.1).
  */
 function isPrivateIP(ip: string): boolean {
-  // IPv4 private ranges
-  if (/^127\./.test(ip)) return true;                         // 127.0.0.0/8
-  if (/^10\./.test(ip)) return true;                          // 10.0.0.0/8
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;    // 172.16.0.0/12
-  if (/^192\.168\./.test(ip)) return true;                    // 192.168.0.0/16
-  if (/^169\.254\./.test(ip)) return true;                    // 169.254.0.0/16 (link-local)
-  if (ip === "0.0.0.0") return true;
+  // Normalize IPv6-mapped IPv4 (::ffff:127.0.0.1 -> 127.0.0.1)
+  const normalized = ip.replace(/^::ffff:/i, "");
 
-  // IPv6 private/reserved
-  if (ip === "::1") return true;                              // loopback
-  if (/^fd[0-9a-f]{2}:/i.test(ip)) return true;              // fd00::/8
-  if (/^fe80:/i.test(ip)) return true;                        // link-local
-  if (ip === "::") return true;
+  // Also handle bracket notation [::1]
+  const clean = normalized.replace(/^\[|\]$/g, "");
+
+  // Check 0.0.0.0
+  if (clean === "0.0.0.0") return true;
+
+  // IPv4 checks
+  const v4Parts = clean.split(".");
+  if (v4Parts.length === 4) {
+    const first = parseInt(v4Parts[0]!, 10);
+    const second = parseInt(v4Parts[1]!, 10);
+    if (first === 127) return true;                                // 127.0.0.0/8
+    if (first === 10) return true;                                 // 10.0.0.0/8
+    if (first === 172 && second >= 16 && second <= 31) return true; // 172.16.0.0/12
+    if (first === 192 && second === 168) return true;              // 192.168.0.0/16
+    if (first === 169 && second === 254) return true;              // 169.254.0.0/16 (link-local + metadata)
+    if (first === 0) return true;                                  // 0.0.0.0/8
+  }
+
+  // IPv6 checks
+  const lowerIp = clean.toLowerCase();
+  if (lowerIp === "::1" || lowerIp === "0:0:0:0:0:0:0:1") return true;
+  if (lowerIp.startsWith("fd") || lowerIp.startsWith("fc")) return true; // fd00::/8, fc00::/7
+  if (lowerIp.startsWith("fe80")) return true;                          // link-local
+  if (lowerIp === "::") return true;
 
   // localhost alias
-  if (ip === "localhost") return true;
+  if (clean === "localhost") return true;
 
   return false;
 }
@@ -397,9 +455,13 @@ export { isPrivateIP as _isPrivateIP };
 
 /**
  * Simple path pattern matcher supporting ** wildcards.
+ * Rejects overly long patterns to prevent ReDoS.
  */
 function matchPath(pattern: string, path: string): boolean {
   if (pattern === "**" || pattern === "/**") return true;
+
+  // Prevent ReDoS with overly long patterns
+  if (pattern.length > MAX_PATTERN_LENGTH) return false;
 
   const escaped = pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")

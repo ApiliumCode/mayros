@@ -120,8 +120,24 @@ export class MamoruApiKeys {
       });
     }
 
-    for (const triple of triples) {
-      await this.client.createTriple(triple);
+    // Atomic-ish: write all triples, rollback on failure
+    const created: string[] = [];
+    try {
+      for (const triple of triples) {
+        await this.client.createTriple(triple);
+        created.push(triple.predicate);
+      }
+    } catch (err) {
+      // Rollback: delete any triples that were created
+      for (const pred of created) {
+        try {
+          const existing = await this.client.listTriples({ subject: sub, predicate: pred, limit: 1 });
+          for (const t of existing.triples) {
+            if (t.id) await this.client.deleteTriple(t.id);
+          }
+        } catch { /* best-effort cleanup */ }
+      }
+      throw err;
     }
 
     const key: ApiKey = {
@@ -142,29 +158,43 @@ export class MamoruApiKeys {
 
   /**
    * Validate a plaintext key.
-   * Uses timing-safe comparison to prevent timing attacks.
+   * Uses prefix-based lookup to avoid scanning all keys, then
+   * timing-safe hash comparison to prevent timing attacks.
    * Updates lastUsedAt on success.
    */
   async validate(plaintext: string): Promise<{ valid: boolean; key?: ApiKey }> {
     const inputHash = hashKey(plaintext);
     const inputHashBuf = Buffer.from(inputHash);
+    const prefix = extractPrefix(plaintext);
 
-    // Find all keys by scanning for keyHash predicates
-    const result = await this.client.listTriples({
-      predicate: this.predicate(PRED.keyHash),
+    // Narrow search by prefix first — avoids loading all keys
+    const prefixResult = await this.client.listTriples({
+      predicate: this.predicate(PRED.prefix),
       limit: 10_000,
     });
 
-    for (const triple of result.triples) {
-      const storedHash = String(triple.object);
+    for (const prefixTriple of prefixResult.triples) {
+      if (String(prefixTriple.object) !== prefix) continue;
+
+      // Found a candidate by prefix — load the full key to get its hash
+      const subject = prefixTriple.subject;
+      const keyTriples = await this.client.listTriples({ subject, limit: 100 });
+      const map = new Map<string, string>();
+      for (const t of keyTriples.triples) {
+        const shortPred = t.predicate.replace(`${this.ns}:`, "");
+        map.set(shortPred, String(t.object));
+      }
+
+      const storedHash = map.get(PRED.keyHash);
+      if (!storedHash) continue;
+
       const storedHashBuf = Buffer.from(storedHash);
 
       // Timing-safe comparison — buffers must be same length
       if (inputHashBuf.length !== storedHashBuf.length) continue;
       if (!timingSafeEqual(inputHashBuf, storedHashBuf)) continue;
 
-      // Found a match — load the full key
-      const subject = triple.subject;
+      // Found a match — build the key object
       const key = await this.loadKey(subject);
       if (!key) continue;
 
@@ -227,7 +257,7 @@ export class MamoruApiKeys {
     const sub = this.subject(keyId);
     const oldKey = await this.loadKey(sub);
     if (!oldKey) {
-      throw new Error(`mamoru-keys: key "${keyId}" not found`);
+      throw new Error("mamoru-keys: key not found");
     }
 
     await this.revoke(keyId);

@@ -106,6 +106,7 @@ const DEFAULT_POLICY: InferencePolicy = {
 };
 
 const MAX_LOG_ENTRIES = 1000;
+const MAX_CUSTOM_PROFILES = 50;
 
 // ── Implementation ───────────────────────────────────────────────────────
 
@@ -154,6 +155,15 @@ export class EruberuProxy {
     if (!profile.id || !profile.endpoint || !profile.model) {
       throw new Error("eruberu: profile must have id, endpoint, and model");
     }
+    // Enforce max cap on custom profiles (built-in profiles don't count)
+    if (
+      !this.profiles.has(profile.id) &&
+      this.profiles.size >= Object.keys(BUILT_IN_PROFILES).length + MAX_CUSTOM_PROFILES
+    ) {
+      throw new Error(
+        `eruberu: max custom profiles reached (${MAX_CUSTOM_PROFILES}). Remove a profile before adding a new one.`,
+      );
+    }
     this.profiles.set(profile.id, { ...profile });
   }
 
@@ -181,7 +191,7 @@ export class EruberuProxy {
     ) {
       return {
         allowed: false,
-        reason: `Provider "${provider}" is not in the allowed list`,
+        reason: `[${this.ns}] Provider "${provider}" is not in the allowed list`,
       };
     }
 
@@ -196,7 +206,7 @@ export class EruberuProxy {
       if (!modelAllowed) {
         return {
           allowed: false,
-          reason: `Model "${model}" is not in the allowed list`,
+          reason: `[${this.ns}] Model "${model}" is not in the allowed list`,
         };
       }
     }
@@ -291,9 +301,13 @@ export class EruberuProxy {
 
 /**
  * Simple glob matcher supporting * and ** wildcards.
+ * Rejects overly long patterns to prevent ReDoS.
  */
 function matchGlob(pattern: string, value: string): boolean {
   if (pattern === "*") return true;
+
+  // Prevent ReDoS with overly long patterns
+  if (pattern.length > 200) return false;
 
   // Convert glob to regex
   const escaped = pattern

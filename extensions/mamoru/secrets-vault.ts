@@ -5,7 +5,7 @@
  * Secrets are encrypted client-side before being persisted to Cortex triples,
  * so the sidecar never sees plaintext values.
  *
- * Key derivation: scrypt (N=16384, r=8, p=1) from master password + fixed salt.
+ * Key derivation: scrypt (N=131072, r=8, p=1) from master password + random salt.
  */
 
 import {
@@ -25,6 +25,7 @@ export type Secret = {
   encryptedValue: string;  // AES-256-GCM encrypted (base64)
   iv: string;              // initialization vector (base64)
   tag: string;             // GCM auth tag (base64)
+  salt: string;            // scrypt salt (base64)
   scope: "global" | "venture" | "agent";
   scopeId?: string;        // venture or agent ID
   createdAt: string;
@@ -42,15 +43,14 @@ export type SecretMetadata = {
 
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;
-const SCRYPT_N = 16384;
+const SALT_BYTES = 16;
+const SCRYPT_N = 131072;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEY_LENGTH = 32;
 
-// Fixed salt derived from namespace — deterministic per-vault
-function deriveSalt(ns: string): Buffer {
-  return Buffer.from(`mamoru-vault:${ns}`, "utf8");
-}
+/** Regex for valid secret names: starts with letter or underscore, alphanumeric + underscore only */
+const SECRET_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 // ── Predicate constants ─────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ const PRED = {
   encrypted: "secret:encrypted",
   iv: "secret:iv",
   tag: "secret:tag",
+  salt: "secret:salt",
   scope: "secret:scope",
   scopeId: "secret:scopeId",
   version: "secret:version",
@@ -70,24 +71,43 @@ const PRED = {
 
 export class MamoruVault {
   private readonly ns: string;
-  private readonly encryptionKey: Buffer;
+  private encryptionKey: Buffer | null;
   private readonly client: CortexClientLike;
 
   constructor(client: CortexClientLike, ns: string, password: string) {
+    if (!password) {
+      throw new Error(
+        "Vault key is required. Set MAYROS_VAULT_KEY env var or provide vaultKey option.",
+      );
+    }
     this.client = client;
     this.ns = ns;
-    this.encryptionKey = this.deriveKey(password);
+    // Derive a key with a temporary salt for password validation;
+    // actual encryption uses per-secret random salts
+    this.encryptionKey = Buffer.from(password, "utf8");
   }
 
   /**
-   * Derive a 256-bit encryption key from a password using scrypt.
+   * Derive a 256-bit encryption key from a password and salt using scrypt.
    */
-  deriveKey(password: string): Buffer {
-    return scryptSync(password, deriveSalt(this.ns), KEY_LENGTH, {
+  private deriveKey(password: Buffer, salt: Buffer): Buffer {
+    return scryptSync(password, salt, KEY_LENGTH, {
       N: SCRYPT_N,
       r: SCRYPT_R,
       p: SCRYPT_P,
+      maxmem: 256 * 1024 * 1024, // 256 MB — required for N=131072, r=8
     });
+  }
+
+  /**
+   * Zero the encryption key and release it.
+   * Call this when the vault is no longer needed.
+   */
+  destroy(): void {
+    if (this.encryptionKey) {
+      this.encryptionKey.fill(0);
+      this.encryptionKey = null;
+    }
   }
 
   // ── Subject helpers ─────────────────────────────────────────────────
@@ -100,11 +120,21 @@ export class MamoruVault {
     return `${this.ns}:${pred}`;
   }
 
+  private requireKey(): Buffer {
+    if (!this.encryptionKey) {
+      throw new Error("Vault has been destroyed — encryption key is no longer available");
+    }
+    return this.encryptionKey;
+  }
+
   // ── Encryption ─────────────────────────────────────────────────────
 
-  private encrypt(plaintext: string): { encrypted: string; iv: string; tag: string } {
+  private encrypt(plaintext: string): { encrypted: string; iv: string; tag: string; salt: string } {
+    const password = this.requireKey();
+    const salt = randomBytes(SALT_BYTES);
+    const key = this.deriveKey(password, salt);
     const iv = randomBytes(IV_BYTES);
-    const cipher = createCipheriv(ALGORITHM, this.encryptionKey, iv);
+    const cipher = createCipheriv(ALGORITHM, key, iv);
 
     const encBuf = Buffer.concat([
       cipher.update(plaintext, "utf8"),
@@ -116,13 +146,16 @@ export class MamoruVault {
       encrypted: encBuf.toString("base64"),
       iv: iv.toString("base64"),
       tag: tag.toString("base64"),
+      salt: salt.toString("base64"),
     };
   }
 
-  private decrypt(encrypted: string, iv: string, tag: string): string {
+  private decrypt(encrypted: string, iv: string, tag: string, salt: string): string {
+    const password = this.requireKey();
+    const key = this.deriveKey(password, Buffer.from(salt, "base64"));
     const decipher = createDecipheriv(
       ALGORITHM,
-      this.encryptionKey,
+      key,
       Buffer.from(iv, "base64"),
     );
     decipher.setAuthTag(Buffer.from(tag, "base64"));
@@ -143,16 +176,23 @@ export class MamoruVault {
     value: string,
     opts?: { scope?: "global" | "venture" | "agent"; scopeId?: string },
   ): Promise<Secret> {
+    if (!SECRET_NAME_RE.test(name)) {
+      throw new Error(
+        `Invalid secret name "${name}". Names must match /^[a-zA-Z_][a-zA-Z0-9_]*$/.`,
+      );
+    }
+
     const scope = opts?.scope ?? "global";
     const version = await this.currentVersion(name) + 1;
     const now = new Date().toISOString();
-    const { encrypted, iv, tag } = this.encrypt(value);
+    const { encrypted, iv, tag, salt } = this.encrypt(value);
 
     const sub = this.subject(name, version);
     const triples: Array<{ subject: string; predicate: string; object: string }> = [
       { subject: sub, predicate: this.predicate(PRED.encrypted), object: encrypted },
       { subject: sub, predicate: this.predicate(PRED.iv), object: iv },
       { subject: sub, predicate: this.predicate(PRED.tag), object: tag },
+      { subject: sub, predicate: this.predicate(PRED.salt), object: salt },
       { subject: sub, predicate: this.predicate(PRED.scope), object: scope },
       { subject: sub, predicate: this.predicate(PRED.version), object: String(version) },
       { subject: sub, predicate: this.predicate(PRED.name), object: name },
@@ -186,6 +226,7 @@ export class MamoruVault {
       encryptedValue: encrypted,
       iv,
       tag,
+      salt,
       scope,
       scopeId: opts?.scopeId,
       createdAt: now,
@@ -214,8 +255,9 @@ export class MamoruVault {
     const encrypted = map.get(PRED.encrypted);
     const iv = map.get(PRED.iv);
     const tag = map.get(PRED.tag);
+    const salt = map.get(PRED.salt);
 
-    if (!encrypted || !iv || !tag) return null;
+    if (encrypted === undefined || !iv || !tag || !salt) return null;
 
     // Scope filtering
     if (opts?.scope) {
@@ -224,7 +266,7 @@ export class MamoruVault {
     }
 
     try {
-      return this.decrypt(encrypted, iv, tag);
+      return this.decrypt(encrypted, iv, tag, salt);
     } catch {
       return null;
     }

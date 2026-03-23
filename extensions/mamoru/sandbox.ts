@@ -25,7 +25,7 @@ export type SandboxPolicy = {
   compatibility: "enforce" | "best_effort";
 };
 
-export type SandboxStatus = "active" | "inactive" | "unsupported";
+export type SandboxStatus = "active" | "inactive" | "unsupported" | "simulated";
 
 export type SandboxAvailability = {
   landlock: boolean;
@@ -109,6 +109,10 @@ export class MamoruSandbox {
   /**
    * Apply a sandbox policy. On non-Linux platforms this is a no-op
    * that returns status "unsupported".
+   *
+   * Actual Landlock/seccomp enforcement is pending — status reflects
+   * availability check only. When kernel primitives are detected but
+   * actual syscalls are not yet wired, status is "simulated".
    */
   async apply(policy: SandboxPolicy): Promise<SandboxApplyResult> {
     const availability = await this.checkAvailability();
@@ -152,7 +156,9 @@ export class MamoruSandbox {
       appliedLayers.push("rlimit_nproc");
     }
 
-    this.status = appliedLayers.length > 0 ? "active" : "inactive";
+    // Actual kernel calls are not yet implemented — report "simulated"
+    // to distinguish from truly enforced sandboxing
+    this.status = appliedLayers.length > 0 ? "simulated" : "inactive";
     this.appliedPolicy = policy;
 
     return { status: this.status, appliedLayers };
@@ -192,15 +198,34 @@ export class MamoruSandbox {
     //     allowElevation: false
     //     maxProcesses: 50
     //   compatibility: best_effort
-    const parsed = parseSimpleYaml(content);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = parseSimpleYaml(content);
+    } catch {
+      console.warn(
+        `[${this.ns}] mamoru-sandbox: failed to parse policy from "${yamlPath}", using default policy`,
+      );
+      return this.getDefaultPolicy();
+    }
     return validatePolicy(parsed);
   }
 
   /**
-   * Get current sandbox status.
+   * Get current sandbox status along with namespace context.
    */
   getStatus(): SandboxStatus {
     return this.status;
+  }
+
+  /**
+   * Get a status summary including namespace context.
+   */
+  getStatusSummary(): { ns: string; status: SandboxStatus; hasPolicy: boolean } {
+    return {
+      ns: this.ns,
+      status: this.status,
+      hasPolicy: this.appliedPolicy !== null,
+    };
   }
 
   /**

@@ -54,6 +54,7 @@ describe("MamoruVault", () => {
     expect(secret.encryptedValue).not.toBe("sk-ant-secret-value");
     expect(secret.iv).toBeTruthy();
     expect(secret.tag).toBeTruthy();
+    expect(secret.salt).toBeTruthy();
 
     // Verify no triple contains the plaintext
     const storedObjects = client._triples.map((t) => t.object);
@@ -163,5 +164,63 @@ describe("MamoruVault", () => {
 
     // Restore for cleanup
     encTriple!.object = original;
+  });
+
+  // 11
+  it("throws when no password provided", () => {
+    expect(() => new MamoruVault(client, "test", "")).toThrow("Vault key is required");
+  });
+
+  // 12
+  it("destroy zeros the encryption key", async () => {
+    const v = new MamoruVault(client, "test", PASSWORD);
+    await v.store("DESTROY_TEST", "value");
+
+    v.destroy();
+
+    // After destroy, operations should throw
+    await expect(v.store("ANOTHER", "val")).rejects.toThrow("destroyed");
+  });
+
+  // 13
+  it("each secret gets a unique random salt", async () => {
+    const s1 = await vault.store("SALT_A", "value-a");
+    const s2 = await vault.store("SALT_B", "value-b");
+
+    expect(s1.salt).toBeTruthy();
+    expect(s2.salt).toBeTruthy();
+    // Random salts should differ
+    expect(s1.salt).not.toBe(s2.salt);
+  });
+
+  // 14
+  it("rejects invalid secret names", async () => {
+    await expect(vault.store("invalid-name", "val")).rejects.toThrow("Invalid secret name");
+    await expect(vault.store("123bad", "val")).rejects.toThrow("Invalid secret name");
+    await expect(vault.store("has space", "val")).rejects.toThrow("Invalid secret name");
+    await expect(vault.store("", "val")).rejects.toThrow("Invalid secret name");
+  });
+
+  // 15 — edge case: empty string encryption round-trip
+  it("encrypts and decrypts empty string", async () => {
+    const secret = await vault.store("EMPTY_VAL", "");
+    // Empty string encrypts to empty base64 — verify round-trip works
+    expect(secret.iv).toBeTruthy();
+    expect(secret.tag).toBeTruthy();
+    expect(secret.salt).toBeTruthy();
+    const retrieved = await vault.retrieve("EMPTY_VAL");
+    expect(retrieved).toBe("");
+  });
+
+  // 16 — edge case: name with colon should be rejected
+  it("rejects secret name containing colon", async () => {
+    await expect(vault.store("bad:name", "val")).rejects.toThrow("Invalid secret name");
+  });
+
+  // 17
+  it("accepts valid secret names", async () => {
+    await expect(vault.store("VALID_NAME", "val")).resolves.toBeTruthy();
+    await expect(vault.store("_private", "val")).resolves.toBeTruthy();
+    await expect(vault.store("camelCase123", "val")).resolves.toBeTruthy();
   });
 });

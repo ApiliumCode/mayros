@@ -162,4 +162,29 @@ describe("MamoruApiKeys", () => {
   it("rotate throws for nonexistent key", async () => {
     await expect(keys.rotate("nonexistent")).rejects.toThrow("not found");
   });
+
+  // 13 — edge case: empty agentId still creates key (no validation on agentId)
+  it("create accepts empty agentId", async () => {
+    const result = await keys.create("", "Empty Agent Key");
+    expect(result.key.agentId).toBe("");
+    expect(result.plaintext).toMatch(/^mk_/);
+  });
+
+  // 14 — edge case: empty name still creates key
+  it("create accepts empty name", async () => {
+    const result = await keys.create("agent-a", "");
+    expect(result.key.name).toBe("");
+    expect(result.plaintext).toMatch(/^mk_/);
+  });
+
+  // 15 — rotate error message does not expose key ID
+  it("rotate error message is generic", async () => {
+    await expect(keys.rotate("secret-key-id-123")).rejects.toThrow("key not found");
+    // Ensure the error does NOT contain the actual key ID
+    try {
+      await keys.rotate("secret-key-id-123");
+    } catch (err) {
+      expect((err as Error).message).not.toContain("secret-key-id-123");
+    }
+  });
 });

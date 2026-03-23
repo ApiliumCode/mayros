@@ -7,6 +7,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { MamoruGate } from "./egress-gate.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -170,6 +171,7 @@ export class LocalModelSetup {
 
   /**
    * Test a local inference endpoint for connectivity and latency.
+   * Validates the endpoint against SSRF rules before making the request.
    */
   async testEndpoint(
     endpoint: string,
@@ -179,6 +181,21 @@ export class LocalModelSetup {
 
     try {
       const url = endpoint.replace(/\/+$/, "") + "/chat/completions";
+
+      // SSRF validation: block requests to private/reserved IPs
+      const ssrfGate = new MamoruGate("local-model");
+      // Allow localhost for local model runtimes (Ollama, vLLM, etc.)
+      ssrfGate.addPreset("cortex");
+      ssrfGate.addRule({ host: "127.0.0.1", port: 11434, protocol: "http" });
+      ssrfGate.addRule({ host: "127.0.0.1", port: 8000, protocol: "http" });
+      ssrfGate.addRule({ host: "127.0.0.1", port: 8080, protocol: "http" });
+      ssrfGate.addRule({ host: "localhost", port: 11434, protocol: "http" });
+      ssrfGate.addRule({ host: "localhost", port: 8000, protocol: "http" });
+      ssrfGate.addRule({ host: "localhost", port: 8080, protocol: "http" });
+      const ssrfCheck = await ssrfGate.validateEndpoint(url);
+      if (!ssrfCheck.safe) {
+        return { ok: false, latencyMs: Date.now() - start, error: `SSRF blocked: ${ssrfCheck.reason}` };
+      }
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

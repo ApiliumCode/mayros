@@ -58,8 +58,8 @@ export type MamoruInstances = {
   proxy: EruberuProxyType;
   gate: MamoruGateType;
   localModel: LocalModelSetupType;
-  apiKeys: MamoruApiKeysType;
-  vault: MamoruVaultType;
+  apiKeys: MamoruApiKeysType | undefined;
+  vault: MamoruVaultType | undefined;
 };
 
 /**
@@ -77,15 +77,21 @@ export async function createMamoruStack(
   const { MamoruVault: Vault } = await import("./secrets-vault.js");
 
   const client = opts?.client;
-  const vaultKey = opts?.vaultKey ?? process.env.MAYROS_VAULT_KEY ?? "mayros-default-key";
+  const vaultKey = opts?.vaultKey ?? process.env.MAYROS_VAULT_KEY;
+
+  if (client && !vaultKey) {
+    throw new Error(
+      "Vault key is required. Set MAYROS_VAULT_KEY env var or provide vaultKey option.",
+    );
+  }
 
   return {
     sandbox: new Sandbox(ns),
     proxy: new Proxy(ns),
     gate: new Gate(ns),
     localModel: new Model(),
-    apiKeys: client ? new Keys(client, ns) : (undefined as unknown as MamoruApiKeysType),
-    vault: client ? new Vault(client, ns, vaultKey) : (undefined as unknown as MamoruVaultType),
+    apiKeys: client ? new Keys(client, ns) : undefined,
+    vault: client && vaultKey ? new Vault(client, ns, vaultKey) : undefined,
   };
 }
 
@@ -155,7 +161,14 @@ export function getMamoruGatewayMethods(instances: MamoruInstances) {
         scopes: params.scopes,
         expiresInDays: params.expiresInDays,
       });
-      return { key: result.key, plaintext: result.plaintext };
+      // WARNING: plaintext is shown ONCE. Gateway callers must ensure
+      // this response transits only over authenticated, encrypted channels.
+      // The plaintext is never stored — only the SHA-256 hash is persisted.
+      return {
+        key: result.key,
+        plaintext: result.plaintext,
+        warning: "Save this key now. It will not be shown again.",
+      };
     },
 
     "mamoru.keys.revoke": async (params: { keyId: string }) => {
