@@ -37,34 +37,55 @@ export type { EgressRule, EgressPolicy, EgressRequest } from "./egress-gate.js";
 export { LocalModelSetup } from "./local-model.js";
 export type { GPUInfo, LocalModelConfig, ModelSuggestion } from "./local-model.js";
 
+export { MamoruApiKeys } from "./api-keys.js";
+export type { ApiKey, ApiKeyCreateResult } from "./api-keys.js";
+
+export { MamoruVault } from "./secrets-vault.js";
+export type { Secret, SecretMetadata } from "./secrets-vault.js";
+
 // ── Plugin registration (gateway + CLI) ──────────────────────────────────
 
 import type { MamoruSandbox as MamoruSandboxType } from "./sandbox.js";
 import type { EruberuProxy as EruberuProxyType } from "./eruberu-proxy.js";
 import type { MamoruGate as MamoruGateType } from "./egress-gate.js";
 import type { LocalModelSetup as LocalModelSetupType } from "./local-model.js";
+import type { MamoruApiKeys as MamoruApiKeysType } from "./api-keys.js";
+import type { MamoruVault as MamoruVaultType } from "./secrets-vault.js";
+import type { CortexClientLike } from "../shared/cortex-client.js";
 
 export type MamoruInstances = {
   sandbox: MamoruSandboxType;
   proxy: EruberuProxyType;
   gate: MamoruGateType;
   localModel: LocalModelSetupType;
+  apiKeys: MamoruApiKeysType;
+  vault: MamoruVaultType;
 };
 
 /**
  * Create all Mamoru instances for a given namespace.
  */
-export async function createMamoruStack(ns: string): Promise<MamoruInstances> {
+export async function createMamoruStack(
+  ns: string,
+  opts?: { client?: CortexClientLike; vaultKey?: string },
+): Promise<MamoruInstances> {
   const { MamoruSandbox: Sandbox } = await import("./sandbox.js");
   const { EruberuProxy: Proxy } = await import("./eruberu-proxy.js");
   const { MamoruGate: Gate } = await import("./egress-gate.js");
   const { LocalModelSetup: Model } = await import("./local-model.js");
+  const { MamoruApiKeys: Keys } = await import("./api-keys.js");
+  const { MamoruVault: Vault } = await import("./secrets-vault.js");
+
+  const client = opts?.client;
+  const vaultKey = opts?.vaultKey ?? process.env.MAYROS_VAULT_KEY ?? "mayros-default-key";
 
   return {
     sandbox: new Sandbox(ns),
     proxy: new Proxy(ns),
     gate: new Gate(ns),
     localModel: new Model(),
+    apiKeys: client ? new Keys(client, ns) : (undefined as unknown as MamoruApiKeysType),
+    vault: client ? new Vault(client, ns, vaultKey) : (undefined as unknown as MamoruVaultType),
   };
 }
 
@@ -115,5 +136,58 @@ export function getMamoruGatewayMethods(instances: MamoruInstances) {
       profiles: proxy.listProfiles(),
       active: proxy.getActiveProfile(),
     }),
+
+    // ── API Keys ─────────────────────────────────────────────────────
+
+    "mamoru.keys.list": async (params: { agentId: string }) => {
+      if (!instances.apiKeys) return { error: "API keys require a Cortex client" };
+      return { keys: await instances.apiKeys.list(params.agentId) };
+    },
+
+    "mamoru.keys.create": async (params: {
+      agentId: string;
+      name: string;
+      scopes?: string[];
+      expiresInDays?: number;
+    }) => {
+      if (!instances.apiKeys) return { error: "API keys require a Cortex client" };
+      const result = await instances.apiKeys.create(params.agentId, params.name, {
+        scopes: params.scopes,
+        expiresInDays: params.expiresInDays,
+      });
+      return { key: result.key, plaintext: result.plaintext };
+    },
+
+    "mamoru.keys.revoke": async (params: { keyId: string }) => {
+      if (!instances.apiKeys) return { error: "API keys require a Cortex client" };
+      await instances.apiKeys.revoke(params.keyId);
+      return { ok: true };
+    },
+
+    // ── Secrets Vault ────────────────────────────────────────────────
+
+    "mamoru.vault.list": async (params?: { scope?: string }) => {
+      if (!instances.vault) return { error: "Vault requires a Cortex client" };
+      return { secrets: await instances.vault.list(params) };
+    },
+
+    "mamoru.vault.store": async (params: {
+      name: string;
+      value: string;
+      scope?: "global" | "venture" | "agent";
+      scopeId?: string;
+    }) => {
+      if (!instances.vault) return { error: "Vault requires a Cortex client" };
+      const secret = await instances.vault.store(params.name, params.value, {
+        scope: params.scope,
+        scopeId: params.scopeId,
+      });
+      return { name: secret.name, version: secret.version, scope: secret.scope };
+    },
+
+    "mamoru.vault.exists": async (params: { name: string }) => {
+      if (!instances.vault) return { error: "Vault requires a Cortex client" };
+      return { exists: await instances.vault.exists(params.name) };
+    },
   };
 }
