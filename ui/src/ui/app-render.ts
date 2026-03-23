@@ -1237,7 +1237,7 @@ export function renderApp(state: AppViewState) {
           if (next.step === "provider" && next.provider === "local") {
             onboardingNext(next);
             state.onboardingWizard = next;
-            void detectOllama(next).then(() => {
+            void detectOllama(next, state.client).then(() => {
               state.onboardingWizard = { ...next };
             });
             return;

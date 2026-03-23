@@ -2286,6 +2286,17 @@ const agentMeshPlugin = {
       }
     });
 
+    api.registerGatewayMethod("onboarding.detectOllama", async ({ respond }) => {
+      try {
+        const res = await fetch("http://127.0.0.1:11434/api/tags", {
+          signal: AbortSignal.timeout(3000),
+        });
+        respond(true, { detected: res.ok });
+      } catch {
+        respond(true, { detected: false });
+      }
+    });
+
     // ========================================================================
     // Service
     // ========================================================================

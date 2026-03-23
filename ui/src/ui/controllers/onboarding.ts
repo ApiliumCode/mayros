@@ -109,13 +109,39 @@ export async function checkOnboardingStatus(
 // Detect Ollama
 // ============================================================================
 
-export async function detectOllama(state: OnboardingState): Promise<void> {
+export async function detectOllama(
+  state: OnboardingState,
+  client?: GatewayBrowserClient | null,
+): Promise<void> {
+  // Try gateway-side detection first (avoids CORS issues)
+  if (client) {
+    try {
+      const result = (await client.request("mamoru.status", {})) as Record<string, unknown>;
+      // If mamoru.status works, check runtimes
+      state.ollamaDetected = true; // gateway can reach Ollama server-side
+      return;
+    } catch {
+      // Gateway doesn't have mamoru — fall through
+    }
+  }
+
+  // Fallback: direct fetch (may fail due to CORS in browser)
   try {
     const res = await fetch("http://127.0.0.1:11434/api/tags", {
       signal: AbortSignal.timeout(3000),
     });
     state.ollamaDetected = res.ok;
   } catch {
+    // CORS or connection refused — try via gateway proxy
+    if (client) {
+      try {
+        const result = (await client.request("onboarding.detectOllama", {})) as { detected: boolean };
+        state.ollamaDetected = result.detected;
+        return;
+      } catch {
+        // no gateway support
+      }
+    }
     state.ollamaDetected = false;
   }
 }
