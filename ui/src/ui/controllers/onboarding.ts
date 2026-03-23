@@ -98,7 +98,10 @@ export async function checkOnboardingStatus(
       state.step = "provider";
     }
   } catch {
-    // Gateway may not support onboarding.status yet — skip wizard
+    // Gateway may not support onboarding.status yet — show wizard
+    // so new users always get guided setup. They can close it.
+    state.open = true;
+    state.step = "provider";
   }
 }
 
