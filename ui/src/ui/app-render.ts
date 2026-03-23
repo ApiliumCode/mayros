@@ -1215,6 +1215,9 @@ export function renderApp(state: AppViewState) {
         onLocalModelChange: (model: string) => {
           state.onboardingWizard = { ...state.onboardingWizard, localModel: model };
         },
+        onActivityChange: (activity: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, selectedActivity: activity };
+        },
         onNext: () => {
           const next = { ...state.onboardingWizard };
           // When moving from apikey → ready, save the config first

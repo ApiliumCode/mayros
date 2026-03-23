@@ -13,6 +13,7 @@ export type OnboardingState = {
   step: OnboardingStep;
   provider: OnboardingProvider | null;
   apiKey: string;
+  selectedActivity: string;
   localModel: string;
   ollamaDetected: boolean;
   saving: boolean;
@@ -26,6 +27,7 @@ export type OnboardingWizardProps = {
   onProviderSelect: (provider: OnboardingProvider) => void;
   onApiKeyChange: (key: string) => void;
   onLocalModelChange: (model: string) => void;
+  onActivityChange?: (activity: string) => void;
   onNext: () => void;
   onBack: () => void;
   onComplete: () => void;
@@ -128,15 +130,65 @@ const PROVIDERS: ProviderInfo[] = [
   },
 ];
 
-const LOCAL_MODELS = [
-  { value: "llama3.3", label: "Llama 3.3 (8B)" },
-  { value: "llama3.3:70b", label: "Llama 3.3 (70B)" },
-  { value: "codellama", label: "CodeLlama (7B)" },
-  { value: "codellama:34b", label: "CodeLlama (34B)" },
-  { value: "mistral", label: "Mistral (7B)" },
-  { value: "mixtral", label: "Mixtral (8x7B)" },
-  { value: "deepseek-coder-v2", label: "DeepSeek Coder V2" },
-  { value: "qwen2.5-coder", label: "Qwen 2.5 Coder" },
+const ACTIVITIES = [
+  { value: "all", label: "All Models" },
+  { value: "coding", label: "Coding" },
+  { value: "chat", label: "Chat / General" },
+  { value: "reasoning", label: "Reasoning / Math" },
+  { value: "creative", label: "Creative Writing" },
+  { value: "analysis", label: "Analysis / Research" },
+  { value: "multilingual", label: "Multilingual" },
+  { value: "vision", label: "Vision / Multimodal" },
+  { value: "agents", label: "Agents / Tool Use" },
+];
+
+const FULL_CATALOG = [
+  // Coding
+  { id: "codellama:7b", name: "Code Llama 7B", activity: "coding", provider: "Meta", vram: 5000, params: "7B", desc: "Fast code completion, low VRAM" },
+  { id: "codellama:13b", name: "Code Llama 13B", activity: "coding", provider: "Meta", vram: 10000, params: "13B", desc: "Strong code generation" },
+  { id: "codellama:34b", name: "Code Llama 34B", activity: "coding", provider: "Meta", vram: 22000, params: "34B", desc: "Best Code Llama for complex tasks" },
+  { id: "deepseek-coder-v2:lite", name: "DeepSeek Coder V2 Lite", activity: "coding", provider: "DeepSeek", vram: 12000, params: "16B", desc: "128K context, MoE architecture" },
+  { id: "deepseek-coder-v2", name: "DeepSeek Coder V2", activity: "coding", provider: "DeepSeek", vram: 22000, params: "33B", desc: "Top-tier code model" },
+  { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", activity: "coding", provider: "Qwen", vram: 5000, params: "7B", desc: "Competitive with larger models" },
+  { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B", activity: "coding", provider: "Qwen", vram: 10000, params: "14B", desc: "Code + tool-use" },
+  { id: "qwen2.5-coder:32b", name: "Qwen 2.5 Coder 32B", activity: "coding", provider: "Qwen", vram: 22000, params: "32B", desc: "Rivals GPT-4 on code" },
+  { id: "starcoder2:7b", name: "StarCoder2 7B", activity: "coding", provider: "Microsoft", vram: 5000, params: "7B", desc: "Fast completions" },
+  { id: "starcoder2:15b", name: "StarCoder2 15B", activity: "coding", provider: "Microsoft", vram: 11000, params: "15B", desc: "Improved accuracy" },
+  // Chat
+  { id: "llama3.2:3b", name: "Llama 3.2 3B", activity: "chat", provider: "Meta", vram: 0, params: "3B", desc: "Runs on CPU, fast" },
+  { id: "llama3.1:8b", name: "Llama 3.1 8B", activity: "chat", provider: "Meta", vram: 6000, params: "8B", desc: "Excellent general model" },
+  { id: "llama3.3:70b", name: "Llama 3.3 70B", activity: "chat", provider: "Meta", vram: 40000, params: "70B", desc: "Near-frontier quality" },
+  { id: "mistral:7b", name: "Mistral 7B", activity: "chat", provider: "Mistral", vram: 6000, params: "7B", desc: "Fast and efficient" },
+  { id: "mistral-nemo:12b", name: "Mistral Nemo 12B", activity: "chat", provider: "Mistral", vram: 9000, params: "12B", desc: "128K context, multilingual" },
+  { id: "mixtral:8x7b", name: "Mixtral 8x7B", activity: "chat", provider: "Mistral", vram: 28000, params: "47B", desc: "MoE, fast for quality" },
+  { id: "phi-4:14b", name: "Phi-4 14B", activity: "chat", provider: "Microsoft", vram: 10000, params: "14B", desc: "Strong reasoning" },
+  { id: "gemma2:9b", name: "Gemma 2 9B", activity: "chat", provider: "Google", vram: 7000, params: "9B", desc: "Efficient, strong benchmarks" },
+  { id: "gemma2:27b", name: "Gemma 2 27B", activity: "chat", provider: "Google", vram: 18000, params: "27B", desc: "Best Gemma" },
+  // Reasoning
+  { id: "deepseek-r1:7b", name: "DeepSeek R1 7B", activity: "reasoning", provider: "DeepSeek", vram: 5000, params: "7B", desc: "Chain-of-thought at small scale" },
+  { id: "deepseek-r1:14b", name: "DeepSeek R1 14B", activity: "reasoning", provider: "DeepSeek", vram: 10000, params: "14B", desc: "Strong reasoning + code" },
+  { id: "deepseek-r1:70b", name: "DeepSeek R1 70B", activity: "reasoning", provider: "DeepSeek", vram: 40000, params: "70B", desc: "Rivals o1 on math" },
+  { id: "qwen2.5:72b", name: "Qwen 2.5 72B", activity: "reasoning", provider: "Qwen", vram: 42000, params: "72B", desc: "Top-tier reasoning" },
+  // Creative
+  { id: "yi:34b", name: "Yi 34B", activity: "creative", provider: "01.AI", vram: 22000, params: "34B", desc: "Creative writing, bilingual" },
+  // Multilingual
+  { id: "qwen2.5:7b", name: "Qwen 2.5 7B", activity: "multilingual", provider: "Qwen", vram: 5000, params: "7B", desc: "Strong CJK languages" },
+  { id: "qwen2.5:14b", name: "Qwen 2.5 14B", activity: "multilingual", provider: "Qwen", vram: 10000, params: "14B", desc: "Best mid-size multilingual" },
+  { id: "aya:8b", name: "Aya 8B", activity: "multilingual", provider: "Cohere", vram: 6000, params: "8B", desc: "23+ languages" },
+  { id: "aya:35b", name: "Aya 35B", activity: "multilingual", provider: "Cohere", vram: 24000, params: "35B", desc: "Best coverage" },
+  // Vision
+  { id: "llava:7b", name: "LLaVA 7B", activity: "vision", provider: "Meta", vram: 6000, params: "7B", desc: "Visual QA" },
+  { id: "llava:13b", name: "LLaVA 13B", activity: "vision", provider: "Meta", vram: 10000, params: "13B", desc: "Better image reasoning" },
+  { id: "llama3.2-vision:11b", name: "Llama 3.2 Vision", activity: "vision", provider: "Meta", vram: 8000, params: "11B", desc: "Native multimodal, 128K ctx" },
+  // Agents
+  { id: "granite3-dense:8b", name: "Granite 3 Dense 8B", activity: "agents", provider: "IBM", vram: 6000, params: "8B", desc: "Strong tool-use" },
+  { id: "granite3-moe:3b", name: "Granite 3 MoE 3B", activity: "agents", provider: "IBM", vram: 3000, params: "3B", desc: "Lightweight agents" },
+  // Analysis
+  { id: "solar:10.7b", name: "Solar 10.7B", activity: "analysis", provider: "Upstage", vram: 8000, params: "10.7B", desc: "Strong summarization" },
+  { id: "command-r:35b", name: "Command R 35B", activity: "analysis", provider: "Cohere", vram: 24000, params: "35B", desc: "RAG-optimized, citations" },
+  // NVIDIA NIM
+  { id: "nvidia/nemotron-mini:4b", name: "Nemotron Mini 4B", activity: "chat", provider: "NVIDIA", vram: 4000, params: "4B", desc: "NIM optimized, low-latency" },
+  { id: "nvidia/nemotron-nano:8b", name: "Nemotron Nano 8B", activity: "coding", provider: "NVIDIA", vram: 8000, params: "8B", desc: "TensorRT-LLM, fast" },
 ];
 
 // ============================================================================
@@ -341,17 +393,53 @@ function renderLocalModelStep(props: OnboardingWizardProps) {
 
       ${s.ollamaDetected
         ? html`
-            <div style="margin-bottom: 20px;">
-              <label style="${LABEL_STYLE}">Choose a model</label>
-              <select
-                style="${INPUT_STYLE}"
-                .value=${s.localModel}
-                @change=${(e: Event) => props.onLocalModelChange((e.target as HTMLSelectElement).value)}
-              >
-                ${LOCAL_MODELS.map(
-                  (m) => html`<option value=${m.value}>${m.label}</option>`,
+            <!-- Activity filter -->
+            <div style="margin-bottom: 12px;">
+              <label style="${LABEL_STYLE}">What will you use it for?</label>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+                ${ACTIVITIES.map(
+                  (a) => html`
+                    <button
+                      style="
+                        padding: 5px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
+                        border: 1px solid ${s.selectedActivity === a.value ? "var(--accent, #ff5c5c)" : "var(--border, #27272a)"};
+                        background: ${s.selectedActivity === a.value ? "var(--accent, #ff5c5c)" : "transparent"};
+                        color: ${s.selectedActivity === a.value ? "white" : "var(--card-foreground, #f4f4f5)"};
+                      "
+                      @click=${() => props.onActivityChange?.(a.value)}
+                    >${a.label}</button>
+                  `,
                 )}
-              </select>
+              </div>
+            </div>
+
+            <!-- Model list filtered by activity -->
+            <div style="margin-bottom: 20px; max-height: 220px; overflow-y: auto; border: 1px solid var(--border, #27272a); border-radius: 8px;">
+              ${FULL_CATALOG
+                .filter((m) => s.selectedActivity === "all" || m.activity === s.selectedActivity)
+                .map(
+                  (m) => html`
+                    <div
+                      style="
+                        padding: 10px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+                        border-bottom: 1px solid var(--border, #27272a);
+                        background: ${s.localModel === m.id ? "rgba(255,92,92,0.1)" : "transparent"};
+                      "
+                      @click=${() => props.onLocalModelChange(m.id)}
+                    >
+                      <div>
+                        <div style="font-size: 14px; font-weight: ${s.localModel === m.id ? "600" : "400"}; color: var(--card-foreground, #f4f4f5);">
+                          ${m.name}
+                          <span style="font-size: 11px; color: #888; margin-left: 6px;">${m.params} | ${m.provider}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #777; margin-top: 2px;">${m.desc}</div>
+                      </div>
+                      <div style="font-size: 11px; color: #888; white-space: nowrap; margin-left: 12px;">
+                        ${m.vram > 0 ? `${(m.vram / 1000).toFixed(0)}GB GPU` : "CPU OK"}
+                      </div>
+                    </div>
+                  `,
+                )}
             </div>
           `
         : html`
@@ -414,7 +502,7 @@ function renderReadyStep(props: OnboardingWizardProps) {
 
   const modelLabel =
     s.provider === "local"
-      ? LOCAL_MODELS.find((m) => m.value === s.localModel)?.label ?? s.localModel
+      ? FULL_CATALOG.find((m) => m.id === s.localModel)?.name ?? s.localModel
       : `${provider?.subtitle ?? ""}`;
 
   return html`
