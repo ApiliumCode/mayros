@@ -21,9 +21,11 @@ done
 
 PLATFORM="linux-$TARGET_ARCH"
 
-# Read versions from manifest
+# Read versions from manifest using node (python3 may not be present)
 MANIFEST="$SHARED_DIR/bundle-manifest.json"
-read_json() { python3 -c "import json;print(json.load(open('$MANIFEST'))$1)"; }
+read_json() {
+  node -e "const m=JSON.parse(require('fs').readFileSync('$MANIFEST','utf8'));console.log(m$1)"
+}
 
 MAYROS_VERSION=$(read_json "['mayros']")
 NODE_VERSION=$(read_json "['node']")
@@ -55,40 +57,88 @@ mkdir -p "$APPDIR/usr/lib/mayros"
 mkdir -p "$APPDIR/etc"
 
 # Extract Node.js
-NODE_FILE=$(read_json "['platforms']['$PLATFORM']['node']")
+NODE_FILE=$(read_json ".platforms['$PLATFORM']['node']")
 echo "  -> Extracting Node.js..."
 tar -xJf "$DEPS_DIR/$NODE_FILE" -C "$APPDIR/usr/lib/node" --strip-components=1
 
 # Symlink node binary
 ln -sf ../lib/node/bin/node "$APPDIR/usr/bin/node"
+ln -sf ../lib/node/bin/npm "$APPDIR/usr/bin/npm"
 
 # Extract Cortex
-CORTEX_FILE=$(read_json "['platforms']['$PLATFORM']['cortex']")
+CORTEX_FILE=$(read_json ".platforms['$PLATFORM']['cortex']")
 echo "  -> Extracting Cortex..."
 tar -xzf "$DEPS_DIR/$CORTEX_FILE" -C "$APPDIR/usr/bin"
 chmod +x "$APPDIR/usr/bin/"aingle-cortex*
 
-# Extract Mayros CLI
-TARBALL=$(ls "$DEPS_DIR"/*.tgz 2>/dev/null | head -1)
+# Rename platform-suffixed Cortex binary (e.g., aingle-cortex-linux-x86_64 -> aingle-cortex)
+for f in "$APPDIR/usr/bin/"aingle-cortex-*; do
+  if [[ -f "$f" ]]; then
+    mv "$f" "$APPDIR/usr/bin/aingle-cortex"
+    echo "  -> Renamed $(basename "$f") -> aingle-cortex"
+    break
+  fi
+done
+
+# Mayros CLI: skip tarball extraction, install via npm at first launch
+TARBALL=$(ls "$DEPS_DIR"/*.tgz 2>/dev/null | head -1 || true)
 if [[ -n "$TARBALL" ]]; then
-  echo "  -> Extracting Mayros CLI..."
-  tar -xzf "$TARBALL" -C "$APPDIR/usr/lib/mayros" --strip-components=1
+  echo "  -> Caching CLI tarball for offline install..."
+  cp "$TARBALL" "$APPDIR/usr/lib/mayros/mayros-cli.tgz"
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Create mayros wrapper script
+# 3. Create first-launch install script
+# ---------------------------------------------------------------------------
+cat > "$APPDIR/usr/lib/mayros/install-cli.sh" <<'INSTALL_SCRIPT'
+#!/usr/bin/env bash
+# Installs Mayros CLI via npm on first launch
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+APPDIR="$(cd "$HERE/../../.." && pwd)"
+NODE="$APPDIR/usr/lib/node/bin/node"
+NPM="$APPDIR/usr/lib/node/bin/npm"
+MAYROS_LIB="$APPDIR/usr/lib/mayros"
+CLI_ENTRY="$MAYROS_LIB/node_modules/@apilium/mayros/dist/index.js"
+
+if [[ -f "$CLI_ENTRY" ]]; then
+  exit 0
+fi
+
+echo "First launch: installing Mayros CLI..."
+
+# Try cached tarball first, then npm registry
+if [[ -f "$MAYROS_LIB/mayros-cli.tgz" ]]; then
+  "$NPM" install "$MAYROS_LIB/mayros-cli.tgz" --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null || \
+  "$NPM" install @apilium/mayros@latest --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null
+else
+  "$NPM" install @apilium/mayros@latest --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null
+fi
+
+echo "Mayros CLI installed."
+INSTALL_SCRIPT
+chmod +x "$APPDIR/usr/lib/mayros/install-cli.sh"
+
+# ---------------------------------------------------------------------------
+# 4. Create mayros wrapper script
 # ---------------------------------------------------------------------------
 cat > "$APPDIR/usr/bin/mayros" <<'WRAPPER'
 #!/usr/bin/env bash
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE="$SELF_DIR/../lib/node/bin/node"
-CLI="$SELF_DIR/../lib/mayros/dist/index.js"
+CLI="$SELF_DIR/../lib/mayros/node_modules/@apilium/mayros/dist/index.js"
+
+# Install CLI on first use if not present
+if [[ ! -f "$CLI" ]]; then
+  bash "$SELF_DIR/../lib/mayros/install-cli.sh"
+fi
+
 exec "$NODE" "$CLI" "$@"
 WRAPPER
 chmod +x "$APPDIR/usr/bin/mayros"
 
 # ---------------------------------------------------------------------------
-# 4. Create AppRun
+# 5. Create AppRun
 # ---------------------------------------------------------------------------
 cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/usr/bin/env bash
@@ -97,7 +147,18 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export PATH="$HERE/usr/bin:$PATH"
 
 NODE="$HERE/usr/lib/node/bin/node"
-CLI="$HERE/usr/lib/mayros/dist/index.js"
+CLI="$HERE/usr/lib/mayros/node_modules/@apilium/mayros/dist/index.js"
+
+# First launch: install CLI via npm if not present
+if [[ ! -f "$CLI" ]]; then
+  bash "$HERE/usr/lib/mayros/install-cli.sh"
+fi
+
+# Onboard if needed
+ONBOARD_MARKER="$HOME/.mayros/.onboarded"
+if [[ ! -f "$ONBOARD_MARKER" ]]; then
+  "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
+fi
 
 # Start gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
@@ -114,11 +175,35 @@ APPRUN
 chmod +x "$APPDIR/AppRun"
 
 # ---------------------------------------------------------------------------
-# 5. Desktop file and icon
+# 6. Desktop file and icon
 # ---------------------------------------------------------------------------
 cp "$SCRIPT_DIR/mayros.desktop" "$APPDIR/mayros.desktop"
 
-# Icon (use PNG from assets or generate a placeholder)
+# Generate PNG icon from SVG using node+sharp
+if [[ ! -f "$ASSETS_DIR/mayros.png" ]]; then
+  SVG_SOURCE=""
+  if [[ -f "$ASSETS_DIR/mayros-logo.svg" ]]; then
+    SVG_SOURCE="$ASSETS_DIR/mayros-logo.svg"
+  elif [[ -f "$INSTALLER_DIR/../ui/public/favicon.svg" ]]; then
+    SVG_SOURCE="$INSTALLER_DIR/../ui/public/favicon.svg"
+  fi
+
+  if [[ -n "$SVG_SOURCE" ]]; then
+    echo "  -> Generating icon PNG from SVG..."
+    node -e "
+      const sharp = require('sharp');
+      const fs = require('fs');
+      const svg = fs.readFileSync('$SVG_SOURCE');
+      sharp(svg, { density: 300 })
+        .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toFile('$ASSETS_DIR/mayros.png')
+        .then(() => console.log('  -> Icon generated'));
+    " 2>/dev/null || echo "  -> Warning: could not generate icon (sharp not available)"
+  fi
+fi
+
+# Copy icon into AppDir
 if [[ -f "$ASSETS_DIR/mayros.png" ]]; then
   cp "$ASSETS_DIR/mayros.png" "$APPDIR/mayros.png"
 elif [[ -f "$ASSETS_DIR/mayros-logo.svg" ]]; then
@@ -127,8 +212,7 @@ elif [[ -f "$ASSETS_DIR/mayros-logo.svg" ]]; then
   elif command -v convert &>/dev/null; then
     convert -background none -resize 256x256 "$ASSETS_DIR/mayros-logo.svg" "$APPDIR/mayros.png"
   else
-    echo "  -> Warning: no SVG converter found, icon will be missing"
-    # Create a minimal 1x1 placeholder
+    echo "  -> Warning: no icon converter found, icon will be missing"
     printf '\x89PNG\r\n\x1a\n' > "$APPDIR/mayros.png"
   fi
 fi
@@ -140,7 +224,7 @@ if [[ -f "$APPDIR/mayros.png" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Download appimagetool and build AppImage
+# 7. Download appimagetool and build AppImage
 # ---------------------------------------------------------------------------
 mkdir -p "$OUTPUT_DIR"
 
@@ -161,7 +245,7 @@ APPIMAGE_PATH="$OUTPUT_DIR/Mayros-${MAYROS_VERSION}-${APPIMAGE_ARCH}.AppImage"
 rm -f "$APPIMAGE_PATH"
 
 echo "==> Building AppImage..."
-ARCH="$APPIMAGE_ARCH" "$APPIMAGETOOL" "$APPDIR" "$APPIMAGE_PATH"
+ARCH="$APPIMAGE_ARCH" "$APPIMAGETOOL" --no-appstream "$APPDIR" "$APPIMAGE_PATH"
 
 chmod +x "$APPIMAGE_PATH"
 

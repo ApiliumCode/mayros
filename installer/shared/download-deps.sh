@@ -73,15 +73,15 @@ verify_sha256() {
 # ---------------------------------------------------------------------------
 # Read manifest entries for this platform
 # ---------------------------------------------------------------------------
-if ! command -v python3 &>/dev/null && ! command -v node &>/dev/null; then
-  echo "Error: python3 or node required to parse manifest" >&2
+if ! command -v node &>/dev/null && ! command -v python3 &>/dev/null; then
+  echo "Error: node or python3 required to parse manifest" >&2
   exit 1
 fi
 
 read_manifest() {
   local key="$1"
   if command -v node &>/dev/null; then
-    node -e "const m=require('$MANIFEST');console.log(m.platforms['$PLATFORM']['$key'])"
+    node -e "const m=JSON.parse(require('fs').readFileSync('$MANIFEST','utf8'));console.log(m.platforms['$PLATFORM']['$key'])"
   else
     python3 -c "import json;m=json.load(open('$MANIFEST'));print(m['platforms']['$PLATFORM']['$key'])"
   fi
@@ -128,16 +128,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Download Mayros npm package
+# 3. Download Mayros npm package (optional — installed at runtime if missing)
 # ---------------------------------------------------------------------------
-echo "==> Downloading Mayros CLI $MAYROS_VERSION..."
+echo "==> Downloading Mayros CLI (optional, installed at runtime if not available)..."
 if command -v npm &>/dev/null; then
-  (cd "$OUTPUT_DIR" && npm pack "@apilium/mayros@${MAYROS_VERSION}" --quiet 2>/dev/null) || {
-    echo "Warning: npm pack failed — ensure the package is published"
+  (cd "$OUTPUT_DIR" && npm pack "@apilium/mayros@latest" --quiet 2>/dev/null) || {
+    echo "  Note: npm pack skipped — CLI will be installed at runtime"
   }
 else
-  echo "Warning: npm not found, skipping Mayros package download"
-  echo "  Install Node.js first or place the tarball manually"
+  echo "  npm not found — CLI will be installed at runtime"
 fi
 
 # ---------------------------------------------------------------------------

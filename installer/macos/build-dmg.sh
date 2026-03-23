@@ -20,11 +20,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Read versions from manifest
+# Read versions from manifest using node (python3 may not be present)
 MANIFEST="$SHARED_DIR/bundle-manifest.json"
-MAYROS_VERSION=$(python3 -c "import json;print(json.load(open('$MANIFEST'))['mayros'])")
-NODE_VERSION=$(python3 -c "import json;print(json.load(open('$MANIFEST'))['node'])")
-CORTEX_VERSION=$(python3 -c "import json;print(json.load(open('$MANIFEST'))['cortex'])")
+read_json() {
+  node -e "const m=JSON.parse(require('fs').readFileSync('$MANIFEST','utf8'));console.log(m$1)"
+}
+
+MAYROS_VERSION=$(read_json "['mayros']")
+NODE_VERSION=$(read_json "['node']")
+CORTEX_VERSION=$(read_json "['cortex']")
 
 echo "==> Mayros $MAYROS_VERSION macOS DMG Builder"
 echo "    Node.js $NODE_VERSION | Cortex $CORTEX_VERSION"
@@ -59,7 +63,6 @@ echo "==> Creating application bundle..."
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources/bin"
 mkdir -p "$APP_DIR/Contents/Resources/node"
-mkdir -p "$APP_DIR/Contents/Resources/cli"
 
 # Info.plist
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
@@ -90,22 +93,24 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 PLIST
 
 # Extract Node.js into bundle
-NODE_FILE=$(python3 -c "import json;print(json.load(open('$MANIFEST'))['platforms']['$PLATFORM']['node'])")
+NODE_FILE=$(read_json ".platforms['$PLATFORM']['node']")
 echo "  -> Extracting Node.js..."
 tar -xzf "$DEPS_DIR/$NODE_FILE" -C "$APP_DIR/Contents/Resources/node" --strip-components=1
 
 # Extract Cortex binary into bundle
-CORTEX_FILE=$(python3 -c "import json;print(json.load(open('$MANIFEST'))['platforms']['$PLATFORM']['cortex'])")
+CORTEX_FILE=$(read_json ".platforms['$PLATFORM']['cortex']")
 echo "  -> Extracting Cortex..."
 tar -xzf "$DEPS_DIR/$CORTEX_FILE" -C "$APP_DIR/Contents/Resources/bin"
 chmod +x "$APP_DIR/Contents/Resources/bin/"*
 
-# Extract Mayros CLI into bundle
-TARBALL=$(ls "$DEPS_DIR"/*.tgz 2>/dev/null | head -1)
-if [[ -n "$TARBALL" ]]; then
-  echo "  -> Extracting Mayros CLI..."
-  tar -xzf "$TARBALL" -C "$APP_DIR/Contents/Resources/cli" --strip-components=1
-fi
+# Rename platform-suffixed Cortex binary (e.g., aingle-cortex-darwin-aarch64 -> aingle-cortex)
+for f in "$APP_DIR/Contents/Resources/bin/"aingle-cortex-*; do
+  if [[ -f "$f" ]]; then
+    mv "$f" "$APP_DIR/Contents/Resources/bin/aingle-cortex"
+    echo "  -> Renamed $(basename "$f") -> aingle-cortex"
+    break
+  fi
+done
 
 # Copy icon
 if [[ -f "$ASSETS_DIR/mayros.icns" ]]; then
@@ -118,20 +123,35 @@ cat > "$APP_DIR/Contents/MacOS/mayros-launcher" <<'LAUNCHER'
 # Mayros application launcher
 RESOURCES="$(dirname "$0")/../Resources"
 NODE="$RESOURCES/node/bin/node"
-CLI="$RESOURCES/cli/dist/index.js"
+NPM="$RESOURCES/node/bin/npm"
 CORTEX="$RESOURCES/bin/aingle-cortex"
-ONBOARD_MARKER="$HOME/.mayros/.onboarded"
+MAYROS_DIR="$HOME/.mayros"
+CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
+ONBOARD_MARKER="$MAYROS_DIR/.onboarded"
 
 export PATH="$RESOURCES/bin:$RESOURCES/node/bin:$PATH"
 
-# First launch: run onboarding
+# First launch: install Mayros CLI via npm
+if [[ ! -f "$CLI" ]]; then
+  osascript -e 'display notification "Installing Mayros..." with title "Mayros"' 2>/dev/null || true
+  "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit 2>/dev/null
+fi
+
+# Copy Cortex binary to ~/.mayros/bin/
+mkdir -p "$MAYROS_DIR/bin"
+if [[ ! -f "$MAYROS_DIR/bin/aingle-cortex" ]]; then
+  cp "$CORTEX" "$MAYROS_DIR/bin/aingle-cortex"
+  chmod +x "$MAYROS_DIR/bin/aingle-cortex"
+fi
+
+# Onboard if needed
 if [[ ! -f "$ONBOARD_MARKER" ]]; then
-  "$NODE" "$CLI" onboard --non-interactive --defaults
+  "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
 fi
 
 # Start gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
-  "$NODE" "$CLI" gateway start --background
+  "$NODE" "$CLI" gateway start --background 2>/dev/null &
 fi
 
 # Open the portal

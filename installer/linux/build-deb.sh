@@ -22,9 +22,11 @@ PLATFORM="linux-$TARGET_ARCH"
 DEB_ARCH="amd64"
 [[ "$TARGET_ARCH" == "arm64" ]] && DEB_ARCH="arm64"
 
-# Read versions from manifest
+# Read versions from manifest using node (python3 may not be present)
 MANIFEST="$SHARED_DIR/bundle-manifest.json"
-read_json() { python3 -c "import json;print(json.load(open('$MANIFEST'))$1)"; }
+read_json() {
+  node -e "const m=JSON.parse(require('fs').readFileSync('$MANIFEST','utf8'));console.log(m$1)"
+}
 
 MAYROS_VERSION=$(read_json "['mayros']")
 NODE_VERSION=$(read_json "['node']")
@@ -53,7 +55,6 @@ rm -rf "$PKG_DIR"
 
 echo "==> Creating package structure..."
 mkdir -p "$PKG_DIR/opt/mayros/node"
-mkdir -p "$PKG_DIR/opt/mayros/cli"
 mkdir -p "$PKG_DIR/opt/mayros/bin"
 mkdir -p "$PKG_DIR/usr/local/bin"
 mkdir -p "$PKG_DIR/usr/share/applications"
@@ -62,30 +63,40 @@ mkdir -p "$PKG_DIR/usr/lib/systemd/user"
 mkdir -p "$PKG_DIR/DEBIAN"
 
 # Extract Node.js
-NODE_FILE=$(read_json "['platforms']['$PLATFORM']['node']")
+NODE_FILE=$(read_json ".platforms['$PLATFORM']['node']")
 echo "  -> Extracting Node.js..."
 tar -xJf "$DEPS_DIR/$NODE_FILE" -C "$PKG_DIR/opt/mayros/node" --strip-components=1
 
 # Extract Cortex
-CORTEX_FILE=$(read_json "['platforms']['$PLATFORM']['cortex']")
+CORTEX_FILE=$(read_json ".platforms['$PLATFORM']['cortex']")
 echo "  -> Extracting Cortex..."
 tar -xzf "$DEPS_DIR/$CORTEX_FILE" -C "$PKG_DIR/opt/mayros/bin"
 chmod +x "$PKG_DIR/opt/mayros/bin/"*
 
-# Extract Mayros CLI
-TARBALL=$(ls "$DEPS_DIR"/*.tgz 2>/dev/null | head -1)
-if [[ -n "$TARBALL" ]]; then
-  echo "  -> Extracting Mayros CLI..."
-  tar -xzf "$TARBALL" -C "$PKG_DIR/opt/mayros/cli" --strip-components=1
-fi
+# Rename platform-suffixed Cortex binary (e.g., aingle-cortex-linux-x86_64 -> aingle-cortex)
+for f in "$PKG_DIR/opt/mayros/bin/"aingle-cortex-*; do
+  if [[ -f "$f" ]]; then
+    mv "$f" "$PKG_DIR/opt/mayros/bin/aingle-cortex"
+    echo "  -> Renamed $(basename "$f") -> aingle-cortex"
+    break
+  fi
+done
 
-# Symlink
+# Symlink for /usr/local/bin
 ln -sf /opt/mayros/bin/mayros "$PKG_DIR/usr/local/bin/mayros"
 
-# Wrapper script
+# Wrapper script (used until postinst runs npm install)
 cat > "$PKG_DIR/opt/mayros/bin/mayros" <<'WRAPPER'
 #!/usr/bin/env bash
-exec /opt/mayros/node/bin/node /opt/mayros/cli/dist/index.js "$@"
+CLI="/opt/mayros/lib/node_modules/@apilium/mayros/dist/index.js"
+if [[ ! -f "$CLI" ]]; then
+  echo "Mayros CLI not installed yet. Running setup..."
+  /opt/mayros/node/bin/npm install -g @apilium/mayros@latest --prefix /opt/mayros --force --no-fund --no-audit 2>/dev/null || {
+    echo "Error: failed to install Mayros CLI. Check network connection."
+    exit 1
+  }
+fi
+exec /opt/mayros/node/bin/node "$CLI" "$@"
 WRAPPER
 chmod +x "$PKG_DIR/opt/mayros/bin/mayros"
 
@@ -131,10 +142,20 @@ cat > "$PKG_DIR/DEBIAN/postinst" <<'POSTINST'
 #!/bin/bash
 set -e
 
+# Install Mayros CLI via npm
+echo "Installing Mayros CLI..."
+/opt/mayros/node/bin/npm install -g @apilium/mayros@latest --prefix /opt/mayros --force --no-fund --no-audit || true
+
+# Create wrapper that points to the installed CLI
+cat > /opt/mayros/bin/mayros <<'EOF'
+#!/usr/bin/env bash
+exec /opt/mayros/node/bin/node /opt/mayros/lib/node_modules/@apilium/mayros/dist/index.js "$@"
+EOF
+chmod +x /opt/mayros/bin/mayros
+
 # Run onboarding for the installing user
 if [ -n "$SUDO_USER" ]; then
   su - "$SUDO_USER" -c "/opt/mayros/bin/mayros onboard --non-interactive --defaults" || true
-  # Enable gateway service for the user
   su - "$SUDO_USER" -c "systemctl --user daemon-reload" || true
   su - "$SUDO_USER" -c "systemctl --user enable mayros-gateway.service" || true
   su - "$SUDO_USER" -c "systemctl --user start mayros-gateway.service" || true
@@ -142,7 +163,7 @@ else
   /opt/mayros/bin/mayros onboard --non-interactive --defaults || true
 fi
 
-echo "Mayros installed successfully. Run 'mayros' to get started."
+echo "Mayros installed. Run 'mayros' to get started."
 POSTINST
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
 
