@@ -200,7 +200,7 @@ export class LocalModelSetup {
       // nvidia-smi not available
     }
 
-    // AMD: rocm-smi
+    // AMD: rocm-smi (Linux) or WMIC/PowerShell (Windows)
     try {
       const { stdout } = await execFileAsync("rocm-smi", [
         "--showmeminfo",
@@ -217,6 +217,64 @@ export class LocalModelSetup {
       }
     } catch {
       // rocm-smi not available
+    }
+
+    // Windows: detect any GPU via PowerShell (NVIDIA, AMD, Intel)
+    if (process.platform === "win32") {
+      try {
+        const { stdout } = await execFileAsync("powershell", [
+          "-NoProfile", "-Command",
+          "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json",
+        ], { timeout: 5000 });
+        const gpus = JSON.parse(stdout.trim());
+        const gpuList = Array.isArray(gpus) ? gpus : [gpus];
+        // Pick the GPU with most VRAM (skip integrated if discrete exists)
+        let bestGpu = { Name: "Unknown GPU", AdapterRAM: 0 };
+        for (const g of gpuList) {
+          if ((g.AdapterRAM ?? 0) > (bestGpu.AdapterRAM ?? 0)) {
+            bestGpu = g;
+          }
+        }
+        const vramMB = Math.round((bestGpu.AdapterRAM ?? 0) / (1024 * 1024));
+        if (vramMB > 0) {
+          const name = String(bestGpu.Name ?? "GPU");
+          const vendor = name.toLowerCase().includes("nvidia") ? "nvidia" as const
+            : name.toLowerCase().includes("amd") || name.toLowerCase().includes("radeon") ? "amd" as const
+            : "none" as const;
+          return { vendor, name, vramMB };
+        }
+      } catch {
+        // PowerShell not available
+      }
+    }
+
+    // Linux: detect via lspci + system RAM for CPU inference
+    if (process.platform === "linux") {
+      try {
+        const { stdout } = await execFileAsync("cat", ["/proc/meminfo"]);
+        const match = stdout.match(/MemTotal:\s+(\d+)\s+kB/);
+        if (match) {
+          const memMB = Math.round(parseInt(match[1]!, 10) / 1024);
+          // Detect Raspberry Pi
+          try {
+            const { stdout: cpuInfo } = await execFileAsync("cat", ["/proc/cpuinfo"]);
+            if (cpuInfo.includes("Raspberry Pi") || cpuInfo.includes("BCM2")) {
+              return {
+                vendor: "none",
+                name: `Raspberry Pi (${Math.round(memMB / 1024)}GB RAM)`,
+                vramMB: Math.min(Math.round(memMB * 0.4), 2048), // Pi can use ~40% RAM for models
+              };
+            }
+          } catch { /* not Pi */ }
+
+          // Generic Linux without GPU — use RAM for CPU inference
+          return {
+            vendor: "none",
+            name: `CPU only (${Math.round(memMB / 1024)}GB RAM)`,
+            vramMB: Math.round(memMB * 0.5),
+          };
+        }
+      } catch { /* /proc/meminfo not available */ }
     }
 
     // macOS: detect Apple Silicon vs Intel
