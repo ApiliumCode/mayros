@@ -79,12 +79,6 @@ export async function createMamoruStack(
   const client = opts?.client;
   const vaultKey = opts?.vaultKey ?? process.env.MAYROS_VAULT_KEY;
 
-  if (client && !vaultKey) {
-    throw new Error(
-      "Vault key is required. Set MAYROS_VAULT_KEY env var or provide vaultKey option.",
-    );
-  }
-
   return {
     sandbox: new Sandbox(ns),
     proxy: new Proxy(ns),

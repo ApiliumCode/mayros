@@ -431,6 +431,21 @@ CLI: `mayros kaneru` — 18 subcommand groups with 40+ commands total
 
 ---
 
+## Mamoru — Security Layer
+
+Mamoru (守る, "to protect") adds enterprise-grade security to Mayros:
+
+- **Sandbox** — Landlock + seccomp probing for kernel-level agent isolation (Linux)
+- **Eruberu Proxy** — All inference calls routed through the gateway with audit logging
+- **Mamoru Gate** — Deny-by-default network egress with 12 presets and real-time approval
+- **Secrets Vault** — AES-256-GCM encrypted secrets with scrypt key derivation
+- **API Keys** — SHA-256 hashed agent keys with timing-safe validation
+- **Local Models** — GPU detection + guided Ollama/vLLM setup
+
+CLI: `mayros mamoru status|egress|proxy|keys|vault|model`
+
+---
+
 ## IDE Plugins
 
 Mayros lives inside your editor, connected via Gateway WebSocket.

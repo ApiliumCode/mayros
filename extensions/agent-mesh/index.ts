@@ -2197,6 +2197,28 @@ const agentMeshPlugin = {
     });
 
     // ========================================================================
+    // Gateway Methods — Mamoru Security
+    // ========================================================================
+
+    try {
+      const { createMamoruStack, getMamoruGatewayMethods } = await import("../mamoru/index.js");
+      const mamoru = await createMamoruStack(ns, { client });
+      const methods = getMamoruGatewayMethods(mamoru);
+      for (const [name, handler] of Object.entries(methods)) {
+        api.registerGatewayMethod(name, async ({ params, respond }) => {
+          try {
+            const result = await handler(params ?? {});
+            respond(true, result);
+          } catch (err) {
+            respond(false, { error: err instanceof Error ? err.message : String(err) });
+          }
+        });
+      }
+    } catch {
+      // Mamoru not available — non-fatal
+    }
+
+    // ========================================================================
     // Service
     // ========================================================================
 

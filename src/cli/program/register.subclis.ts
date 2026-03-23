@@ -333,6 +333,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "mamoru",
+    description: "Mamoru — security, inference routing, network control, secrets vault",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../mamoru-cli.js");
+      mod.registerMamoruCli(program);
+    },
+  },
+  {
     name: "workflow",
     description: "Multi-agent workflows — run, list, and track workflow execution",
     hasSubcommands: true,
