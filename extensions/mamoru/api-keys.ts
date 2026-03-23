@@ -206,11 +206,16 @@ export class MamoruApiKeys {
         return { valid: false };
       }
 
-      // Update lastUsedAt
+      // Update lastUsedAt — delete old triple first to avoid duplication
+      const now = new Date().toISOString();
+      const existing = await this.client.listTriples({ subject, predicate: this.predicate(PRED.lastUsedAt), limit: 1 });
+      for (const t of existing.triples) {
+        if (t.id) await this.client.deleteTriple(t.id);
+      }
       await this.client.createTriple({
         subject,
         predicate: this.predicate(PRED.lastUsedAt),
-        object: new Date().toISOString(),
+        object: now,
       });
 
       return { valid: true, key };

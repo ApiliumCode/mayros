@@ -104,12 +104,12 @@ export function registerMamoruCli(program: Command) {
         console.log(`  Seccomp:      ${availability.seccomp ? "available" : "unavailable"}`);
 
         console.log("\nEruberu Proxy:");
-        console.log(`  Profile:      ${activeProfile}`);
+        console.log(`  Profile:      ${activeProfile ? activeProfile.name : "(none)"}`);
         console.log(`  Log entries:  ${logCount}`);
-        console.log(`  Policy:       ${policy.mode}`);
+        console.log(`  Policy:       providers=${policy.allowedProviders.join(",")}`);
 
         console.log("\nMamoru Gate (Egress):");
-        console.log(`  Policy:       ${egressPolicy.mode}`);
+        console.log(`  Policy:       ${egressPolicy.defaultAction}`);
         console.log(`  Pending:      ${pending.length} request(s)`);
 
         console.log("\nVault:");
@@ -134,7 +134,8 @@ export function registerMamoruCli(program: Command) {
       const parent = mamoru.opts();
       try {
         const { stack } = await loadMamoruStack(parent);
-        const rules = stack.gate.getRules();
+        const egressPolicy = stack.gate.getPolicy();
+        const rules = egressPolicy.rules;
         const pending = stack.gate.getPendingRequests();
 
         console.log("Active Egress Rules:");
@@ -142,7 +143,7 @@ export function registerMamoruCli(program: Command) {
           console.log("  (none)");
         } else {
           for (const rule of rules) {
-            console.log(`  ${rule.id}  ${rule.pattern}  [${rule.action}]  ${rule.description ?? ""}`);
+            console.log(`  ${rule.host}:${rule.port}  [${rule.protocol}]`);
           }
         }
 
@@ -151,7 +152,7 @@ export function registerMamoruCli(program: Command) {
           console.log("  (none)");
         } else {
           for (const req of pending) {
-            console.log(`  ${req.id}  ${req.destination}  agent=${req.agentId ?? "unknown"}  ${req.reason ?? ""}`);
+            console.log(`  ${req.id}  ${req.host}:${req.port}  binary=${req.binary ?? "unknown"}  [${req.status}]`);
           }
         }
       } catch (err) {
@@ -227,9 +228,10 @@ export function registerMamoruCli(program: Command) {
       try {
         const { stack } = await loadMamoruStack(parent);
         const presets = stack.gate.listPresets();
+        const activePresets = stack.gate.getPolicy().presets;
         console.log("Available Egress Presets:");
         for (const p of presets) {
-          const active = p.active ? " [active]" : "";
+          const active = activePresets.includes(p.name) ? " [active]" : "";
           console.log(`  ${p.name}${active}  — ${p.description}`);
         }
       } catch (err) {
@@ -257,13 +259,13 @@ export function registerMamoruCli(program: Command) {
         console.log(`Inference Logs (last ${logs.length}):`);
         for (const log of logs) {
           const ts = new Date(log.timestamp).toISOString();
-          console.log(`  ${ts}  ${log.model}  ${log.tokensIn}→${log.tokensOut}  ${log.latencyMs}ms  [${log.status}]`);
+          console.log(`  ${ts}  ${log.model}  ${log.inputTokens}→${log.outputTokens}  ${log.durationMs}ms  [${log.status}]`);
         }
 
         console.log("\nUsage Summary:");
         console.log(`  Total requests: ${summary.totalRequests}`);
-        console.log(`  Total tokens:   ${summary.totalTokensIn} in / ${summary.totalTokensOut} out`);
-        console.log(`  Avg latency:    ${summary.avgLatencyMs.toFixed(0)}ms`);
+        console.log(`  Total tokens:   ${summary.totalTokens}`);
+        console.log(`  By provider:    ${Object.entries(summary.byProvider).map(([k, v]) => `${k}=${v}`).join(", ") || "none"}`);
       } catch (err) {
         handleError(err);
       }
@@ -277,11 +279,11 @@ export function registerMamoruCli(program: Command) {
       try {
         const { stack } = await loadMamoruStack(parent);
         const profiles = stack.proxy.listProfiles();
-        const active = stack.proxy.getActiveProfile();
+        const activeProfile = stack.proxy.getActiveProfile();
 
         console.log("Inference Profiles:");
         for (const p of profiles) {
-          const marker = active && p.id === active.id ? " [active]" : "";
+          const marker = activeProfile && p.id === activeProfile.id ? " [active]" : "";
           console.log(`  ${p.name}${marker}  — ${p.providerType} (${p.endpoint})`);
         }
       } catch (err) {
@@ -456,8 +458,8 @@ export function registerMamoruCli(program: Command) {
           process.exitCode = 1;
           return;
         }
-        const value = await stack.vault.get(opts.name);
-        if (value === undefined) {
+        const value = await stack.vault.retrieve(opts.name);
+        if (value === null) {
           console.log(`Secret "${opts.name}" not found.`);
           process.exitCode = 1;
           return;
@@ -483,14 +485,12 @@ export function registerMamoruCli(program: Command) {
         const { stack } = await loadMamoruStack(parent);
         const gpu = await stack.localModel.detectGPU();
         console.log("GPU Detection:");
-        if (!gpu.available) {
+        if (gpu.vendor === "none") {
           console.log("  No GPU detected.");
         } else {
           console.log(`  Vendor:   ${gpu.vendor}`);
-          console.log(`  Model:    ${gpu.model}`);
+          console.log(`  Name:     ${gpu.name}`);
           console.log(`  VRAM:     ${gpu.vramMB ? `${gpu.vramMB} MB` : "unknown"}`);
-          console.log(`  Driver:   ${gpu.driver ?? "unknown"}`);
-          console.log(`  Backend:  ${gpu.backend}`);
         }
       } catch (err) {
         handleError(err);
@@ -578,7 +578,6 @@ export function registerMamoruCli(program: Command) {
         if (result.ok) {
           console.log(`Model "${opts.model}" is reachable at ${opts.endpoint}`);
           console.log(`  Response time: ${result.latencyMs}ms`);
-          console.log(`  Model info:    ${result.info ?? "n/a"}`);
         } else {
           console.error(`Model test failed: ${result.error}`);
           process.exitCode = 1;
