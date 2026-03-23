@@ -95,13 +95,20 @@ if (Test-Path (Join-Path $repoRoot "LICENSE")) {
     Copy-Item (Join-Path $repoRoot "LICENSE") $StageDir
 }
 
-# Create install.cmd — runs npm install at install time
+# Create install.cmd — runs npm install at install time, starts services, opens portal
 $installCmd = @"
 @echo off
 set "MAYROS_DIR=%LOCALAPPDATA%\Mayros"
 set "PATH=%MAYROS_DIR%\node;%PATH%"
 echo Installing Mayros...
 call "%MAYROS_DIR%\node\npm.cmd" install -g @apilium/mayros@latest --prefix "%MAYROS_DIR%" --force --no-fund --no-audit
+echo Starting Cortex...
+start "" "%MAYROS_DIR%\bin\aingle-cortex.exe" --port 19090
+echo Starting Gateway...
+start "" "%MAYROS_DIR%\mayros.cmd" gateway start
+timeout /t 3 /nobreak >nul
+echo Opening Mayros Dashboard...
+start http://127.0.0.1:18789
 echo Done.
 "@
 Set-Content -Path (Join-Path $StageDir "install-mayros.cmd") -Value $installCmd -Encoding ASCII

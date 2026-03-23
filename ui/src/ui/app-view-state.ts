@@ -44,6 +44,7 @@ import type { ChatAttachment, ChatQueueItem, CronFormState } from "./ui-types.ts
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
 import type { SessionLogEntry } from "./views/usage.ts";
 import type { SetupWizardState } from "./views/setup-wizard.ts";
+import type { OnboardingState } from "./views/onboarding-wizard.ts";
 import type { CommandBarState } from "./views/command-bar.ts";
 
 export type AppViewState = {
@@ -149,6 +150,7 @@ export type AppViewState = {
   venturesError: string | null;
   venturesDashboard: VentureDashboardResponse | null;
   setupWizard: SetupWizardState;
+  onboardingWizard: OnboardingState;
   commandBar: CommandBarState;
   cortexLoading: boolean;
   cortexStatus: CortexStatusResponse | null;

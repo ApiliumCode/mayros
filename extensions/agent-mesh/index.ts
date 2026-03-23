@@ -2219,6 +2219,74 @@ const agentMeshPlugin = {
     }
 
     // ========================================================================
+    // Gateway Method — Onboarding
+    // ========================================================================
+
+    api.registerGatewayMethod("onboarding.save", async ({ params, respond }) => {
+      try {
+        const p = params as {
+          provider: string;
+          apiKey: string;
+          model: string;
+        };
+
+        // Store onboarding config as triples in Cortex
+        const onboardingNs = `${ns}:onboarding`;
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:provider`,
+          object: p.provider,
+        });
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:model`,
+          object: p.model,
+        });
+        if (p.apiKey) {
+          await client.createTriple({
+            subject: onboardingNs,
+            predicate: `${ns}:onboarding:apiKeySet`,
+            object: "true",
+          });
+        }
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:completedAt`,
+          object: new Date().toISOString(),
+        });
+
+        respond(true, { saved: true });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    api.registerGatewayMethod("onboarding.status", async ({ respond }) => {
+      try {
+        const onboardingNs = `${ns}:onboarding`;
+        let hasModel = false;
+        try {
+          const result = await client.listTriples({
+            subject: onboardingNs,
+            predicate: `${ns}:onboarding:completedAt`,
+            limit: 1,
+          });
+          hasModel = result.triples.length > 0;
+        } catch {
+          // Cortex may not be available — treat as not onboarded
+        }
+
+        respond(true, {
+          onboarded: hasModel,
+          gateway: true,
+          cortex: cortexAvailable,
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // ========================================================================
     // Service
     // ========================================================================
 

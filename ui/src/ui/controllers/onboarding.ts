@@ -1,0 +1,118 @@
+import type { GatewayBrowserClient } from "../gateway.ts";
+import type { OnboardingState, OnboardingStep, OnboardingProvider } from "../views/onboarding-wizard.ts";
+
+// ============================================================================
+// Initial state
+// ============================================================================
+
+export function createInitialOnboardingState(): OnboardingState {
+  return {
+    open: false,
+    step: "provider",
+    provider: null,
+    apiKey: "",
+    localModel: "llama3.3",
+    ollamaDetected: false,
+    saving: false,
+    error: null,
+    gatewayOk: false,
+    cortexOk: false,
+  };
+}
+
+// ============================================================================
+// Navigation
+// ============================================================================
+
+const STEP_ORDER: OnboardingStep[] = ["provider", "apikey", "ready"];
+
+export function onboardingNext(state: OnboardingState): void {
+  const idx = STEP_ORDER.indexOf(state.step);
+  if (idx < STEP_ORDER.length - 1) {
+    state.step = STEP_ORDER[idx + 1];
+    state.error = null;
+  }
+}
+
+export function onboardingBack(state: OnboardingState): void {
+  const idx = STEP_ORDER.indexOf(state.step);
+  if (idx > 0) {
+    state.step = STEP_ORDER[idx - 1];
+    state.error = null;
+  }
+}
+
+// ============================================================================
+// Save config via gateway
+// ============================================================================
+
+export async function saveOnboardingConfig(
+  state: OnboardingState,
+  client: GatewayBrowserClient,
+): Promise<void> {
+  state.saving = true;
+  state.error = null;
+  try {
+    const model =
+      state.provider === "local"
+        ? `ollama/${state.localModel}`
+        : state.provider === "anthropic"
+          ? "anthropic/claude-sonnet-4-20250514"
+          : state.provider === "openai"
+            ? "openai/gpt-4o"
+            : state.provider === "google"
+              ? "google/gemini-2.0-flash"
+              : "";
+
+    await client.request("onboarding.save", {
+      provider: state.provider,
+      apiKey: state.provider !== "local" ? state.apiKey : "",
+      model,
+    });
+  } catch (err) {
+    state.error = `Failed to save configuration: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
+  } finally {
+    state.saving = false;
+  }
+}
+
+// ============================================================================
+// Check onboarding status
+// ============================================================================
+
+export async function checkOnboardingStatus(
+  state: OnboardingState,
+  client: GatewayBrowserClient,
+): Promise<void> {
+  try {
+    const result = (await client.request("onboarding.status", {})) as {
+      onboarded: boolean;
+      gateway: boolean;
+      cortex: boolean;
+    };
+    state.gatewayOk = result.gateway;
+    state.cortexOk = result.cortex;
+    if (!result.onboarded) {
+      state.open = true;
+      state.step = "provider";
+    }
+  } catch {
+    // Gateway may not support onboarding.status yet — skip wizard
+  }
+}
+
+// ============================================================================
+// Detect Ollama
+// ============================================================================
+
+export async function detectOllama(state: OnboardingState): Promise<void> {
+  try {
+    const res = await fetch("http://127.0.0.1:11434/api/tags", {
+      signal: AbortSignal.timeout(3000),
+    });
+    state.ollamaDetected = res.ok;
+  } catch {
+    state.ollamaDetected = false;
+  }
+}

@@ -82,7 +82,14 @@ import { loadCanvasSurface } from "./controllers/canvas.ts";
 import { renderVenturesDashboard } from "./views/ventures.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { renderSetupWizard } from "./views/setup-wizard.ts";
+import { renderOnboardingWizard, type OnboardingProvider } from "./views/onboarding-wizard.ts";
 import { wizardNext, wizardBack, wizardCreate } from "./controllers/setup-wizard.ts";
+import {
+  onboardingNext,
+  onboardingBack,
+  saveOnboardingConfig,
+  detectOllama,
+} from "./controllers/onboarding.ts";
 import { renderCommandBar } from "./views/command-bar.ts";
 import {
   loadCommandBarContext,
@@ -1195,6 +1202,58 @@ export function renderApp(state: AppViewState) {
           if (state.client) {
             void executeCommandBar(state.commandBar, state.client, query);
           }
+        },
+      })}
+      ${renderOnboardingWizard({
+        state: state.onboardingWizard,
+        onProviderSelect: (provider: OnboardingProvider) => {
+          state.onboardingWizard = { ...state.onboardingWizard, provider };
+        },
+        onApiKeyChange: (key: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, apiKey: key };
+        },
+        onLocalModelChange: (model: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, localModel: model };
+        },
+        onNext: () => {
+          const next = { ...state.onboardingWizard };
+          // When moving from apikey → ready, save the config first
+          if (next.step === "apikey" && state.client) {
+            next.saving = true;
+            state.onboardingWizard = next;
+            void saveOnboardingConfig(next, state.client)
+              .then(() => {
+                onboardingNext(next);
+                // Check service health for the ready screen
+                next.gatewayOk = state.connected;
+                state.onboardingWizard = { ...next };
+              })
+              .catch(() => {
+                state.onboardingWizard = { ...next };
+              });
+            return;
+          }
+          // When selecting "local" provider, detect Ollama
+          if (next.step === "provider" && next.provider === "local") {
+            onboardingNext(next);
+            state.onboardingWizard = next;
+            void detectOllama(next).then(() => {
+              state.onboardingWizard = { ...next };
+            });
+            return;
+          }
+          onboardingNext(next);
+          state.onboardingWizard = next;
+        },
+        onBack: () => {
+          const next = { ...state.onboardingWizard };
+          onboardingBack(next);
+          state.onboardingWizard = next;
+        },
+        onComplete: () => {
+          state.onboardingWizard = { ...state.onboardingWizard, open: false };
+          // Refresh the dashboard
+          void state.loadOverview();
         },
       })}
     </div>
