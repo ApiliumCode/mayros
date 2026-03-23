@@ -541,4 +541,67 @@ export function registerMamoruCli(program: Command) {
         handleError(err);
       }
     });
+
+  // mayros mamoru model runtimes — detect all available runtimes
+  model
+    .command("runtimes")
+    .description("Detect available local inference runtimes (Docker, Ollama, vLLM, NIM)")
+    .action(async () => {
+      const parent = mamoru.opts();
+      try {
+        const { stack } = await loadMamoruStack(parent);
+        console.log("Detecting local runtimes...\n");
+        const runtimes = await stack.localModel.detectRuntimes();
+        for (const r of runtimes) {
+          const status = r.installed ? `installed (v${r.version ?? "?"})` : "not installed";
+          const gpu = r.gpuSupport ? " [GPU]" : "";
+          const endpoint = r.endpoint ? ` → ${r.endpoint}` : "";
+          console.log(`  ${r.name}: ${status}${gpu}${endpoint}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  // mayros mamoru model install-guides — show installation commands
+  model
+    .command("install-guides")
+    .description("Show installation commands for each runtime on this platform")
+    .action(async () => {
+      const parent = mamoru.opts();
+      try {
+        const { stack } = await loadMamoruStack(parent);
+        const guides = stack.localModel.getInstallGuides();
+        console.log("Installation Guides:\n");
+        for (const g of guides) {
+          console.log(`  ${g.runtime} (${g.platform}):`);
+          console.log(`    $ ${g.command}`);
+          console.log(`    ${g.notes}`);
+          console.log(`    Docs: ${g.url}\n`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  // mayros mamoru model install-ollama — auto-install Ollama
+  model
+    .command("install-ollama")
+    .description("Install Ollama automatically (winget/brew/curl)")
+    .action(async () => {
+      const parent = mamoru.opts();
+      try {
+        const { stack } = await loadMamoruStack(parent);
+        console.log("Installing Ollama...");
+        const result = await stack.localModel.installOllama();
+        if (result.success) {
+          console.log(`Done: ${result.message}`);
+        } else {
+          console.error(result.message);
+          process.exitCode = 1;
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
 }

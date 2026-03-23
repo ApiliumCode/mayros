@@ -1,8 +1,8 @@
 /**
  * Local Model Setup — Guided local model detection and installation
  *
- * Detects GPU hardware, suggests appropriate models, and manages
- * local inference runtimes (Ollama, vLLM).
+ * Detects GPU hardware, Docker, Ollama, vLLM, NVIDIA NIM, and
+ * offers guided installation of local inference runtimes.
  */
 
 import { execFile } from "node:child_process";
@@ -24,6 +24,22 @@ export type LocalModelConfig = {
   endpoint: string;
   model: string;
   gpuInfo: GPUInfo | null;
+};
+
+export type RuntimeInfo = {
+  name: "docker" | "ollama" | "vllm" | "nim";
+  installed: boolean;
+  version?: string;
+  endpoint?: string;
+  gpuSupport?: boolean;
+};
+
+export type InstallGuide = {
+  runtime: string;
+  platform: string;
+  command: string;
+  url: string;
+  notes: string;
 };
 
 export type ModelSuggestion = {
@@ -246,5 +262,178 @@ export class LocalModelSetup {
    */
   getCatalog(): ModelSuggestion[] {
     return [...MODEL_CATALOG];
+  }
+
+  // ── Runtime Detection ─────────────────────────────────────────────
+
+  /**
+   * Detect all available local inference runtimes.
+   */
+  async detectRuntimes(): Promise<RuntimeInfo[]> {
+    const runtimes: RuntimeInfo[] = [];
+
+    // Docker
+    try {
+      const { stdout } = await execFileAsync("docker", ["--version"]);
+      const version = stdout.trim().match(/(\d+\.\d+\.\d+)/)?.[1];
+      // Check if NVIDIA Container Toolkit is available
+      let gpuSupport = false;
+      try {
+        await execFileAsync("docker", ["run", "--rm", "--gpus", "all", "nvidia/cuda:12.0-base", "nvidia-smi"], { timeout: 10_000 });
+        gpuSupport = true;
+      } catch { /* no GPU support */ }
+      runtimes.push({ name: "docker", installed: true, version, gpuSupport });
+    } catch {
+      runtimes.push({ name: "docker", installed: false });
+    }
+
+    // Ollama
+    const ollama = await this.checkOllama();
+    runtimes.push({
+      name: "ollama",
+      installed: ollama.installed,
+      version: ollama.version,
+      endpoint: ollama.endpoint,
+    });
+
+    // vLLM (check if python vllm package or running server)
+    try {
+      const response = await fetch("http://localhost:8000/v1/models", {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        runtimes.push({ name: "vllm", installed: true, endpoint: "http://localhost:8000/v1" });
+      } else {
+        runtimes.push({ name: "vllm", installed: false });
+      }
+    } catch {
+      runtimes.push({ name: "vllm", installed: false });
+    }
+
+    // NVIDIA NIM (check for running NIM service)
+    try {
+      const response = await fetch("http://localhost:8000/v1/models", {
+        signal: AbortSignal.timeout(3000),
+        headers: { "User-Agent": "mayros-detect" },
+      });
+      if (response.ok) {
+        const data = await response.json() as { data?: Array<{ id: string }> };
+        const hasNvidia = data.data?.some((m) => m.id.includes("nvidia") || m.id.includes("nemotron"));
+        if (hasNvidia) {
+          runtimes.push({ name: "nim", installed: true, endpoint: "http://localhost:8000/v1" });
+        }
+      }
+    } catch {
+      runtimes.push({ name: "nim", installed: false });
+    }
+
+    return runtimes;
+  }
+
+  /**
+   * Get installation guides for each runtime on the current platform.
+   */
+  getInstallGuides(): InstallGuide[] {
+    const platform = process.platform;
+    const guides: InstallGuide[] = [];
+
+    // Ollama — universal
+    if (platform === "darwin") {
+      guides.push({
+        runtime: "ollama",
+        platform: "macOS",
+        command: "brew install ollama && ollama serve",
+        url: "https://ollama.com/download",
+        notes: "Apple Silicon optimized. Runs natively, no Docker needed.",
+      });
+    } else if (platform === "linux") {
+      guides.push({
+        runtime: "ollama",
+        platform: "Linux",
+        command: "curl -fsSL https://ollama.com/install.sh | sh",
+        url: "https://ollama.com/download",
+        notes: "Supports NVIDIA GPU out of the box. AMD via ROCm.",
+      });
+    } else if (platform === "win32") {
+      guides.push({
+        runtime: "ollama",
+        platform: "Windows",
+        command: "winget install Ollama.Ollama",
+        url: "https://ollama.com/download",
+        notes: "Supports NVIDIA GPU. Download from ollama.com or use winget.",
+      });
+    }
+
+    // Docker — for NIM, vLLM
+    if (platform === "win32") {
+      guides.push({
+        runtime: "docker",
+        platform: "Windows",
+        command: "winget install Docker.DockerDesktop",
+        url: "https://docs.docker.com/desktop/install/windows-install/",
+        notes: "Required for NVIDIA NIM and vLLM. Enable WSL2 backend.",
+      });
+    } else if (platform === "darwin") {
+      guides.push({
+        runtime: "docker",
+        platform: "macOS",
+        command: "brew install --cask docker",
+        url: "https://docs.docker.com/desktop/install/mac-install/",
+        notes: "Required for NVIDIA NIM. Apple Silicon supported via Rosetta.",
+      });
+    } else {
+      guides.push({
+        runtime: "docker",
+        platform: "Linux",
+        command: "curl -fsSL https://get.docker.com | sh",
+        url: "https://docs.docker.com/engine/install/",
+        notes: "Required for NVIDIA NIM. Add nvidia-container-toolkit for GPU.",
+      });
+    }
+
+    // NVIDIA NIM — requires Docker + NVIDIA GPU
+    guides.push({
+      runtime: "nim",
+      platform: "Any (Docker)",
+      command: "docker run --gpus all -p 8000:8000 nvcr.io/nim/meta/llama-3.1-8b-instruct:latest",
+      url: "https://build.nvidia.com",
+      notes: "Requires Docker + NVIDIA GPU + API key from build.nvidia.com.",
+    });
+
+    // vLLM — Python
+    guides.push({
+      runtime: "vllm",
+      platform: "Any (Python)",
+      command: "pip install vllm && vllm serve meta-llama/Llama-3.3-70B --port 8000",
+      url: "https://docs.vllm.ai/en/latest/getting_started/installation.html",
+      notes: "Requires Python 3.9+ and NVIDIA GPU with CUDA. High performance.",
+    });
+
+    return guides;
+  }
+
+  /**
+   * Attempt to install Ollama automatically.
+   * Returns true if installation succeeded.
+   */
+  async installOllama(): Promise<{ success: boolean; message: string }> {
+    const platform = process.platform;
+    try {
+      if (platform === "win32") {
+        await execFileAsync("winget", ["install", "Ollama.Ollama", "--accept-package-agreements", "--accept-source-agreements"], { timeout: 120_000 });
+        return { success: true, message: "Ollama installed via winget. Run 'ollama serve' to start." };
+      } else if (platform === "darwin") {
+        await execFileAsync("brew", ["install", "ollama"], { timeout: 120_000 });
+        return { success: true, message: "Ollama installed via brew. Run 'ollama serve' to start." };
+      } else {
+        // Linux: use the official install script
+        const { execSync } = await import("node:child_process");
+        execSync("curl -fsSL https://ollama.com/install.sh | sh", { timeout: 120_000, stdio: "pipe" });
+        return { success: true, message: "Ollama installed. It should start automatically." };
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, message: `Installation failed: ${msg}. Install manually from https://ollama.com` };
+    }
   }
 }
