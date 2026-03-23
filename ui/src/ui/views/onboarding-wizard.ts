@@ -145,7 +145,21 @@ const ACTIVITIES = [
 ];
 
 const FULL_CATALOG = [
-  // Coding
+  // ── Small models (0-4GB VRAM) — run on almost any machine ──────
+  { id: "qwen2.5-coder:1.5b", name: "Qwen 2.5 Coder 1.5B", activity: "coding", provider: "Qwen", vram: 0, params: "1.5B", desc: "Tiny but capable code model, runs on CPU" },
+  { id: "deepseek-coder-v2:lite", name: "DeepSeek Coder V2 Lite", activity: "coding", provider: "DeepSeek", vram: 3000, params: "2.5B", desc: "Lightweight MoE coder, great for autocomplete" },
+  { id: "phi-3.5:3.8b", name: "Phi 3.5 Mini 3.8B", activity: "chat", provider: "Microsoft", vram: 3000, params: "3.8B", desc: "Microsoft's small powerhouse, strong reasoning" },
+  { id: "gemma2:2b", name: "Gemma 2 2B", activity: "chat", provider: "Google", vram: 0, params: "2B", desc: "Google's tiny model, CPU friendly" },
+  { id: "tinyllama:1.1b", name: "TinyLlama 1.1B", activity: "chat", provider: "Meta", vram: 0, params: "1.1B", desc: "Ultra-light, instant responses on any hardware" },
+  { id: "deepseek-r1:1.5b", name: "DeepSeek R1 1.5B", activity: "reasoning", provider: "DeepSeek", vram: 0, params: "1.5B", desc: "Chain-of-thought reasoning on CPU" },
+  { id: "qwen2.5:3b", name: "Qwen 2.5 3B", activity: "multilingual", provider: "Qwen", vram: 0, params: "3B", desc: "Multilingual on CPU, CJK + Latin" },
+  { id: "moondream:1.8b", name: "Moondream 1.8B", activity: "vision", provider: "Meta", vram: 2000, params: "1.8B", desc: "Tiny vision model, image understanding on CPU" },
+  { id: "smollm2:1.7b", name: "SmolLM2 1.7B", activity: "agents", provider: "Microsoft", vram: 0, params: "1.7B", desc: "Small but capable for simple agent tasks" },
+  { id: "qwen2.5:0.5b", name: "Qwen 2.5 0.5B", activity: "chat", provider: "Qwen", vram: 0, params: "0.5B", desc: "Smallest Qwen, ultra-fast, edge devices" },
+  { id: "nomic-embed-text", name: "Nomic Embed Text", activity: "analysis", provider: "Nomic", vram: 0, params: "137M", desc: "Text embeddings for RAG and search, CPU only" },
+  { id: "all-minilm:l6-v2", name: "MiniLM L6 v2", activity: "analysis", provider: "Microsoft", vram: 0, params: "22M", desc: "Fast sentence embeddings, perfect for search" },
+
+  // ── Coding (5GB+) ─────────────────────────────────────────────────
   { id: "codellama:7b", name: "Code Llama 7B", activity: "coding", provider: "Meta", vram: 5000, params: "7B", desc: "Fast code completion, low VRAM" },
   { id: "codellama:13b", name: "Code Llama 13B", activity: "coding", provider: "Meta", vram: 10000, params: "13B", desc: "Strong code generation" },
   { id: "codellama:34b", name: "Code Llama 34B", activity: "coding", provider: "Meta", vram: 22000, params: "34B", desc: "Best Code Llama for complex tasks" },

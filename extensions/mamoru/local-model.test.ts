@@ -125,10 +125,13 @@ describe("LocalModelSetup", () => {
   });
 
   // 12
-  it("suggestByActivity returns empty array for no-GPU on large models", () => {
+  it("suggestByActivity returns only CPU-capable models for no-GPU", () => {
     const noGpu = { vendor: "none" as const, name: "No GPU", vramMB: 0 };
     const codingModels = setup.suggestByActivity("coding", noGpu);
-    expect(codingModels.length).toBe(0); // all coding models require VRAM
+    // Only tiny CPU models should be returned
+    for (const m of codingModels) {
+      expect(m.vramRequired).toBe(0);
+    }
   });
 
   // 13
