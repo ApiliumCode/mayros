@@ -96,6 +96,46 @@ mayros uninstall --dry-run # preview without deleting
 
 A detailed data loss warning is always shown before deletion — listing every category of data (knowledge graph, ventures, agent memory, decision history, etc.).
 
+### Desktop Installers
+
+Zero-setup installers that bundle Node.js + AIngle Cortex — no prerequisites required.
+
+| Platform | Format | Download |
+|----------|--------|----------|
+| **Windows** | `.exe` (NSIS) | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **macOS (Apple Silicon)** | `.dmg` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **macOS (Intel)** | `.dmg` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **Linux (x64)** | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **Linux (arm64)** | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+
+Each installer includes Node.js portable + AIngle Cortex binary, runs `npm install` at install time, creates desktop shortcuts, and adds Mayros to the system PATH.
+
+---
+
+## Local Models
+
+Run models locally with automatic GPU detection and guided setup. Mayros detects your hardware and recommends compatible models.
+
+**Supported runtimes:**
+
+| Runtime | Use case |
+|---------|----------|
+| **Ollama** | Easiest setup — one command install |
+| **vLLM** | High-throughput serving with tensor parallelism |
+| **NVIDIA NIM** | Optimized containers for NVIDIA GPUs |
+
+**GPU detection:** NVIDIA (nvidia-smi), AMD/Intel (PowerShell on Windows, lspci on Linux), Apple Silicon (sysctl), Intel Mac (system_profiler), Raspberry Pi (BCM2 chipset).
+
+**50+ model catalog** segmented by 8 activities (coding, chat, reasoning, creative, analysis, multilingual, vision, agents) with VRAM-aware filtering — from CPU-only models (0 VRAM) to 80GB+ enterprise models.
+
+```bash
+mayros mamoru model detect     # detect GPU and recommend models
+mayros mamoru model catalog    # browse full catalog by activity
+mayros mamoru model install    # guided installation
+```
+
+The onboarding wizard in the web portal also includes GPU-aware model selection with compatibility indicators.
+
 ---
 
 ## Coding CLI
