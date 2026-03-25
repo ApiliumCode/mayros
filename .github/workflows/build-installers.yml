@@ -111,7 +111,7 @@ jobs:
   # Linux arm64 — AppImage + .deb
   # ===========================================================================
   linux-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,7 +124,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y fuse libfuse2 qemu-user-static
+          sudo apt-get install -y fuse libfuse2
+
+      - name: Generate PNG icon from pre-built assets
+        run: cp installer/assets/mayros-icon-256.png installer/assets/mayros.png
 
       - name: Build AppImage (arm64)
         run: |
@@ -174,7 +177,8 @@ jobs:
 
       - name: Install sharp and generate .icns icon
         run: |
-          npm install sharp
+          npm install --no-package-lock --ignore-scripts sharp
+          npm rebuild sharp
           node -e "
             const sharp = require('sharp');
             const fs = require('fs');
@@ -220,7 +224,7 @@ jobs:
           files: installer/macos/output/*.dmg
 
   macos-x64:
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -235,7 +239,8 @@ jobs:
 
       - name: Install sharp and generate .icns
         run: |
-          npm install sharp
+          npm install --no-package-lock --ignore-scripts sharp
+          npm rebuild sharp
           node -e "
             const sharp = require('sharp');
             const fs = require('fs');
