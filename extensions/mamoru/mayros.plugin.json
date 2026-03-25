@@ -1,0 +1,27 @@
+{
+  "id": "mamoru",
+  "kind": "security",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean", "default": true }
+    }
+  },
+  "uiHints": {
+    "mamoru.sandbox.compatibility": {
+      "label": "Sandbox Mode",
+      "placeholder": "best_effort",
+      "help": "enforce = strict kernel sandbox, best_effort = graceful fallback"
+    },
+    "mamoru.egress.defaultAction": {
+      "label": "Default Egress Action",
+      "placeholder": "deny",
+      "help": "deny = block all outbound by default, allow = permit all"
+    },
+    "mamoru.proxy.logAllRequests": {
+      "label": "Log All Inference Requests",
+      "placeholder": "true",
+      "help": "Audit trail for all LLM API calls"
+    }
+  }
+}

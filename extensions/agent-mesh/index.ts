@@ -2197,6 +2197,118 @@ const agentMeshPlugin = {
     });
 
     // ========================================================================
+    // Gateway Methods — Mamoru Security
+    // ========================================================================
+
+    try {
+      const { createMamoruStack, getMamoruGatewayMethods } = await import("../mamoru/index.js");
+      const mamoru = await createMamoruStack(ns, { client });
+      const methods = getMamoruGatewayMethods(mamoru);
+      for (const [name, handler] of Object.entries(methods)) {
+        api.registerGatewayMethod(name, async ({ params, respond }) => {
+          try {
+            const result = await handler(params ?? {});
+            respond(true, result);
+          } catch (err) {
+            respond(false, { error: err instanceof Error ? err.message : String(err) });
+          }
+        });
+      }
+    } catch {
+      // Mamoru not available — non-fatal
+    }
+
+    // ========================================================================
+    // Gateway Method — Onboarding
+    // ========================================================================
+
+    api.registerGatewayMethod("onboarding.save", async ({ params, respond }) => {
+      try {
+        const p = params as {
+          provider: string;
+          apiKey: string;
+          model: string;
+        };
+
+        // Store onboarding config as triples in Cortex
+        const onboardingNs = `${ns}:onboarding`;
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:provider`,
+          object: p.provider,
+        });
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:model`,
+          object: p.model,
+        });
+        if (p.apiKey) {
+          await client.createTriple({
+            subject: onboardingNs,
+            predicate: `${ns}:onboarding:apiKeySet`,
+            object: "true",
+          });
+        }
+        await client.createTriple({
+          subject: onboardingNs,
+          predicate: `${ns}:onboarding:completedAt`,
+          object: new Date().toISOString(),
+        });
+
+        respond(true, { saved: true });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    api.registerGatewayMethod("onboarding.status", async ({ respond }) => {
+      try {
+        const onboardingNs = `${ns}:onboarding`;
+        let hasModel = false;
+        try {
+          const result = await client.listTriples({
+            subject: onboardingNs,
+            predicate: `${ns}:onboarding:completedAt`,
+            limit: 1,
+          });
+          hasModel = result.triples.length > 0;
+        } catch {
+          // Cortex may not be available — treat as not onboarded
+        }
+
+        respond(true, {
+          onboarded: hasModel,
+          gateway: true,
+          cortex: cortexAvailable,
+        });
+      } catch (err) {
+        respond(false, { error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    api.registerGatewayMethod("onboarding.detectGPU", async ({ respond }) => {
+      try {
+        const { LocalModelSetup } = await import("../mamoru/local-model.js");
+        const setup = new LocalModelSetup();
+        const gpu = await setup.detectGPU();
+        respond(true, gpu);
+      } catch {
+        respond(true, { vendor: "none", name: "Unknown", vramMB: 4096 });
+      }
+    });
+
+    api.registerGatewayMethod("onboarding.detectOllama", async ({ respond }) => {
+      try {
+        const res = await fetch("http://127.0.0.1:11434/api/tags", {
+          signal: AbortSignal.timeout(3000),
+        });
+        respond(true, { detected: res.ok });
+      } catch {
+        respond(true, { detected: false });
+      }
+    });
+
+    // ========================================================================
     // Service
     // ========================================================================
 

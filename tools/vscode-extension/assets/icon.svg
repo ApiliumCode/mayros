@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <circle cx="64" cy="64" r="60" fill="#1e1e2e" stroke="#7c3aed" stroke-width="4"/>
-  <text x="64" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
-        font-size="72" font-weight="bold" fill="#c4b5fd">M</text>
+  <!-- Mayrito head (red) -->
+  <circle cx="64" cy="72" r="48" fill="#E53935"/>
+  <!-- V-crest (golden) -->
+  <path d="M40 24 L64 48 L88 24" fill="none" stroke="#D4A017" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Eyes (golden) -->
+  <circle cx="50" cy="68" r="7" fill="#D4A017"/>
+  <circle cx="78" cy="68" r="7" fill="#D4A017"/>
+  <!-- Smile -->
+  <path d="M52 86 Q64 96 76 86" fill="none" stroke="#D4A017" stroke-width="4" stroke-linecap="round"/>
 </svg>

@@ -1,0 +1,27 @@
+{
+  "mayros": "0.3.1",
+  "node": "22.16.0",
+  "cortex": "0.6.3",
+  "platforms": {
+    "macos-arm64": {
+      "node": "node-v22.16.0-darwin-arm64.tar.gz",
+      "cortex": "aingle-cortex-macos-aarch64.tar.gz"
+    },
+    "macos-x64": {
+      "node": "node-v22.16.0-darwin-x64.tar.gz",
+      "cortex": "aingle-cortex-macos-x86_64.tar.gz"
+    },
+    "linux-x64": {
+      "node": "node-v22.16.0-linux-x64.tar.xz",
+      "cortex": "aingle-cortex-linux-x86_64.tar.gz"
+    },
+    "linux-arm64": {
+      "node": "node-v22.16.0-linux-arm64.tar.xz",
+      "cortex": "aingle-cortex-linux-aarch64.tar.gz"
+    },
+    "windows-x64": {
+      "node": "node-v22.16.0-win-x64.zip",
+      "cortex": "aingle-cortex-windows-x86_64.exe.zip"
+    }
+  }
+}

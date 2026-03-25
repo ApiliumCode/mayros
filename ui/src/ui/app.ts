@@ -21,8 +21,10 @@ import {
 } from "./app-chat.ts";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
 import { createInitialWizardState } from "./controllers/setup-wizard.ts";
+import { createInitialOnboardingState } from "./controllers/onboarding.ts";
 import { createInitialCommandBarState } from "./controllers/command-bar.ts";
 import type { SetupWizardState } from "./views/setup-wizard.ts";
+import type { OnboardingState } from "./views/onboarding-wizard.ts";
 import type { CommandBarState } from "./views/command-bar.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import { connectGateway as connectGatewayInternal } from "./app-gateway.ts";
@@ -239,6 +241,7 @@ export class MayrosApp extends LitElement {
   @state() venturesDashboard: VentureDashboardResponse | null = null;
 
   @state() setupWizard: SetupWizardState = createInitialWizardState();
+  @state() onboardingWizard: OnboardingState = createInitialOnboardingState();
   @state() commandBar: CommandBarState = createInitialCommandBarState();
 
   @state() cortexLoading = false;
