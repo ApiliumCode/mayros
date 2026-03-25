@@ -177,9 +177,9 @@ jobs:
 
       - name: Install sharp and generate .icns icon
         run: |
-          npm install --no-package-lock --ignore-scripts sharp
-          npm rebuild sharp
-          node -e "
+          mkdir -p /tmp/sharp-tool && cd /tmp/sharp-tool && npm init -y > /dev/null 2>&1 && npm install sharp
+          cd $GITHUB_WORKSPACE
+          NODE_PATH=/tmp/sharp-tool/node_modules node -e "
             const sharp = require('sharp');
             const fs = require('fs');
             const src = 'ui/public/mayrito-face.png';
@@ -239,9 +239,9 @@ jobs:
 
       - name: Install sharp and generate .icns
         run: |
-          npm install --no-package-lock --ignore-scripts sharp
-          npm rebuild sharp
-          node -e "
+          mkdir -p /tmp/sharp-tool && cd /tmp/sharp-tool && npm init -y > /dev/null 2>&1 && npm install sharp
+          cd $GITHUB_WORKSPACE
+          NODE_PATH=/tmp/sharp-tool/node_modules node -e "
             const sharp = require('sharp');
             const fs = require('fs');
             const src = 'ui/public/mayrito-face.png';
