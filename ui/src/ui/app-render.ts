@@ -82,7 +82,15 @@ import { loadCanvasSurface } from "./controllers/canvas.ts";
 import { renderVenturesDashboard } from "./views/ventures.ts";
 import { loadVenturesDashboard } from "./controllers/ventures.ts";
 import { renderSetupWizard } from "./views/setup-wizard.ts";
+import { renderOnboardingWizard, type OnboardingProvider } from "./views/onboarding-wizard.ts";
 import { wizardNext, wizardBack, wizardCreate } from "./controllers/setup-wizard.ts";
+import {
+  onboardingNext,
+  onboardingBack,
+  saveOnboardingConfig,
+  detectOllama,
+  detectGPU,
+} from "./controllers/onboarding.ts";
 import { renderCommandBar } from "./views/command-bar.ts";
 import {
   loadCommandBarContext,
@@ -167,10 +175,10 @@ export function renderApp(state: AppViewState) {
           </button>
           <div class="brand">
             <div class="brand-logo">
-              <img src=${basePath ? `${basePath}/favicon.svg` : "/favicon.svg"} alt="Mayros" />
+              <img src=${basePath ? `${basePath}/mayrito-face.png` : "/mayrito-face.png"} alt="Mayros" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">MAYROS</div>
+              <div class="brand-title" style="color: #E53935;">MAYROS</div>
               <div class="brand-sub">Gateway Dashboard</div>
             </div>
           </div>
@@ -1195,6 +1203,65 @@ export function renderApp(state: AppViewState) {
           if (state.client) {
             void executeCommandBar(state.commandBar, state.client, query);
           }
+        },
+      })}
+      ${renderOnboardingWizard({
+        state: state.onboardingWizard,
+        onProviderSelect: (provider: OnboardingProvider) => {
+          state.onboardingWizard = { ...state.onboardingWizard, provider };
+        },
+        onApiKeyChange: (key: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, apiKey: key };
+        },
+        onLocalModelChange: (model: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, localModel: model };
+        },
+        onActivityChange: (activity: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, selectedActivity: activity };
+        },
+        onNext: () => {
+          const next = { ...state.onboardingWizard };
+          // When moving from apikey → ready, save the config first
+          if (next.step === "apikey" && state.client) {
+            next.saving = true;
+            state.onboardingWizard = next;
+            void saveOnboardingConfig(next, state.client)
+              .then(() => {
+                onboardingNext(next);
+                // Check service health for the ready screen
+                next.gatewayOk = state.connected;
+                state.onboardingWizard = { ...next };
+              })
+              .catch(() => {
+                state.onboardingWizard = { ...next };
+              });
+            return;
+          }
+          // When selecting "local" provider, detect Ollama
+          if (next.step === "provider" && next.provider === "local") {
+            onboardingNext(next);
+            state.onboardingWizard = next;
+            // Detect Ollama + GPU in parallel
+            Promise.all([
+              detectOllama(next, state.client),
+              detectGPU(next, state.client),
+            ]).then(() => {
+              state.onboardingWizard = { ...next };
+            });
+            return;
+          }
+          onboardingNext(next);
+          state.onboardingWizard = next;
+        },
+        onBack: () => {
+          const next = { ...state.onboardingWizard };
+          onboardingBack(next);
+          state.onboardingWizard = next;
+        },
+        onComplete: () => {
+          state.onboardingWizard = { ...state.onboardingWizard, open: false };
+          // Refresh the dashboard
+          void state.loadOverview();
         },
       })}
     </div>

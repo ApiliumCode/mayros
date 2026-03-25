@@ -25,11 +25,13 @@ import {
   removeExecApproval,
 } from "./controllers/exec-approval.ts";
 import { loadNodes } from "./controllers/nodes.ts";
+import { checkOnboardingStatus } from "./controllers/onboarding.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayEventFrame, GatewayHelloOk } from "./gateway.ts";
 import { GatewayBrowserClient } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
+import type { OnboardingState } from "./views/onboarding-wizard.ts";
 import type {
   AgentsListResult,
   PresenceEntry,
@@ -65,6 +67,7 @@ type GatewayHost = {
   execApprovalQueue: ExecApprovalRequest[];
   execApprovalError: string | null;
   updateAvailable: UpdateAvailable | null;
+  onboardingWizard: OnboardingState;
 };
 
 type SessionDefaultsSnapshot = {
@@ -159,6 +162,11 @@ export function connectGateway(host: GatewayHost) {
       void loadNodes(host as unknown as MayrosApp, { quiet: true });
       void loadDevices(host as unknown as MayrosApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
+      // Check if first-launch onboarding wizard should show
+      void checkOnboardingStatus(host.onboardingWizard, client).then(() => {
+        // Trigger re-render by assigning a new object reference
+        host.onboardingWizard = { ...host.onboardingWizard };
+      });
     },
     onClose: ({ code, reason }) => {
       if (host.client !== client) {

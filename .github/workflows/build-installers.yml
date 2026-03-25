@@ -1,0 +1,281 @@
+name: Build Desktop Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 0.3.1)"
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # ===========================================================================
+  # Windows — NSIS .exe installer
+  # ===========================================================================
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          cd installer/windows
+          .\build-installer.ps1
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/windows/output/*.exe
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/windows/output/*.exe
+
+  # ===========================================================================
+  # Linux x64 — AppImage + .deb
+  # ===========================================================================
+  linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse2
+
+      - name: Generate PNG icon from pre-built assets
+        run: cp installer/assets/mayros-icon-256.png installer/assets/mayros.png
+
+      - name: Build AppImage
+        run: |
+          chmod +x installer/linux/build-appimage.sh
+          chmod +x installer/shared/download-deps.sh
+          cd installer/linux
+          bash build-appimage.sh --arch x64
+
+      - name: Build .deb
+        run: |
+          chmod +x installer/linux/build-deb.sh
+          cd installer/linux
+          bash build-deb.sh --arch x64
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage-x64
+          path: installer/linux/output/*.AppImage
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb-x64
+          path: installer/linux/output/*.deb
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer/linux/output/*.AppImage
+            installer/linux/output/*.deb
+
+  # ===========================================================================
+  # Linux arm64 — AppImage + .deb
+  # ===========================================================================
+  linux-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fuse libfuse2 qemu-user-static
+
+      - name: Build AppImage (arm64)
+        run: |
+          chmod +x installer/linux/build-appimage.sh
+          chmod +x installer/shared/download-deps.sh
+          cd installer/linux
+          bash build-appimage.sh --arch arm64
+
+      - name: Build .deb (arm64)
+        run: |
+          chmod +x installer/linux/build-deb.sh
+          cd installer/linux
+          bash build-deb.sh --arch arm64
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: |
+            installer/linux/output/*.AppImage
+            installer/linux/output/*.deb
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installer/linux/output/*.AppImage
+            installer/linux/output/*.deb
+
+  # ===========================================================================
+  # macOS — DMG (Apple Silicon + Intel)
+  # ===========================================================================
+  macos-arm64:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Install sharp and generate .icns icon
+        run: |
+          npm install sharp
+          node -e "
+            const sharp = require('sharp');
+            const fs = require('fs');
+            const src = 'ui/public/mayrito-face.png';
+            const sizes = [16, 32, 64, 128, 256, 512, 1024];
+            async function main() {
+              fs.mkdirSync('installer/assets/mayros.iconset', { recursive: true });
+              for (const s of sizes) {
+                const buf = await sharp(src)
+                  .resize(s, s, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
+                  .png().toBuffer();
+                fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '.png', buf);
+                if (s <= 512) {
+                  const buf2x = await sharp(src)
+                    .resize(s*2, s*2, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
+                    .png().toBuffer();
+                  fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '@2x.png', buf2x);
+                }
+              }
+              console.log('Iconset generated');
+            }
+            main();
+          "
+          iconutil -c icns installer/assets/mayros.iconset -o installer/assets/mayros.icns
+
+      - name: Build DMG
+        run: |
+          chmod +x installer/macos/build-dmg.sh
+          chmod +x installer/shared/download-deps.sh
+          cd installer/macos
+          bash build-dmg.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-arm64
+          path: installer/macos/output/*.dmg
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/macos/output/*.dmg
+
+  macos-x64:
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Install sharp and generate .icns
+        run: |
+          npm install sharp
+          node -e "
+            const sharp = require('sharp');
+            const fs = require('fs');
+            const src = 'ui/public/mayrito-face.png';
+            const sizes = [16, 32, 64, 128, 256, 512, 1024];
+            async function main() {
+              fs.mkdirSync('installer/assets/mayros.iconset', { recursive: true });
+              for (const s of sizes) {
+                const buf = await sharp(src)
+                  .resize(s, s, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
+                  .png().toBuffer();
+                fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '.png', buf);
+                if (s <= 512) {
+                  const buf2x = await sharp(src)
+                    .resize(s*2, s*2, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
+                    .png().toBuffer();
+                  fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '@2x.png', buf2x);
+                }
+              }
+              console.log('Iconset generated');
+            }
+            main();
+          "
+          iconutil -c icns installer/assets/mayros.iconset -o installer/assets/mayros.icns
+
+      - name: Build DMG
+        run: |
+          chmod +x installer/macos/build-dmg.sh
+          chmod +x installer/shared/download-deps.sh
+          cd installer/macos
+          bash build-dmg.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-x64
+          path: installer/macos/output/*.dmg
+
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/macos/output/*.dmg

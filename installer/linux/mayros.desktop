@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Mayros
+Comment=AI agent framework
+Exec=mayros dashboard
+Icon=mayros
+Terminal=false
+Type=Application
+Categories=Development;Utility;
