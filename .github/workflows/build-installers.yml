@@ -34,46 +34,6 @@ jobs:
       - name: Install NSIS
         run: choco install nsis -y
 
-      - name: Install sharp for icon generation
-        run: npm install sharp
-
-      - name: Generate Mayros ICO from SVG
-        run: |
-          node -e "
-            const sharp = require('sharp');
-            const fs = require('fs');
-            const svg = fs.readFileSync('ui/public/favicon.svg');
-            const sizes = [16, 32, 48, 64, 128, 256];
-            async function main() {
-              const pngs = [];
-              for (const s of sizes) {
-                pngs.push(await sharp(svg, { density: 300 })
-                  .resize(s, s, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
-                  .png().toBuffer());
-              }
-              // PNG-in-ICO format
-              const header = Buffer.alloc(6);
-              header.writeUInt16LE(0, 0);
-              header.writeUInt16LE(1, 2);
-              header.writeUInt16LE(pngs.length, 4);
-              let offset = 6 + pngs.length * 16;
-              const dirs = pngs.map((png, i) => {
-                const e = Buffer.alloc(16);
-                const s = sizes[i] >= 256 ? 0 : sizes[i];
-                e.writeUInt8(s, 0); e.writeUInt8(s, 1);
-                e.writeUInt16LE(1, 4); e.writeUInt16LE(32, 6);
-                e.writeUInt32LE(png.length, 8);
-                e.writeUInt32LE(offset, 12);
-                offset += png.length;
-                return e;
-              });
-              fs.writeFileSync('installer/assets/mayros.ico',
-                Buffer.concat([header, ...dirs, ...pngs]));
-              console.log('ICO generated');
-            }
-            main();
-          "
-
       - name: Build Windows installer
         shell: pwsh
         run: |
@@ -111,21 +71,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fuse libfuse2
 
-      - name: Install sharp for icon generation
-        run: npm install sharp
-
-      - name: Generate PNG icon
-        run: |
-          node -e "
-            const sharp = require('sharp');
-            const fs = require('fs');
-            const svg = fs.readFileSync('ui/public/favicon.svg');
-            sharp(svg, { density: 300 })
-              .resize(256, 256, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
-              .png()
-              .toFile('installer/assets/mayros.png')
-              .then(() => console.log('PNG icon generated'));
-          "
+      - name: Generate PNG icon from pre-built assets
+        run: cp installer/assets/mayros-icon-256.png installer/assets/mayros.png
 
       - name: Build AppImage
         run: |
@@ -225,26 +172,23 @@ jobs:
       - name: Install create-dmg
         run: brew install create-dmg
 
-      - name: Install sharp for icon generation
-        run: npm install sharp
-
-      - name: Generate .icns icon
+      - name: Install sharp and generate .icns icon
         run: |
-          # Generate PNG sizes for iconutil
+          npm install sharp
           node -e "
             const sharp = require('sharp');
             const fs = require('fs');
-            const svg = fs.readFileSync('ui/public/favicon.svg');
+            const src = 'ui/public/mayrito-face.png';
             const sizes = [16, 32, 64, 128, 256, 512, 1024];
             async function main() {
               fs.mkdirSync('installer/assets/mayros.iconset', { recursive: true });
               for (const s of sizes) {
-                const buf = await sharp(svg, { density: 300 })
+                const buf = await sharp(src)
                   .resize(s, s, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
                   .png().toBuffer();
                 fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '.png', buf);
                 if (s <= 512) {
-                  const buf2x = await sharp(svg, { density: 300 })
+                  const buf2x = await sharp(src)
                     .resize(s*2, s*2, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
                     .png().toBuffer();
                   fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '@2x.png', buf2x);
@@ -295,17 +239,17 @@ jobs:
           node -e "
             const sharp = require('sharp');
             const fs = require('fs');
-            const svg = fs.readFileSync('ui/public/favicon.svg');
+            const src = 'ui/public/mayrito-face.png';
             const sizes = [16, 32, 64, 128, 256, 512, 1024];
             async function main() {
               fs.mkdirSync('installer/assets/mayros.iconset', { recursive: true });
               for (const s of sizes) {
-                const buf = await sharp(svg, { density: 300 })
+                const buf = await sharp(src)
                   .resize(s, s, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
                   .png().toBuffer();
                 fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '.png', buf);
                 if (s <= 512) {
-                  const buf2x = await sharp(svg, { density: 300 })
+                  const buf2x = await sharp(src)
                     .resize(s*2, s*2, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } })
                     .png().toBuffer();
                   fs.writeFileSync('installer/assets/mayros.iconset/icon_' + s + 'x' + s + '@2x.png', buf2x);
