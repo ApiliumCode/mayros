@@ -175,10 +175,10 @@ export function renderApp(state: AppViewState) {
           </button>
           <div class="brand">
             <div class="brand-logo">
-              <img src=${basePath ? `${basePath}/favicon.svg` : "/favicon.svg"} alt="Mayros" />
+              <img src=${basePath ? `${basePath}/mayrito-face.png` : "/mayrito-face.png"} alt="Mayros" />
             </div>
             <div class="brand-text">
-              <div class="brand-title">MAYROS</div>
+              <div class="brand-title" style="color: #E53935;">MAYROS</div>
               <div class="brand-sub">Gateway Dashboard</div>
             </div>
           </div>

@@ -264,13 +264,11 @@ function renderProviderStep(props: OnboardingWizardProps) {
   return html`
     <div>
       <div style="text-align: center; margin-bottom: 32px;">
-        <div style="
-          font-size: 48px; margin-bottom: 16px;
-          color: var(--accent, #ff5c5c);
-          font-weight: 700; letter-spacing: 2px;
-        ">MAYROS</div>
-        <h2 style="margin: 0 0 8px 0; font-size: 22px; color: var(--card-foreground, #f4f4f5); font-weight: 600;">
-          Welcome to Mayros
+        <img src="/mayrito-welcome.svg" alt="Mayros" style="
+          width: 120px; height: 120px; margin: 0 auto 16px auto; display: block;
+        " />
+        <h2 style="margin: 0 0 8px 0; font-size: 22px; color: var(--card-foreground, #f4f4f5); font-weight: 400;">
+          Welcome to <span style="color: #E53935; font-weight: 700;">Mayros</span>
         </h2>
         <p style="margin: 0; font-size: 14px; color: #888;">
           Your autonomous agent gateway. Choose an AI provider to get started.

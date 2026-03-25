@@ -1,7 +1,7 @@
 # ⚡🛡️ Mayros
 
 <p align="center">
-    <img src="docs/assets/mayros-logo.svg" alt="Mayros" width="200">
+    <img src="assets/mayros-readme.png" alt="Mayros" width="200">
 </p>
 
 <p align="center">
