@@ -109,9 +109,13 @@ echo "First launch: installing Mayros CLI..."
 
 # Try cached tarball first, then npm registry
 if [[ -f "$MAYROS_LIB/mayros-cli.tgz" ]]; then
-  "$NPM" install "$MAYROS_LIB/mayros-cli.tgz" --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null || \
-  "$NPM" install @apilium/mayros@latest --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null
+  echo "Using cached CLI package..."
+  "$NPM" install "$MAYROS_LIB/mayros-cli.tgz" --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null || {
+    echo "Cached install failed, falling back to npm registry..."
+    "$NPM" install @apilium/mayros@latest --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null
+  }
 else
+  echo "No cached package found, installing from npm registry..."
   "$NPM" install @apilium/mayros@latest --prefix "$MAYROS_LIB" --force --no-fund --no-audit 2>/dev/null
 fi
 
@@ -151,22 +155,46 @@ CLI="$HERE/usr/lib/mayros/node_modules/@apilium/mayros/dist/index.js"
 
 # First launch: install CLI via npm if not present
 if [[ ! -f "$CLI" ]]; then
+  echo "Installing Mayros... this may take a minute."
+  notify-send "Mayros" "Installing Mayros... please wait." 2>/dev/null || true
   bash "$HERE/usr/lib/mayros/install-cli.sh"
 fi
 
 # Onboard if needed
 ONBOARD_MARKER="$HOME/.mayros/.onboarded"
 if [[ ! -f "$ONBOARD_MARKER" ]]; then
+  echo "Configuring Mayros for first use..."
   "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
 fi
 
+# Start Cortex if not running and wait for it
+if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
+  "$HERE/usr/bin/aingle-cortex" --port 19090 &>/dev/null &
+fi
+CORTEX_TRIES=0
+while [[ $CORTEX_TRIES -lt 20 ]]; do
+  if curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1; then
+    break
+  fi
+  CORTEX_TRIES=$((CORTEX_TRIES + 1))
+  sleep 1
+done
+
 # Start gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
+  echo "Starting Mayros Gateway..."
   "$NODE" "$CLI" gateway start --background 2>/dev/null &
 fi
 
 # If launched without args (e.g., from desktop), open portal
 if [[ $# -eq 0 ]]; then
+  # Wait for gateway to be ready
+  TRIES=0
+  while [[ $TRIES -lt 30 ]]; do
+    curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
+    TRIES=$((TRIES + 1))
+    sleep 1
+  done
   exec "$NODE" "$CLI" dashboard
 else
   exec "$NODE" "$CLI" "$@"
@@ -203,8 +231,10 @@ if [[ ! -f "$ASSETS_DIR/mayros.png" ]]; then
   fi
 fi
 
-# Copy icon into AppDir
-if [[ -f "$ASSETS_DIR/mayros.png" ]]; then
+# Copy icon into AppDir — use pre-built 256px PNG from assets
+if [[ -f "$ASSETS_DIR/mayros-icon-256.png" ]]; then
+  cp "$ASSETS_DIR/mayros-icon-256.png" "$APPDIR/mayros.png"
+elif [[ -f "$ASSETS_DIR/mayros.png" ]]; then
   cp "$ASSETS_DIR/mayros.png" "$APPDIR/mayros.png"
 elif [[ -f "$ASSETS_DIR/mayros-logo.svg" ]]; then
   if command -v rsvg-convert &>/dev/null; then
@@ -213,7 +243,6 @@ elif [[ -f "$ASSETS_DIR/mayros-logo.svg" ]]; then
     convert -background none -resize 256x256 "$ASSETS_DIR/mayros-logo.svg" "$APPDIR/mayros.png"
   else
     echo "  -> Warning: no icon converter found, icon will be missing"
-    printf '\x89PNG\r\n\x1a\n' > "$APPDIR/mayros.png"
   fi
 fi
 

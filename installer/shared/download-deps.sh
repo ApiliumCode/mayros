@@ -35,6 +35,25 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 # ---------------------------------------------------------------------------
+# Network connectivity check
+# ---------------------------------------------------------------------------
+echo "==> Checking network connectivity..."
+if command -v curl &>/dev/null; then
+  if ! curl -s --max-time 5 https://github.com > /dev/null 2>&1; then
+    echo "Error: no internet connection detected."
+    echo "Please check your network and try again."
+    exit 1
+  fi
+elif command -v wget &>/dev/null; then
+  if ! wget -q --timeout=5 --spider https://github.com 2>/dev/null; then
+    echo "Error: no internet connection detected."
+    echo "Please check your network and try again."
+    exit 1
+  fi
+fi
+echo "  -> Connection OK"
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 download() {
@@ -114,17 +133,25 @@ echo "==> Downloading AIngle Cortex $CORTEX_VERSION ($PLATFORM)..."
 CORTEX_URL="https://github.com/${CORTEX_REPO}/releases/download/v${CORTEX_VERSION}/${CORTEX_FILE}"
 download "$CORTEX_URL" "$OUTPUT_DIR/$CORTEX_FILE"
 
-# Download checksum file if available
+# Download checksum file if available (with retries)
 CORTEX_SHA_URL="https://github.com/${CORTEX_REPO}/releases/download/v${CORTEX_VERSION}/checksums.sha256"
-if curl -fSL --head "$CORTEX_SHA_URL" &>/dev/null 2>&1; then
-  download "$CORTEX_SHA_URL" "$OUTPUT_DIR/cortex-checksums.sha256"
-  EXPECTED_CORTEX_SHA=$(grep "$CORTEX_FILE" "$OUTPUT_DIR/cortex-checksums.sha256" | awk '{print $1}')
-  if [[ -n "$EXPECTED_CORTEX_SHA" ]]; then
-    verify_sha256 "$OUTPUT_DIR/$CORTEX_FILE" "$EXPECTED_CORTEX_SHA"
+CHECKSUM_OK=false
+for attempt in 1 2 3; do
+  if curl -fSL --head "$CORTEX_SHA_URL" &>/dev/null 2>&1; then
+    if download "$CORTEX_SHA_URL" "$OUTPUT_DIR/cortex-checksums.sha256" 2>/dev/null; then
+      EXPECTED_CORTEX_SHA=$(grep "$CORTEX_FILE" "$OUTPUT_DIR/cortex-checksums.sha256" | awk '{print $1}')
+      if [[ -n "$EXPECTED_CORTEX_SHA" ]]; then
+        verify_sha256 "$OUTPUT_DIR/$CORTEX_FILE" "$EXPECTED_CORTEX_SHA"
+        CHECKSUM_OK=true
+      fi
+      rm -f "$OUTPUT_DIR/cortex-checksums.sha256"
+      break
+    fi
   fi
-  rm -f "$OUTPUT_DIR/cortex-checksums.sha256"
-else
-  echo "  (no checksum file available for Cortex release)"
+  [[ $attempt -lt 3 ]] && echo "  Retrying checksum download (attempt $((attempt + 1))/3)..." && sleep 2
+done
+if [[ "$CHECKSUM_OK" != "true" ]]; then
+  echo "  Warning: could not verify Cortex checksum after 3 attempts. Continuing without verification."
 fi
 
 # ---------------------------------------------------------------------------
