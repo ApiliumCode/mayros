@@ -115,6 +115,9 @@ done
 # Copy icon
 if [[ -f "$ASSETS_DIR/mayros.icns" ]]; then
   cp "$ASSETS_DIR/mayros.icns" "$APP_DIR/Contents/Resources/mayros.icns"
+else
+  echo "Error: $ASSETS_DIR/mayros.icns not found. Cannot build .app without icon."
+  exit 1
 fi
 
 # Launcher script
@@ -131,27 +134,134 @@ ONBOARD_MARKER="$MAYROS_DIR/.onboarded"
 
 export PATH="$RESOURCES/bin:$RESOURCES/node/bin:$PATH"
 
+# Progress notification helper (non-blocking, uses app icon, no buttons)
+show_progress() {
+  osascript -e "display notification \"$1\" with title \"Mayros\"" 2>/dev/null || true
+}
+dismiss_progress() {
+  : # notifications auto-dismiss
+}
+
 # First launch: install Mayros CLI via npm
 if [[ ! -f "$CLI" ]]; then
-  osascript -e 'display notification "Installing Mayros..." with title "Mayros"' 2>/dev/null || true
-  "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit 2>/dev/null
+  show_progress "Installing Mayros...\n\nThis may take a minute. Please wait."
+  if ! "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit 2>/dev/null; then
+    dismiss_progress
+    osascript -e 'display alert "Mayros Installation Failed" message "npm install failed. Check your internet connection and try again." as critical' 2>/dev/null || true
+    exit 1
+  fi
+  dismiss_progress
+fi
+
+# Add ~/.mayros/bin to PATH right after install, so PATH is set even if user quits early
+SHELL_PROFILE=""
+if [[ -f "$HOME/.zshrc" ]]; then
+  SHELL_PROFILE="$HOME/.zshrc"
+elif [[ -f "$HOME/.bash_profile" ]]; then
+  SHELL_PROFILE="$HOME/.bash_profile"
+elif [[ -f "$HOME/.bashrc" ]]; then
+  SHELL_PROFILE="$HOME/.bashrc"
+fi
+if [[ -n "$SHELL_PROFILE" ]] && ! grep -q '.mayros/bin' "$SHELL_PROFILE" 2>/dev/null; then
+  echo '' >> "$SHELL_PROFILE"
+  echo '# Mayros CLI' >> "$SHELL_PROFILE"
+  echo 'export PATH="$HOME/.mayros/bin:$PATH"' >> "$SHELL_PROFILE"
 fi
 
 # Copy Cortex binary to ~/.mayros/bin/
 mkdir -p "$MAYROS_DIR/bin"
 if [[ ! -f "$MAYROS_DIR/bin/aingle-cortex" ]]; then
+  show_progress "Setting up AIngle Cortex..."
   cp "$CORTEX" "$MAYROS_DIR/bin/aingle-cortex"
   chmod +x "$MAYROS_DIR/bin/aingle-cortex"
+  dismiss_progress
+fi
+
+# Create CLI wrapper so 'mayros' works from any terminal
+WRAPPER="$MAYROS_DIR/bin/mayros"
+if [[ ! -f "$WRAPPER" ]]; then
+  cat > "$WRAPPER" <<'WRAP'
+#!/usr/bin/env bash
+MAYROS_DIR="$HOME/.mayros"
+NODE="$MAYROS_DIR/node/bin/node"
+# Fallback: use app bundle node if ~/.mayros/node doesn't exist
+if [[ ! -f "$NODE" ]]; then
+  APP_NODE="/Applications/Mayros.app/Contents/Resources/node/bin/node"
+  [[ -f "$APP_NODE" ]] && NODE="$APP_NODE"
+fi
+# Try installer location (npm --prefix)
+CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
+# Fallback: node_modules at root (some npm versions)
+if [[ ! -f "$CLI" ]]; then
+  CLI="$MAYROS_DIR/node_modules/@apilium/mayros/dist/index.js"
+fi
+# Fallback: standard npm global install
+if [[ ! -f "$CLI" ]]; then
+  GLOBAL_CLI="$(which mayros 2>/dev/null)"
+  if [[ -n "$GLOBAL_CLI" && "$GLOBAL_CLI" != "$0" ]]; then
+    exec "$GLOBAL_CLI" "$@"
+  fi
+  echo "Mayros is not installed. Open Mayros.app first or run: npm install -g @apilium/mayros"
+  exit 1
+fi
+exec "$NODE" "$CLI" "$@"
+WRAP
+  chmod +x "$WRAPPER"
+fi
+
+# Link bundled node to ~/.mayros/node/ for CLI use outside the app
+# Use symlink if the app is in /Applications to avoid ~500MB copy
+if [[ ! -d "$MAYROS_DIR/node" ]]; then
+  if [[ -d "/Applications/Mayros.app/Contents/Resources/node" ]]; then
+    ln -s "/Applications/Mayros.app/Contents/Resources/node" "$MAYROS_DIR/node"
+  else
+    cp -R "$RESOURCES/node" "$MAYROS_DIR/node"
+  fi
 fi
 
 # Onboard if needed
 if [[ ! -f "$ONBOARD_MARKER" ]]; then
-  "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
+  show_progress "Configuring Mayros for first use..."
+  if ! "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null; then
+    osascript -e 'display notification "Initial setup had issues. You can re-run: mayros onboard" with title "Mayros"' 2>/dev/null || true
+  fi
+  dismiss_progress
 fi
+
+# Start Cortex if not running and wait for it
+if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
+  "$MAYROS_DIR/bin/aingle-cortex" --port 19090 &>/dev/null &
+fi
+CORTEX_TRIES=0
+while [[ $CORTEX_TRIES -lt 20 ]]; do
+  if curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1; then
+    break
+  fi
+  CORTEX_TRIES=$((CORTEX_TRIES + 1))
+  sleep 1
+done
 
 # Start gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
+  show_progress "Starting Mayros Gateway..."
   "$NODE" "$CLI" gateway start --background 2>/dev/null &
+fi
+
+# Wait for gateway to be ready before opening the portal
+GATEWAY_URL="http://127.0.0.1:18789/health"
+TRIES=0
+MAX_TRIES=30
+while [[ $TRIES -lt $MAX_TRIES ]]; do
+  if curl -s --max-time 2 "$GATEWAY_URL" >/dev/null 2>&1; then
+    break
+  fi
+  TRIES=$((TRIES + 1))
+  sleep 1
+done
+dismiss_progress 2>/dev/null || true
+
+if [[ $TRIES -ge $MAX_TRIES ]]; then
+  osascript -e 'display notification "Gateway is taking longer than expected. Opening portal anyway." with title "Mayros"' 2>/dev/null || true
 fi
 
 # Open the portal
