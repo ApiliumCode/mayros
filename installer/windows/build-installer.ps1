@@ -123,9 +123,12 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Configuring Mayros for first use...
-call "%MAYROS_DIR%\mayros.cmd" onboard --non-interactive --defaults
-if errorlevel 1 (
-    echo WARNING: initial configuration had issues, but installation will continue.
+:: Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
+set "CONFIG_FILE=%MAYROS_DIR%\mayros.json"
+if not exist "%CONFIG_FILE%" (
+    echo {"gateway":{"mode":"local","auth":{"mode":"none"}}} > "%CONFIG_FILE%"
+) else (
+    "%MAYROS_DIR%\node\node.exe" -e "const fs=require('fs');const f=process.argv[1];const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" "%CONFIG_FILE%" 2>nul
 )
 echo.
 echo Starting Cortex...
