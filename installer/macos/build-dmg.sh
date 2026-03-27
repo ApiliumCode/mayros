@@ -115,12 +115,15 @@ done
 # Copy icon
 if [[ -f "$ASSETS_DIR/mayros.icns" ]]; then
   cp "$ASSETS_DIR/mayros.icns" "$APP_DIR/Contents/Resources/mayros.icns"
+else
+  echo "Error: $ASSETS_DIR/mayros.icns not found. Cannot build .app without icon."
+  exit 1
 fi
 
 # Launcher script
 cat > "$APP_DIR/Contents/MacOS/mayros-launcher" <<'LAUNCHER'
 #!/usr/bin/env bash
-# Mayros application launcher
+# Mayros application launcher — runs on first open and every launch
 RESOURCES="$(dirname "$0")/../Resources"
 NODE="$RESOURCES/node/bin/node"
 NPM="$RESOURCES/node/bin/npm"
@@ -128,31 +131,109 @@ CORTEX="$RESOURCES/bin/aingle-cortex"
 MAYROS_DIR="$HOME/.mayros"
 CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
 ONBOARD_MARKER="$MAYROS_DIR/.onboarded"
+LOG="$MAYROS_DIR/install.log"
 
 export PATH="$RESOURCES/bin:$RESOURCES/node/bin:$PATH"
+mkdir -p "$MAYROS_DIR/bin"
 
-# First launch: install Mayros CLI via npm
+# Non-blocking notification (no buttons, no modals, auto-dismiss)
+notify() {
+  osascript -e "display notification \"$1\" with title \"Mayros\"" 2>/dev/null || true
+}
+
+# Fatal error with modal alert (only for critical failures)
+fatal() {
+  osascript -e "display alert \"Mayros\" message \"$1\" as critical" 2>/dev/null || true
+  exit 1
+}
+
+# ── Step 1: Install CLI ──────────────────────────────────────────────
 if [[ ! -f "$CLI" ]]; then
-  osascript -e 'display notification "Installing Mayros..." with title "Mayros"' 2>/dev/null || true
-  "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit 2>/dev/null
+  notify "Installing Mayros... this may take a minute."
+  "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit > "$LOG" 2>&1
+  if [[ ! -f "$CLI" ]]; then
+    fatal "Installation failed. Check ~/.mayros/install.log for details."
+  fi
+  notify "Mayros CLI installed successfully."
 fi
 
-# Copy Cortex binary to ~/.mayros/bin/
-mkdir -p "$MAYROS_DIR/bin"
+# ── Step 2: Setup PATH (do this early so it persists even if user quits) ──
+SHELL_PROFILE=""
+if [[ -f "$HOME/.zshrc" ]]; then
+  SHELL_PROFILE="$HOME/.zshrc"
+elif [[ -f "$HOME/.bash_profile" ]]; then
+  SHELL_PROFILE="$HOME/.bash_profile"
+elif [[ -f "$HOME/.bashrc" ]]; then
+  SHELL_PROFILE="$HOME/.bashrc"
+fi
+if [[ -n "$SHELL_PROFILE" ]] && ! grep -q '.mayros/bin' "$SHELL_PROFILE" 2>/dev/null; then
+  printf '\n# Mayros CLI\nexport PATH="$HOME/.mayros/bin:$PATH"\n' >> "$SHELL_PROFILE"
+fi
+
+# ── Step 3: Copy Cortex binary ───────────────────────────────────────
 if [[ ! -f "$MAYROS_DIR/bin/aingle-cortex" ]]; then
   cp "$CORTEX" "$MAYROS_DIR/bin/aingle-cortex"
   chmod +x "$MAYROS_DIR/bin/aingle-cortex"
 fi
 
-# Onboard if needed
-if [[ ! -f "$ONBOARD_MARKER" ]]; then
-  "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
+# ── Step 4: Create CLI wrapper for terminal use ──────────────────────
+WRAPPER="$MAYROS_DIR/bin/mayros"
+cat > "$WRAPPER" <<'WRAP'
+#!/usr/bin/env bash
+MAYROS_DIR="$HOME/.mayros"
+NODE="$MAYROS_DIR/node/bin/node"
+if [[ ! -f "$NODE" ]]; then
+  NODE="/Applications/Mayros.app/Contents/Resources/node/bin/node"
+fi
+CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
+if [[ ! -f "$CLI" ]]; then
+  CLI="$MAYROS_DIR/node_modules/@apilium/mayros/dist/index.js"
+fi
+if [[ ! -f "$CLI" ]]; then
+  echo "Mayros is not installed. Open Mayros.app or run: npm install -g @apilium/mayros"
+  exit 1
+fi
+exec "$NODE" "$CLI" "$@"
+WRAP
+chmod +x "$WRAPPER"
+
+# ── Step 5: Link node for CLI use outside the app ────────────────────
+if [[ ! -d "$MAYROS_DIR/node" ]]; then
+  if [[ -d "/Applications/Mayros.app/Contents/Resources/node" ]]; then
+    ln -sf "/Applications/Mayros.app/Contents/Resources/node" "$MAYROS_DIR/node"
+  else
+    cp -R "$RESOURCES/node" "$MAYROS_DIR/node"
+  fi
 fi
 
-# Start gateway if not running
-if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
-  "$NODE" "$CLI" gateway start --background 2>/dev/null &
+# ── Step 6: Onboard ─────────────────────────────────────────────────
+if [[ ! -f "$ONBOARD_MARKER" ]]; then
+  notify "Configuring Mayros for first use..."
+  "$NODE" "$CLI" onboard --non-interactive --defaults >> "$LOG" 2>&1 || true
 fi
+
+# ── Step 7: Start Cortex and wait ────────────────────────────────────
+if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
+  "$MAYROS_DIR/bin/aingle-cortex" --port 19090 >> "$LOG" 2>&1 &
+fi
+for i in $(seq 1 20); do
+  curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1 && break
+  sleep 1
+done
+
+# ── Step 8: Start Gateway and wait ───────────────────────────────────
+if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
+  notify "Starting Mayros Gateway..."
+  "$NODE" "$CLI" gateway start --background >> "$LOG" 2>&1 &
+fi
+
+# ── Step 9: Wait for Gateway and open portal ─────────────────────────
+for i in $(seq 1 30); do
+  curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
+  sleep 1
+done
+
+notify "Mayros is ready!"
 
 # Open the portal
 exec "$NODE" "$CLI" dashboard
