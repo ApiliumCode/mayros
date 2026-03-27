@@ -163,7 +163,9 @@ else
   /opt/mayros/bin/mayros onboard --non-interactive --defaults || true
 fi
 
+echo ""
 echo "Mayros installed. Run 'mayros' to get started."
+echo "NOTE: Please restart your terminal or run 'source ~/.bashrc' for the 'mayros' command to be available."
 POSTINST
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
 
