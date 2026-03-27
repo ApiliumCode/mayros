@@ -160,11 +160,12 @@ if [[ ! -f "$CLI" ]]; then
   bash "$HERE/usr/lib/mayros/install-cli.sh"
 fi
 
-# Onboard if needed
-ONBOARD_MARKER="$HOME/.mayros/.onboarded"
-if [[ ! -f "$ONBOARD_MARKER" ]]; then
-  echo "Configuring Mayros for first use..."
-  "$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
+# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
+CONFIG_FILE="$HOME/.mayros/mayros.json"
+if [[ -f "$CONFIG_FILE" ]]; then
+  "$NODE" -e "const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" 2>/dev/null || true
+else
+  echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
 fi
 
 # Start Cortex if not running and wait for it
