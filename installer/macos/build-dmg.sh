@@ -214,25 +214,24 @@ fi
 echo "  ✓ CLI wrapper created"
 echo ""
 
-# Step 5: Onboard + configure gateway mode
+# Step 5: Configure gateway (skip onboard so portal wizard shows)
 echo "  [5/6] Running initial configuration..."
-"$NODE" "$CLI" onboard --non-interactive --defaults 2>/dev/null || true
-# Ensure gateway.mode=local is set (required for gateway to start)
+# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
 CONFIG_FILE="$MAYROS_DIR/mayros.json"
 if [[ -f "\$CONFIG_FILE" ]]; then
-  # Merge gateway.mode into existing config
   "$NODE" -e "
     const fs = require('fs');
     const f = '\$CONFIG_FILE';
     const c = JSON.parse(fs.readFileSync(f, 'utf8'));
     if (!c.gateway) c.gateway = {};
     if (!c.gateway.mode) c.gateway.mode = 'local';
+    if (!c.gateway.auth) c.gateway.auth = {};
+    if (!c.gateway.auth.mode) c.gateway.auth.mode = 'none';
     fs.writeFileSync(f, JSON.stringify(c, null, 2));
   " 2>/dev/null || true
 else
-  echo '{"gateway":{"mode":"local"}}' > "\$CONFIG_FILE"
+  echo '{\"gateway\":{\"mode\":\"local\",\"auth\":{\"mode\":\"none\"}}}' > "\$CONFIG_FILE"
 fi
-touch "$MAYROS_DIR/.onboarded"
 echo "  ✓ Configuration complete"
 echo ""
 
