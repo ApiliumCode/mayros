@@ -100,16 +100,67 @@ $installCmd = @"
 @echo off
 set "MAYROS_DIR=%LOCALAPPDATA%\Mayros"
 set "PATH=%MAYROS_DIR%\node;%PATH%"
-echo Installing Mayros...
-call "%MAYROS_DIR%\node\npm.cmd" install -g @apilium/mayros@latest --prefix "%MAYROS_DIR%" --force --no-fund --no-audit
+echo.
+echo ===================================
+echo   Installing Mayros...
+echo   This may take a minute.
+echo ===================================
+echo.
+:: Locate npm.cmd — try portable node root first, then nested path
+set "NPM_CMD=%MAYROS_DIR%\node\npm.cmd"
+if not exist "%NPM_CMD%" set "NPM_CMD=%MAYROS_DIR%\node\node_modules\npm\bin\npm-cli.js"
+if not exist "%NPM_CMD%" (
+    echo ERROR: npm not found in portable Node.js directory.
+    echo Expected: %MAYROS_DIR%\node\npm.cmd
+    exit /b 1
+)
+call "%NPM_CMD%" install -g @apilium/mayros@latest --prefix "%MAYROS_DIR%" --force --no-fund --no-audit
+if errorlevel 1 (
+    echo.
+    echo ERROR: npm install failed. Please check your network connection
+    echo and try running this command manually:
+    echo   "%NPM_CMD%" install -g @apilium/mayros@latest --prefix "%MAYROS_DIR%"
+    exit /b 1
+)
+echo Configuring Mayros for first use...
+call "%MAYROS_DIR%\mayros.cmd" onboard --non-interactive --defaults
+if errorlevel 1 (
+    echo WARNING: initial configuration had issues, but installation will continue.
+)
+echo.
 echo Starting Cortex...
 start "" "%MAYROS_DIR%\bin\aingle-cortex.exe" --port 19090
+:: Wait for Cortex to be ready before starting gateway
+echo Waiting for Cortex to be ready...
+set CORTEX_TRIES=0
+:cortexwait
+if %CORTEX_TRIES% GEQ 20 goto startgateway
+powershell -Command "try { (Invoke-WebRequest -Uri http://127.0.0.1:19090/health -UseBasicParsing -TimeoutSec 2).StatusCode } catch { exit 1 }" >nul 2>&1
+if %errorlevel%==0 goto startgateway
+set /a CORTEX_TRIES+=1
+timeout /t 1 /nobreak >nul
+goto cortexwait
+:startgateway
 echo Starting Gateway...
 start "" "%MAYROS_DIR%\mayros.cmd" gateway start
-timeout /t 3 /nobreak >nul
+echo Waiting for gateway to be ready...
+set TRIES=0
+:waitloop
+if %TRIES% GEQ 30 goto openbrowser
+powershell -Command "try { (Invoke-WebRequest -Uri http://127.0.0.1:18789/health -UseBasicParsing -TimeoutSec 2).StatusCode } catch { exit 1 }" >nul 2>&1
+if %errorlevel%==0 goto openbrowser
+set /a TRIES+=1
+timeout /t 1 /nobreak >nul
+goto waitloop
+:openbrowser
 echo Opening Mayros Dashboard...
 start http://127.0.0.1:18789
-echo Done.
+echo.
+echo ===================================
+echo   Mayros installed successfully!
+echo   You can now use 'mayros' from
+echo   any terminal (restart terminal first).
+echo ===================================
 "@
 Set-Content -Path (Join-Path $StageDir "install-mayros.cmd") -Value $installCmd -Encoding ASCII
 

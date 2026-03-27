@@ -105,8 +105,8 @@ Section "Mayros" SecMain
   ; --- Start Menu shortcut ---
   CreateDirectory "$SMPROGRAMS\Mayros"
   CreateShortcut "$SMPROGRAMS\Mayros\Mayros Dashboard.lnk" \
-    "$INSTDIR\node\node.exe" \
-    '"$INSTDIR\bin\open-portal.cmd"' \
+    "$WINDIR\system32\cmd.exe" \
+    '/c "$INSTDIR\bin\open-portal.cmd"' \
     "$INSTDIR\mayros.ico" 0 "" "" "Open Mayros Control Dashboard"
   CreateShortcut "$SMPROGRAMS\Mayros\Uninstall Mayros.lnk" "$INSTDIR\uninstall.exe"
 
@@ -154,7 +154,7 @@ FunctionEnd
 
 Function CreateDesktopShortcut
   CreateShortcut "$DESKTOP\Mayros Dashboard.lnk" \
-    "$INSTDIR\node\node.exe" \
-    '"$INSTDIR\bin\open-portal.cmd"' \
+    "$WINDIR\system32\cmd.exe" \
+    '/c "$INSTDIR\bin\open-portal.cmd"' \
     "$INSTDIR\mayros.ico" 0 "" "" "Open Mayros Control Dashboard"
 FunctionEnd
