@@ -127,6 +127,13 @@ call "%MAYROS_DIR%\mayros.cmd" onboard --non-interactive --defaults
 if errorlevel 1 (
     echo WARNING: initial configuration had issues, but installation will continue.
 )
+:: Ensure gateway.mode=local is set
+set "CONFIG_FILE=%MAYROS_DIR%\mayros.json"
+if not exist "%CONFIG_FILE%" (
+    echo {"gateway":{"mode":"local"}} > "%CONFIG_FILE%"
+) else (
+    "%MAYROS_DIR%\node\node.exe" -e "const fs=require('fs');const f=process.argv[1];const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';fs.writeFileSync(f,JSON.stringify(c,null,2));" "%CONFIG_FILE%" 2>nul
+)
 echo.
 echo Starting Cortex...
 start "" "%MAYROS_DIR%\bin\aingle-cortex.exe" --port 19090
