@@ -153,14 +153,28 @@ exec /opt/mayros/node/bin/node /opt/mayros/lib/node_modules/@apilium/mayros/dist
 EOF
 chmod +x /opt/mayros/bin/mayros
 
-# Run onboarding for the installing user
+# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
 if [ -n "$SUDO_USER" ]; then
-  su - "$SUDO_USER" -c "/opt/mayros/bin/mayros onboard --non-interactive --defaults" || true
+  MAYROS_DIR="/home/$SUDO_USER/.mayros"
+  su - "$SUDO_USER" -c "mkdir -p '$MAYROS_DIR'"
+  CONFIG_FILE="$MAYROS_DIR/mayros.json"
+  if [ -f "$CONFIG_FILE" ]; then
+    su - "$SUDO_USER" -c "/opt/mayros/node/bin/node -e \"const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));\"" || true
+  else
+    su - "$SUDO_USER" -c "echo '{\"gateway\":{\"mode\":\"local\",\"auth\":{\"mode\":\"none\"}}}' > '$CONFIG_FILE'"
+  fi
   su - "$SUDO_USER" -c "systemctl --user daemon-reload" || true
   su - "$SUDO_USER" -c "systemctl --user enable mayros-gateway.service" || true
   su - "$SUDO_USER" -c "systemctl --user start mayros-gateway.service" || true
 else
-  /opt/mayros/bin/mayros onboard --non-interactive --defaults || true
+  MAYROS_DIR="$HOME/.mayros"
+  mkdir -p "$MAYROS_DIR"
+  CONFIG_FILE="$MAYROS_DIR/mayros.json"
+  if [ -f "$CONFIG_FILE" ]; then
+    /opt/mayros/node/bin/node -e "const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" || true
+  else
+    echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
+  fi
 fi
 
 echo ""
