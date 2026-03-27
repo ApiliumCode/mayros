@@ -179,8 +179,13 @@ async function resolveCliProgramArguments(params: {
     const nodePath =
       params.nodePath ?? (isNodeRuntime(execPath) ? execPath : await resolveNodePath());
     const cliEntrypointPath = await resolveCliEntrypointPathForService();
+    // Derive package root from the entrypoint path (e.g. .../dist/index.js → ...)
+    // so the LaunchAgent WorkingDirectory points to the package, not "/".
+    const distIndex = cliEntrypointPath.lastIndexOf(`${path.sep}dist${path.sep}`);
+    const workingDirectory = distIndex > 0 ? cliEntrypointPath.slice(0, distIndex) : undefined;
     return {
       programArguments: [nodePath, cliEntrypointPath, ...params.args],
+      workingDirectory,
     };
   }
 

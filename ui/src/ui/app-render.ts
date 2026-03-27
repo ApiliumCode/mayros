@@ -90,6 +90,7 @@ import {
   saveOnboardingConfig,
   detectOllama,
   detectGPU,
+  fetchOllamaModels,
 } from "./controllers/onboarding.ts";
 import { renderCommandBar } from "./views/command-bar.ts";
 import {
@@ -926,20 +927,25 @@ export function renderApp(state: AppViewState) {
                 onSplitRatioChange: (ratio: number) => state.handleSplitRatioChange(ratio),
                 assistantName: state.assistantName,
                 assistantAvatar: state.assistantAvatar,
-                voiceRecording: (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false,
-                onToggleVoice: isVoiceAvailable() ? () => {
-                  const recording = (state as Record<string, unknown>).chatVoiceRecording as boolean ?? false;
-                  if (recording) {
-                    stopVoiceRecognition(state.commandBar);
-                    (state as Record<string, unknown>).chatVoiceRecording = false;
-                  } else {
-                    startVoiceRecognition(state.commandBar, (text) => {
-                      state.chatMessage = (state.chatMessage ? state.chatMessage + " " : "") + text;
-                      (state as Record<string, unknown>).chatVoiceRecording = false;
-                    });
-                    (state as Record<string, unknown>).chatVoiceRecording = true;
-                  }
-                } : undefined,
+                voiceRecording:
+                  ((state as Record<string, unknown>).chatVoiceRecording as boolean) ?? false,
+                onToggleVoice: isVoiceAvailable()
+                  ? () => {
+                      const recording =
+                        ((state as Record<string, unknown>).chatVoiceRecording as boolean) ?? false;
+                      if (recording) {
+                        stopVoiceRecognition(state.commandBar);
+                        (state as Record<string, unknown>).chatVoiceRecording = false;
+                      } else {
+                        startVoiceRecognition(state.commandBar, (text) => {
+                          state.chatMessage =
+                            (state.chatMessage ? state.chatMessage + " " : "") + text;
+                          (state as Record<string, unknown>).chatVoiceRecording = false;
+                        });
+                        (state as Record<string, unknown>).chatVoiceRecording = true;
+                      }
+                    }
+                  : undefined,
               })
             : nothing
         }
@@ -1079,7 +1085,13 @@ export function renderApp(state: AppViewState) {
                 dashboard: state.venturesDashboard,
                 onRefresh: () => void loadVenturesDashboard(state),
                 onNewVenture: () => {
-                  state.setupWizard = { ...state.setupWizard, open: true, step: "venture", error: null, result: null };
+                  state.setupWizard = {
+                    ...state.setupWizard,
+                    open: true,
+                    step: "venture",
+                    error: null,
+                    result: null,
+                  };
                 },
               })
             : nothing
@@ -1094,18 +1106,31 @@ export function renderApp(state: AppViewState) {
                 onRefresh: () => void loadKaneruDashboard(state),
                 squadBuilder: (state as Record<string, unknown>).squadBuilderAgents
                   ? {
-                      availableAgents: (state as Record<string, unknown>).squadBuilderAgents as Array<{ agentId: string; role: string }>,
-                      selectedAgents: ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [],
-                      squadName: ((state as Record<string, unknown>).squadBuilderName as string) ?? "",
-                      strategy: ((state as Record<string, unknown>).squadBuilderStrategy as string) ?? "additive",
+                      availableAgents: (state as Record<string, unknown>)
+                        .squadBuilderAgents as Array<{ agentId: string; role: string }>,
+                      selectedAgents:
+                        ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [],
+                      squadName:
+                        ((state as Record<string, unknown>).squadBuilderName as string) ?? "",
+                      strategy:
+                        ((state as Record<string, unknown>).squadBuilderStrategy as string) ??
+                        "additive",
                       onToggleAgent: (agentId: string) => {
-                        const sel = ((state as Record<string, unknown>).squadBuilderSelected as string[]) ?? [];
-                        (state as Record<string, unknown>).squadBuilderSelected = sel.includes(agentId)
+                        const sel =
+                          ((state as Record<string, unknown>).squadBuilderSelected as string[]) ??
+                          [];
+                        (state as Record<string, unknown>).squadBuilderSelected = sel.includes(
+                          agentId,
+                        )
                           ? sel.filter((id) => id !== agentId)
                           : [...sel, agentId];
                       },
-                      onNameChange: (name: string) => { (state as Record<string, unknown>).squadBuilderName = name; },
-                      onStrategyChange: (strategy: string) => { (state as Record<string, unknown>).squadBuilderStrategy = strategy; },
+                      onNameChange: (name: string) => {
+                        (state as Record<string, unknown>).squadBuilderName = name;
+                      },
+                      onStrategyChange: (strategy: string) => {
+                        (state as Record<string, unknown>).squadBuilderStrategy = strategy;
+                      },
                       onCreate: () => {},
                       creating: false,
                     }
@@ -1120,12 +1145,19 @@ export function renderApp(state: AppViewState) {
                 loading: state.canvasLoading,
                 error: state.canvasError,
                 jsonl: state.canvasJsonl,
-                activeSurface: (state as Record<string, unknown>).canvasActiveSurface as string ?? "all",
+                activeSurface:
+                  ((state as Record<string, unknown>).canvasActiveSurface as string) ?? "all",
                 onSurfaceChange: (surface: string) => {
                   (state as Record<string, unknown>).canvasActiveSurface = surface;
                   void loadCanvasSurface(state, surface === "all" ? undefined : surface);
                 },
-                onRefresh: () => void loadCanvasSurface(state, ((state as Record<string, unknown>).canvasActiveSurface as string) === "all" ? undefined : (state as Record<string, unknown>).canvasActiveSurface as string),
+                onRefresh: () =>
+                  void loadCanvasSurface(
+                    state,
+                    ((state as Record<string, unknown>).canvasActiveSurface as string) === "all"
+                      ? undefined
+                      : ((state as Record<string, unknown>).canvasActiveSurface as string),
+                  ),
               })
             : nothing
         }
@@ -1196,7 +1228,7 @@ export function renderApp(state: AppViewState) {
             "route-task": "route task",
             "list-agents": "list agents",
             "squad-status": "squad status",
-            "decisions": "recent decisions",
+            decisions: "recent decisions",
           };
           const query = labels[action] ?? action;
           state.commandBar = { ...state.commandBar, query };
@@ -1218,6 +1250,29 @@ export function renderApp(state: AppViewState) {
         },
         onActivityChange: (activity: string) => {
           state.onboardingWizard = { ...state.onboardingWizard, selectedActivity: activity };
+        },
+        onRefreshOllamaModels: () => {
+          console.log("[onboarding] Refresh clicked, client connected:", !!state.client);
+          const next = { ...state.onboardingWizard };
+          next.saving = true;
+          state.onboardingWizard = { ...next };
+          detectOllama(next, state.client)
+            .then(() => {
+              console.log(
+                "[onboarding] detectOllama result:",
+                next.ollamaDetected,
+                "models:",
+                next.ollamaInstalledModels,
+              );
+              next.saving = false;
+              state.onboardingWizard = { ...next };
+            })
+            .catch((err) => {
+              console.error("[onboarding] Refresh failed:", err);
+              next.saving = false;
+              next.error = "Failed to check Ollama. Is the gateway running?";
+              state.onboardingWizard = { ...next };
+            });
         },
         onNext: () => {
           const next = { ...state.onboardingWizard };
@@ -1242,12 +1297,11 @@ export function renderApp(state: AppViewState) {
             onboardingNext(next);
             state.onboardingWizard = next;
             // Detect Ollama + GPU in parallel
-            Promise.all([
-              detectOllama(next, state.client),
-              detectGPU(next, state.client),
-            ]).then(() => {
-              state.onboardingWizard = { ...next };
-            });
+            Promise.all([detectOllama(next, state.client), detectGPU(next, state.client)]).then(
+              () => {
+                state.onboardingWizard = { ...next };
+              },
+            );
             return;
           }
           onboardingNext(next);

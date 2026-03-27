@@ -1971,9 +1971,7 @@ const agentMeshPlugin = {
       try {
         const summary = await dashboard.getSummary();
         const fullTable = taskRouter?.getRouteTable?.() ?? [];
-        const routeTable = fullTable
-          .sort((a, b) => b.qValue - a.qValue)
-          .slice(0, 100);
+        const routeTable = fullTable.sort((a, b) => b.qValue - a.qValue).slice(0, 100);
 
         // Collect available agents from all venture chains
         const availableAgents: Array<{ agentId: string; role: string }> = [];
@@ -1985,7 +1983,9 @@ const agentMeshPlugin = {
           const ventures = await vm.list();
           for (const v of ventures.slice(0, 10)) {
             const chain = await cm.getChain(v.id);
-            const extractAgents = (nodes: Array<{ agentId: string; role: string; children: unknown[] }>) => {
+            const extractAgents = (
+              nodes: Array<{ agentId: string; role: string; children: unknown[] }>,
+            ) => {
               for (const n of nodes) {
                 if (!availableAgents.some((a) => a.agentId === n.agentId)) {
                   availableAgents.push({ agentId: n.agentId, role: n.role });
@@ -2047,7 +2047,14 @@ const agentMeshPlugin = {
 
         const ventures = await vm.list();
         const venturesSummary = [];
-        const allMissions: Array<{ id: string; identifier: string; title: string; status: string; priority: string; claimedBy: string | null }> = [];
+        const allMissions: Array<{
+          id: string;
+          identifier: string;
+          title: string;
+          status: string;
+          priority: string;
+          claimedBy: string | null;
+        }> = [];
 
         let totalFuelSpent = 0;
         let activeMissions = 0;
@@ -2087,7 +2094,12 @@ const agentMeshPlugin = {
         }
 
         // Collect chain data from all ventures for visualization
-        const allChainNodes: Array<{ agentId: string; role: string; escalatesTo: string | null; children: unknown[] }> = [];
+        const allChainNodes: Array<{
+          agentId: string;
+          role: string;
+          escalatesTo: string | null;
+          children: unknown[];
+        }> = [];
         for (const v of ventures.slice(0, 20)) {
           try {
             const chain = await cm.getChain(v.id);
@@ -2153,8 +2165,10 @@ const agentMeshPlugin = {
 
         // 3. Create first mission
         const validPriorities = ["critical", "high", "medium", "low"] as const;
-        const priority = validPriorities.includes(p.missionPriority as typeof validPriorities[number])
-          ? (p.missionPriority as typeof validPriorities[number])
+        const priority = validPriorities.includes(
+          p.missionPriority as (typeof validPriorities)[number],
+        )
+          ? (p.missionPriority as (typeof validPriorities)[number])
           : "medium";
         const mission = await mm.create({
           ventureId: venture.id,
@@ -2181,7 +2195,8 @@ const agentMeshPlugin = {
     api.registerGatewayMethod("kaneru.canvas", async ({ params, respond }) => {
       try {
         const { loadCanvasData } = await import("../kaneru/canvas-gateway.js");
-        const { generateSurface, generateAllSurfaces } = await import("../kaneru/canvas-surfaces.js");
+        const { generateSurface, generateAllSurfaces } =
+          await import("../kaneru/canvas-surfaces.js");
 
         const data = await loadCanvasData(client, ns);
         const surfaceId = (params as { surface?: string })?.surface;
@@ -2255,6 +2270,50 @@ const agentMeshPlugin = {
           object: new Date().toISOString(),
         });
 
+        // Persist model + auth to config files so the agent can use them
+        try {
+          const nodePath = await import("node:path");
+          const nodeFsP = await import("node:fs/promises");
+          const home = process.env.HOME ?? "";
+
+          // Update mayros.json with model + ollama auth profile
+          const configPath = nodePath.join(home, ".mayros", "mayros.json");
+          let cfg: Record<string, any> = {};
+          try {
+            cfg = JSON.parse(await nodeFsP.readFile(configPath, "utf8"));
+          } catch {
+            /* new */
+          }
+          if (!cfg.agents) cfg.agents = {};
+          if (!cfg.agents.defaults) cfg.agents.defaults = {};
+          if (!cfg.agents.defaults.model) cfg.agents.defaults.model = {};
+          cfg.agents.defaults.model.primary = p.model;
+          if (p.provider === "local" && p.model.startsWith("ollama/")) {
+            if (!cfg.auth) cfg.auth = {};
+            if (!cfg.auth.profiles) cfg.auth.profiles = {};
+            cfg.auth.profiles["ollama"] = { provider: "ollama", mode: "api_key" };
+          }
+          await nodeFsP.writeFile(configPath, JSON.stringify(cfg, null, 2) + "\n");
+
+          // Write Ollama credentials to auth-profiles.json
+          if (p.provider === "local" && p.model.startsWith("ollama/")) {
+            const agentDir = nodePath.join(home, ".mayros", "agents", "main", "agent");
+            await nodeFsP.mkdir(agentDir, { recursive: true });
+            const storePath = nodePath.join(agentDir, "auth-profiles.json");
+            let store: Record<string, any> = { version: 2, profiles: {} };
+            try {
+              store = JSON.parse(await nodeFsP.readFile(storePath, "utf8"));
+            } catch {
+              /* new */
+            }
+            if (!store.profiles) store.profiles = {};
+            store.profiles["ollama"] = { provider: "ollama", type: "api_key", key: "ollama-local" };
+            await nodeFsP.writeFile(storePath, JSON.stringify(store, null, 2));
+          }
+        } catch {
+          // Config write failure is non-fatal — model is still in Cortex
+        }
+
         respond(true, { saved: true });
       } catch (err) {
         respond(false, { error: err instanceof Error ? err.message : String(err) });
@@ -2302,9 +2361,17 @@ const agentMeshPlugin = {
         const res = await fetch("http://127.0.0.1:11434/api/tags", {
           signal: AbortSignal.timeout(3000),
         });
-        respond(true, { detected: res.ok });
+        if (!res.ok) {
+          respond(true, { detected: false, models: [] });
+          return;
+        }
+        const data = (await res.json()) as { models?: Array<{ name?: string }> };
+        const models = (data.models ?? [])
+          .map((m: { name?: string }) => m.name ?? "")
+          .filter(Boolean);
+        respond(true, { detected: true, models });
       } catch {
-        respond(true, { detected: false });
+        respond(true, { detected: false, models: [] });
       }
     });
 

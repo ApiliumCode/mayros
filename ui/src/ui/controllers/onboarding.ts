@@ -1,5 +1,9 @@
 import type { GatewayBrowserClient } from "../gateway.ts";
-import type { OnboardingState, OnboardingStep, OnboardingProvider } from "../views/onboarding-wizard.ts";
+import type {
+  OnboardingState,
+  OnboardingStep,
+  OnboardingProvider,
+} from "../views/onboarding-wizard.ts";
 
 // ============================================================================
 // Initial state
@@ -14,6 +18,7 @@ export function createInitialOnboardingState(): OnboardingState {
     selectedActivity: "all",
     localModel: "llama3.1:8b",
     ollamaDetected: false,
+    ollamaInstalledModels: [],
     detectedVramMB: 4096,
     detectedGpuName: "",
     saving: false,
@@ -116,36 +121,45 @@ export async function detectOllama(
   state: OnboardingState,
   client?: GatewayBrowserClient | null,
 ): Promise<void> {
-  // Try gateway-side detection first (avoids CORS issues)
-  if (client) {
-    try {
-      const result = (await client.request("mamoru.status", {})) as Record<string, unknown>;
-      // If mamoru.status works, check runtimes
-      state.ollamaDetected = true; // gateway can reach Ollama server-side
-      return;
-    } catch {
-      // Gateway doesn't have mamoru — fall through
-    }
-  }
-
-  // Fallback: direct fetch (may fail due to CORS in browser)
-  try {
-    const res = await fetch("http://127.0.0.1:11434/api/tags", {
-      signal: AbortSignal.timeout(3000),
-    });
-    state.ollamaDetected = res.ok;
-  } catch {
-    // CORS or connection refused — try via gateway proxy
-    if (client) {
-      try {
-        const result = (await client.request("onboarding.detectOllama", {})) as { detected: boolean };
-        state.ollamaDetected = result.detected;
-        return;
-      } catch {
-        // no gateway support
-      }
-    }
+  // Always use gateway proxy (direct browser fetch blocked by CSP)
+  if (!client) {
     state.ollamaDetected = false;
+    return;
+  }
+  try {
+    const result = (await client.request("onboarding.detectOllama", {})) as {
+      detected: boolean;
+      models?: string[];
+    };
+    state.ollamaDetected = result.detected;
+    if (result.models) {
+      state.ollamaInstalledModels = result.models;
+    }
+  } catch {
+    state.ollamaDetected = false;
+  }
+}
+
+/**
+ * Fetch the list of models already downloaded in Ollama.
+ * Always uses the gateway proxy (direct browser fetch is blocked by CSP).
+ */
+export async function fetchOllamaModels(
+  state: OnboardingState,
+  client?: GatewayBrowserClient | null,
+): Promise<void> {
+  if (!client) return;
+  try {
+    const result = (await client.request("onboarding.detectOllama", {})) as {
+      detected: boolean;
+      models?: string[];
+    };
+    state.ollamaDetected = result.detected;
+    if (result.models) {
+      state.ollamaInstalledModels = result.models;
+    }
+  } catch {
+    // gateway doesn't support model listing yet
   }
 }
 
