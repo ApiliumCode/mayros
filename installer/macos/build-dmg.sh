@@ -341,18 +341,22 @@ rm -f "$DMG_PATH"
 
 echo "==> Creating DMG..."
 if command -v create-dmg &>/dev/null; then
-  create-dmg \
-    --volname "Mayros ${MAYROS_VERSION}" \
-    --volicon "$ASSETS_DIR/mayros.icns" \
-    --window-pos 200 120 \
-    --window-size 600 400 \
-    --icon-size 100 \
-    --icon "Mayros.app" 150 200 \
-    --app-drop-link 450 200 \
-    --hide-extension "Mayros.app" \
-    --no-internet-enable \
-    "$DMG_PATH" \
-    "$APP_DIR"
+  DMG_BG="$ASSETS_DIR/dmg-background.png"
+  DMG_ARGS=(
+    --volname "Mayros ${MAYROS_VERSION}"
+    --volicon "$ASSETS_DIR/mayros.icns"
+    --window-pos 200 120
+    --window-size 660 400
+    --icon-size 120
+    --icon "Mayros.app" 175 230
+    --app-drop-link 485 230
+    --hide-extension "Mayros.app"
+    --no-internet-enable
+  )
+  if [[ -f "$DMG_BG" ]]; then
+    DMG_ARGS+=(--background "$DMG_BG")
+  fi
+  create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_DIR"
 else
   echo "  -> create-dmg not found, using hdiutil fallback"
   TEMP_DMG="$BUILD_DIR/temp.dmg"
