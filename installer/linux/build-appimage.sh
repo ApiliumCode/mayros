@@ -160,12 +160,31 @@ if [[ ! -f "$CLI" ]]; then
   bash "$HERE/usr/lib/mayros/install-cli.sh"
 fi
 
-# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
-CONFIG_FILE="$HOME/.mayros/mayros.json"
-if [[ -f "$CONFIG_FILE" ]]; then
-  "$NODE" -e "const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" 2>/dev/null || true
-else
-  echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
+# Minimal config: gateway.mode=local + auth.mode=none
+MAYROS_DIR="$HOME/.mayros"
+mkdir -p "$MAYROS_DIR"
+CONFIG_FILE="$MAYROS_DIR/mayros.json"
+"$NODE" -e "
+  const fs = require('fs');
+  const f = '$CONFIG_FILE';
+  let c = {};
+  try { c = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+  if (!c.gateway) c.gateway = {};
+  if (!c.gateway.mode) c.gateway.mode = 'local';
+  if (!c.gateway.auth) c.gateway.auth = {};
+  c.gateway.auth.mode = 'none';
+  fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n');
+" 2>/dev/null || echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
+
+# Bootstrap workspace templates
+TEMPLATES="$HERE/usr/lib/mayros/node_modules/@apilium/mayros/docs/reference/templates"
+WORKSPACE="$MAYROS_DIR/workspace"
+if [[ -d "$TEMPLATES" ]]; then
+  mkdir -p "$WORKSPACE"
+  for tmpl in AGENTS.md MAYROS.md TOOLS.md IDENTITY.md USER.md HOPE.md BOOTSTRAP.md; do
+    [[ -f "$TEMPLATES/$tmpl" ]] && [[ ! -f "$WORKSPACE/$tmpl" ]] && cp "$TEMPLATES/$tmpl" "$WORKSPACE/$tmpl"
+  done
+  [[ ! -f "$WORKSPACE/MEMORY.md" ]] && echo "# Memory" > "$WORKSPACE/MEMORY.md"
 fi
 
 # Start Cortex if not running and wait for it
