@@ -309,14 +309,19 @@ if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
   "$NODE" "$CLI" gateway install >>"$LOG" 2>&1 || true
   "$NODE" "$CLI" gateway start >>"$LOG" 2>&1 &
 fi
-# Always wait for Gateway to be healthy before opening dashboard
+# Wait for Gateway to be healthy, then open portal
+GATEWAY_OK=false
 for i in $(seq 1 30); do
-  curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
+  if curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1; then
+    GATEWAY_OK=true
+    break
+  fi
   sleep 1
 done
 
-# Open the portal
-exec "$NODE" "$CLI" dashboard
+if [[ "$GATEWAY_OK" == "true" ]]; then
+  open "http://127.0.0.1:18789"
+fi
 LAUNCHER
 chmod +x "$APP_DIR/Contents/MacOS/mayros-launcher"
 
