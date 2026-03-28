@@ -1251,6 +1251,9 @@ export function renderApp(state: AppViewState) {
         onActivityChange: (activity: string) => {
           state.onboardingWizard = { ...state.onboardingWizard, selectedActivity: activity };
         },
+        onAgentNameChange: (name: string) => {
+          state.onboardingWizard = { ...state.onboardingWizard, agentName: name };
+        },
         onRefreshOllamaModels: () => {
           console.log("[onboarding] Refresh clicked, client connected:", !!state.client);
           const next = { ...state.onboardingWizard };

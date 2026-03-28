@@ -19,6 +19,7 @@ export type OnboardingState = {
   ollamaInstalledModels: string[];
   detectedVramMB: number;
   detectedGpuName: string;
+  agentName: string;
   saving: boolean;
   error: string | null;
   gatewayOk: boolean;
@@ -32,6 +33,7 @@ export type OnboardingWizardProps = {
   onLocalModelChange: (model: string) => void;
   onActivityChange?: (activity: string) => void;
   onRefreshOllamaModels?: () => void;
+  onAgentNameChange: (name: string) => void;
   onNext: () => void;
   onBack: () => void;
   onComplete: () => void;
@@ -979,6 +981,21 @@ function renderReadyStep(props: OnboardingWizardProps) {
         <p style="margin: 0; font-size: 14px; color: #888;">
           Your agent gateway is configured and running.
         </p>
+      </div>
+
+      <!-- Agent name -->
+      <div style="margin-bottom: 20px;">
+        <label style="${LABEL_STYLE}">Name your agent</label>
+        <input
+          type="text"
+          style="${INPUT_STYLE}"
+          .value=${s.agentName}
+          placeholder="Atlas"
+          @input=${(e: Event) => props.onAgentNameChange((e.target as HTMLInputElement).value)}
+        />
+        <div style="font-size: 12px; color: #666; margin-top: 4px;">
+          You can change this later in IDENTITY.md
+        </div>
       </div>
 
       <div style="

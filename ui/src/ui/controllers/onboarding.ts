@@ -19,6 +19,7 @@ export function createInitialOnboardingState(): OnboardingState {
     localModel: "llama3.1:8b",
     ollamaDetected: false,
     ollamaInstalledModels: [],
+    agentName: "Atlas",
     detectedVramMB: 4096,
     detectedGpuName: "",
     saving: false,
@@ -76,6 +77,7 @@ export async function saveOnboardingConfig(
       provider: state.provider,
       apiKey: state.provider !== "local" ? state.apiKey : "",
       model,
+      agentName: state.agentName.trim() || "Atlas",
     });
   } catch (err) {
     state.error = `Failed to save configuration: ${err instanceof Error ? err.message : String(err)}`;

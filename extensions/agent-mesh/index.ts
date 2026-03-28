@@ -2243,6 +2243,7 @@ const agentMeshPlugin = {
           provider: string;
           apiKey: string;
           model: string;
+          agentName?: string;
         };
 
         // Store onboarding config as triples in Cortex
@@ -2309,6 +2310,18 @@ const agentMeshPlugin = {
             if (!store.profiles) store.profiles = {};
             store.profiles["ollama"] = { provider: "ollama", type: "api_key", key: "ollama-local" };
             await nodeFsP.writeFile(storePath, JSON.stringify(store, null, 2));
+          }
+
+          // Write agent name to IDENTITY.md
+          const agentName = p.agentName?.trim() || "Atlas";
+          const workspaceDir = nodePath.join(home, ".mayros", "workspace");
+          const identityPath = nodePath.join(workspaceDir, "IDENTITY.md");
+          try {
+            let identity = await nodeFsP.readFile(identityPath, "utf8");
+            identity = identity.replace(/- \*\*Name:\*\*.*/, `- **Name:** ${agentName}`);
+            await nodeFsP.writeFile(identityPath, identity);
+          } catch {
+            /* workspace not ready yet — non-fatal */
           }
         } catch {
           // Config write failure is non-fatal — model is still in Cortex
