@@ -1,6 +1,6 @@
 # Mayros Installer Infrastructure
 
-Cross-platform installer build scripts for Mayros v0.3.1.
+Cross-platform installer build scripts for Mayros v0.3.2.
 
 ## Directory Structure
 
@@ -75,7 +75,7 @@ cd installer\windows
 .\build-installer.ps1 -SkipDownload
 ```
 
-Output: `installer/windows/output/mayros-0.3.1-setup.exe`
+Output: `installer/windows/output/mayros-0.3.2-setup.exe`
 
 ### macOS DMG
 
@@ -87,7 +87,7 @@ cd installer/macos
 ./build-dmg.sh --sign "Developer ID Application: Apilium Technologies"
 ```
 
-Output: `installer/macos/output/Mayros-0.3.1.dmg`
+Output: `installer/macos/output/Mayros-0.3.2.dmg`
 
 ### Linux AppImage
 
@@ -99,7 +99,7 @@ cd installer/linux
 ./build-appimage.sh --arch arm64
 ```
 
-Output: `installer/linux/output/Mayros-0.3.1-x86_64.AppImage`
+Output: `installer/linux/output/Mayros-0.3.2-x86_64.AppImage`
 
 ### Linux .deb Package
 
@@ -111,17 +111,17 @@ cd installer/linux
 ./build-deb.sh --arch arm64
 ```
 
-Output: `installer/linux/output/mayros_0.3.1_amd64.deb`
+Output: `installer/linux/output/mayros_0.3.2_amd64.deb`
 
 ## Bundled Components
 
 Each installer packages three components:
 
-| Component       | Version | Source                                |
-|-----------------|---------|---------------------------------------|
-| Mayros CLI      | 0.3.1   | npm: `@apilium/mayros`                |
-| Node.js         | 22.16.0 | nodejs.org (portable/binary)          |
-| AIngle Cortex   | 0.6.3   | GitHub: `ApiliumCode/aingle` releases  |
+| Component     | Version | Source                                |
+| ------------- | ------- | ------------------------------------- |
+| Mayros CLI    | 0.3.2   | npm: `@apilium/mayros`                |
+| Node.js       | 22.16.0 | nodejs.org (portable/binary)          |
+| AIngle Cortex | 0.6.3   | GitHub: `ApiliumCode/aingle` releases |
 
 ## What the Installers Do
 
