@@ -142,6 +142,11 @@ export type AppViewState = {
   kaneruLoading: boolean;
   kaneruError: string | null;
   kaneruDashboard: KaneruDashboardResponse | null;
+  squadBuilderAgents: Array<{ agentId: string; role: string }>;
+  squadBuilderSelected: string[];
+  squadBuilderName: string;
+  squadBuilderStrategy: string;
+  squadBuilderCreating: boolean;
   canvasLoading: boolean;
   canvasError: string | null;
   canvasJsonl: string | null;

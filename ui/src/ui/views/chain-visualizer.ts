@@ -1,4 +1,4 @@
-import { html, nothing } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
 
 // ============================================================================
 // Types
@@ -47,7 +47,7 @@ const TREE_BRANCH_STYLE = `
 // Render functions
 // ============================================================================
 
-function renderChainNode(node: ChainNodeData, isRoot: boolean) {
+function renderChainNode(node: ChainNodeData, isRoot: boolean): TemplateResult {
   const wrapperStyle = isRoot ? "margin: 8px 0;" : TREE_BRANCH_STYLE;
 
   return html`

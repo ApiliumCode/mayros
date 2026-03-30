@@ -230,6 +230,11 @@ export class MayrosApp extends LitElement {
   @state() kaneruLoading = false;
   @state() kaneruError: string | null = null;
   @state() kaneruDashboard: KaneruDashboardResponse | null = null;
+  @state() squadBuilderAgents: Array<{ agentId: string; role: string }> = [];
+  @state() squadBuilderSelected: string[] = [];
+  @state() squadBuilderName = "";
+  @state() squadBuilderStrategy = "additive";
+  @state() squadBuilderCreating = false;
 
   @state() canvasLoading = false;
   @state() canvasError: string | null = null;

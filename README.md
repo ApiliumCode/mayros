@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>AI agent framework · Coding CLI · Personal assistant</strong><br>
-  <em>One platform. Your terminal, your channels, your devices.</em>
+  One platform. Your terminal, your channels, your devices.
 </p>
 
 <p align="center">
@@ -388,7 +388,7 @@ CLI: `mayros workflow run|list` · `mayros dashboard team|summary|agent` · `may
 
 Kaneru turns Mayros into a full AI venture platform. Create organizations of agents that learn, coordinate, and improve over time — all stored in Cortex, all DAG-auditable.
 
-### Quick Start
+### Kaneru Quick Start
 
 ```bash
 # Install a pre-built venture template (security-audit, content-pipeline, devops-squad)
