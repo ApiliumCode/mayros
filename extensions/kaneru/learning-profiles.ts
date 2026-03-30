@@ -104,9 +104,10 @@ export class LearningProfileManager {
 
   /** Record a mission outcome and update the agent's learning profile. */
   async recordOutcome(outcome: MissionOutcome): Promise<LearningProfile> {
-    const { domain, taskType } = outcome.domain && outcome.taskType
-      ? { domain: outcome.domain, taskType: outcome.taskType }
-      : classifyMission(outcome.title);
+    const { domain, taskType } =
+      outcome.domain && outcome.taskType
+        ? { domain: outcome.domain, taskType: outcome.taskType }
+        : classifyMission(outcome.title);
 
     const existing = await this.getProfile(outcome.agentId, domain, taskType);
 
@@ -152,7 +153,11 @@ export class LearningProfileManager {
   }
 
   /** Get a specific learning profile. */
-  async getProfile(agentId: string, domain: string, taskType: string): Promise<LearningProfile | null> {
+  async getProfile(
+    agentId: string,
+    domain: string,
+    taskType: string,
+  ): Promise<LearningProfile | null> {
     const subject = profileSubject(this.ns, agentId, domain, taskType);
     const result = await this.client.listTriples({ subject, limit: 20 });
     return parseProfileTriples(this.ns, agentId, domain, taskType, result.triples);
@@ -218,9 +223,7 @@ export class LearningProfileManager {
       if (profile) profiles.push(profile);
     }
 
-    return profiles
-      .sort((a, b) => b.expertise - a.expertise)
-      .slice(0, limit);
+    return profiles.sort((a, b) => b.expertise - a.expertise).slice(0, limit);
   }
 
   // ---------- Field helpers ----------

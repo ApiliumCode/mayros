@@ -171,9 +171,7 @@ describe("AgentTerminalService", () => {
       });
 
       // Find the stdout triple
-      const stdoutTriple = storedTriples.find((t) =>
-        String(t.predicate).includes("stdout"),
-      );
+      const stdoutTriple = storedTriples.find((t) => String(t.predicate).includes("stdout"));
       expect(stdoutTriple).toBeTruthy();
       expect(String(stdoutTriple!.object).length).toBe(2000);
     });
@@ -190,9 +188,7 @@ describe("AgentTerminalService", () => {
 
       // 8 fields including missionId
       expect(storedTriples.length).toBe(8);
-      const missionTriple = storedTriples.find((t) =>
-        String(t.predicate).includes("missionId"),
-      );
+      const missionTriple = storedTriples.find((t) => String(t.predicate).includes("missionId"));
       expect(missionTriple).toBeTruthy();
       expect(String(missionTriple!.object)).toBe("mission-42");
     });

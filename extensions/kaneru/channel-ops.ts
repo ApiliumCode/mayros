@@ -87,9 +87,7 @@ export class ChannelOpsService {
   /** Build a mission completion notification. */
   buildMissionReport(mission: Mission, outcome: MissionOutcome): ChannelNotification {
     const status = outcome.success ? "completed" : "failed";
-    const duration = outcome.durationMs > 0
-      ? ` in ${Math.round(outcome.durationMs / 1000)}s`
-      : "";
+    const duration = outcome.durationMs > 0 ? ` in ${Math.round(outcome.durationMs / 1000)}s` : "";
 
     return {
       type: "mission-complete",
@@ -120,9 +118,8 @@ export class ChannelOpsService {
 
   /** Build a decision pending notification. */
   buildDecisionPrompt(decision: DecisionRecord): ChannelNotification {
-    const participants = decision.participants.length > 0
-      ? `\nParticipants: ${decision.participants.join(", ")}`
-      : "";
+    const participants =
+      decision.participants.length > 0 ? `\nParticipants: ${decision.participants.join(", ")}` : "";
 
     return {
       type: "decision-pending",

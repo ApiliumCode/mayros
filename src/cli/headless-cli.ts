@@ -201,7 +201,7 @@ export async function runHeadless(opts: HeadlessOptions): Promise<void> {
 
   // 3. Ensure gateway + cortex are running (unless explicit --url was provided)
   if (!opts.url) {
-    const snapshot = readConfigFileSnapshot();
+    const snapshot = await readConfigFileSnapshot();
     const config = snapshot.valid ? snapshot.config : {};
     await ensureServicesRunning({
       config,

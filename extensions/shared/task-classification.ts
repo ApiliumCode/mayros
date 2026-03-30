@@ -23,7 +23,16 @@ export type TaskClassification = {
 // ============================================================================
 
 export const TASK_TYPE_KEYWORDS: Record<string, string[]> = {
-  "code-review": ["review", "pr", "pull request", "check", "lint", "inspect", "approve", "feedback"],
+  "code-review": [
+    "review",
+    "pr",
+    "pull request",
+    "check",
+    "lint",
+    "inspect",
+    "approve",
+    "feedback",
+  ],
   "security-scan": ["security", "vulnerability", "cve", "owasp", "audit", "pentest"],
   implementation: ["implement", "build", "create", "add", "feature", "develop"],
   refactoring: ["refactor", "clean", "simplify", "extract", "restructure"],

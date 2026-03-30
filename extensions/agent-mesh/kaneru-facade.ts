@@ -15,6 +15,7 @@ import { NamespaceManager } from "./namespace-manager.js";
 import { KnowledgeFusion } from "./knowledge-fusion.js";
 import { TeamManager } from "./team-manager.js";
 import { AgentMailbox } from "./agent-mailbox.js";
+import type { MailMessageType } from "./agent-mailbox.js";
 import { BackgroundTracker } from "./background-tracker.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
 import { TaskRouter } from "./task-router.js";
@@ -25,7 +26,11 @@ import { TeamDashboardService } from "./team-dashboard.js";
 import { LearningProfileManager } from "../kaneru/learning-profiles.js";
 import type { LearningProfile } from "../kaneru/learning-profiles.js";
 import { DecisionHistory } from "../kaneru/decision-history.js";
-import type { DecisionRecord, DecisionContext, ConsensusResultLike } from "../kaneru/decision-history.js";
+import type {
+  DecisionRecord,
+  DecisionContext,
+  ConsensusResultLike,
+} from "../kaneru/decision-history.js";
 import { KnowledgeTransferService } from "../kaneru/knowledge-transfer.js";
 import type { TransferResult } from "../kaneru/knowledge-transfer.js";
 import { DojoService } from "../kaneru/dojo.js";
@@ -44,7 +49,8 @@ import { VentureManager } from "../kaneru/venture.js";
 import { ChainManager } from "../kaneru/chain.js";
 import { DirectiveManager } from "../kaneru/directives.js";
 import { randomUUID } from "node:crypto";
-import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
+import type { MergeStrategy } from "./mesh-protocol.js";
+import type { ConsensusStrategy } from "./consensus-engine.js";
 
 // ============================================================================
 // Types
@@ -162,13 +168,22 @@ export class KaneruFacade {
     this.taskRouter.setLearningProfiles(this.learningProfiles);
     this.decisionHistory = new DecisionHistory(this.client, this.ns);
     this.knowledgeTransfer = new KnowledgeTransferService(
-      this.client, this.ns, this.fusion, this.nsMgr,
+      this.client,
+      this.ns,
+      this.fusion,
+      this.nsMgr,
     );
 
     const ventureManager = new VentureManager(this.client, this.ns);
     const chainManager = new ChainManager(this.client, this.ns);
     const directiveManager = new DirectiveManager(this.client, this.ns);
-    this.dojo = new DojoService(this.client, this.ns, ventureManager, chainManager, directiveManager);
+    this.dojo = new DojoService(
+      this.client,
+      this.ns,
+      ventureManager,
+      chainManager,
+      directiveManager,
+    );
     this.channelOps = new ChannelOpsService(this.ns);
     this.distributed = new DistributedVentureManager(this.client, this.ns);
     this.comments = new MissionCommentService(this.client, this.ns);
@@ -276,7 +291,7 @@ export class KaneruFacade {
       from,
       to,
       content,
-      type: (type ?? "info") as "task" | "result" | "info" | "error",
+      type: (type ?? "info") as MailMessageType,
     });
   }
 
@@ -361,14 +376,21 @@ export class KaneruFacade {
   // ---- Knowledge Transfer ----
 
   /** Transfer knowledge from agent's namespace to shared namespace. */
-  async transferKnowledge(agentId: string, missionId: string, squadId?: string): Promise<TransferResult> {
+  async transferKnowledge(
+    agentId: string,
+    missionId: string,
+    squadId?: string,
+  ): Promise<TransferResult> {
     return this.knowledgeTransfer.transferOnComplete(agentId, missionId, squadId);
   }
 
   // ---- Decision History ----
 
   /** Record a consensus result as a decision. */
-  async recordDecision(result: ConsensusResultLike, context?: DecisionContext): Promise<DecisionRecord> {
+  async recordDecision(
+    result: ConsensusResultLike,
+    context?: DecisionContext,
+  ): Promise<DecisionRecord> {
     return this.decisionHistory.record(result, context);
   }
 
@@ -385,10 +407,14 @@ export class KaneruFacade {
   // ---- Dojo ----
 
   /** List available Dojo venture templates. */
-  async dojoList(): Promise<DojoTemplate[]> { return this.dojo.listTemplates(); }
+  async dojoList(): Promise<DojoTemplate[]> {
+    return this.dojo.listTemplates();
+  }
 
   /** Preview a Dojo template as a human-readable string. */
-  async dojoPreview(templateId: string): Promise<string> { return this.dojo.preview(templateId); }
+  async dojoPreview(templateId: string): Promise<string> {
+    return this.dojo.preview(templateId);
+  }
 
   /** Install a Dojo template as a new venture. */
   async dojoInstall(templateId: string, ventureName: string): Promise<DojoInstallResult> {
@@ -449,7 +475,10 @@ export class KaneruFacade {
   // ---- Cost Analytics ----
 
   /** Full cost analytics for a venture. */
-  async costAnalysis(ventureId: string, opts?: { period?: string; fuelLimit?: number }): Promise<CostAnalytics> {
+  async costAnalysis(
+    ventureId: string,
+    opts?: { period?: string; fuelLimit?: number },
+  ): Promise<CostAnalytics> {
     return this.costAnalyticsSvc.analyze(ventureId, {
       period: (opts?.period as "daily" | "weekly" | "monthly") ?? "daily",
       fuelLimit: opts?.fuelLimit,
@@ -460,9 +489,7 @@ export class KaneruFacade {
   async getDashboard(): Promise<KaneruDashboardData> {
     const summary = await this.dashboard.getSummary();
     const fullTable = this.taskRouter.getRouteTable?.() ?? [];
-    const routeTable = fullTable
-      .sort((a, b) => b.qValue - a.qValue)
-      .slice(0, 100);
+    const routeTable = fullTable.sort((a, b) => b.qValue - a.qValue).slice(0, 100);
     return {
       squads: summary.teams.map((t) => ({
         id: t.teamId,

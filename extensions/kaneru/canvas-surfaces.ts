@@ -12,7 +12,11 @@
 // Types
 // ============================================================================
 
-export type CanvasSurfaceId = "kaneru-overview" | "kaneru-missions" | "kaneru-chain" | "kaneru-fuel";
+export type CanvasSurfaceId =
+  | "kaneru-overview"
+  | "kaneru-missions"
+  | "kaneru-chain"
+  | "kaneru-fuel";
 
 type A2UIComponent = {
   id: string;
@@ -95,7 +99,10 @@ function card(id: string, childIds: string[]): A2UIComponent {
 }
 
 function button(id: string, label: string, action: string): A2UIComponent {
-  return { id, component: { Button: { label: { literalString: label }, action: { literalString: action } } } };
+  return {
+    id,
+    component: { Button: { label: { literalString: label }, action: { literalString: action } } },
+  };
 }
 
 function divider(id: string): A2UIComponent {
@@ -113,7 +120,12 @@ function formatCents(cents: number): string {
 }
 
 function priorityLabel(priority: string): string {
-  const map: Record<string, string> = { critical: "CRITICAL", high: "HIGH", medium: "MED", low: "LOW" };
+  const map: Record<string, string> = {
+    critical: "CRITICAL",
+    high: "HIGH",
+    medium: "MED",
+    low: "LOW",
+  };
   return map[priority] ?? priority.toUpperCase();
 }
 
@@ -149,13 +161,20 @@ export function generateOverviewSurface(data: CanvasVentureData): string {
   for (let i = 0; i < data.ventures.length && i < 20; i++) {
     const v = data.ventures[i];
     const vid = `v-${i}`;
-    const fuelText = v.fuelLimit > 0
-      ? `${formatCents(v.fuelSpent)} / ${formatCents(v.fuelLimit)}`
-      : formatCents(v.fuelSpent);
+    const fuelText =
+      v.fuelLimit > 0
+        ? `${formatCents(v.fuelSpent)} / ${formatCents(v.fuelLimit)}`
+        : formatCents(v.fuelSpent);
 
     components.push(card(vid, [`${vid}-name`, `${vid}-info`, `${vid}-fuel`]));
     components.push(text(`${vid}-name`, `[${v.prefix}] ${v.name}`, "h3"));
-    components.push(text(`${vid}-info`, `${v.status} | ${v.agentCount} agents | ${v.missionCount} missions`, "caption"));
+    components.push(
+      text(
+        `${vid}-info`,
+        `${v.status} | ${v.agentCount} agents | ${v.missionCount} missions`,
+        "caption",
+      ),
+    );
     components.push(text(`${vid}-fuel`, `Fuel: ${fuelText}`, "body"));
     ventureCardIds.push(vid);
   }
@@ -182,7 +201,11 @@ export function generateMissionsSurface(data: CanvasVentureData): string {
 
   const statuses = ["queued", "ready", "active", "review", "complete"];
   const statusLabels: Record<string, string> = {
-    queued: "Queued", ready: "Ready", active: "Active", review: "Review", complete: "Complete",
+    queued: "Queued",
+    ready: "Ready",
+    active: "Active",
+    review: "Review",
+    complete: "Complete",
   };
 
   for (const status of statuses) {
@@ -204,7 +227,9 @@ export function generateMissionsSurface(data: CanvasVentureData): string {
       }
 
       components.push(card(mid, cardChildren));
-      components.push(text(`${mid}-id`, `${m.identifier} [${priorityLabel(m.priority)}]`, "caption"));
+      components.push(
+        text(`${mid}-id`, `${m.identifier} [${priorityLabel(m.priority)}]`, "caption"),
+      );
       components.push(text(`${mid}-title`, m.title, "body"));
       components.push(text(`${mid}-meta`, claimInfo, "caption"));
 
@@ -247,7 +272,10 @@ export function generateChainSurface(data: CanvasVentureData): string {
     nodeIds.push("no-chain");
   } else {
     let idx = 0;
-    const renderNode = (node: { agentId: string; role: string; children: Array<{ agentId: string; role: string }> }, depth: number) => {
+    const renderNode = (
+      node: { agentId: string; role: string; children: Array<{ agentId: string; role: string }> },
+      depth: number,
+    ) => {
       const nid = `chain-${idx++}`;
       const indent = depth > 0 ? "  ".repeat(depth) + "-> " : "";
       components.push(card(nid, [`${nid}-name`, `${nid}-role`]));
@@ -255,7 +283,7 @@ export function generateChainSurface(data: CanvasVentureData): string {
       components.push(text(`${nid}-role`, node.role, "caption"));
       nodeIds.push(nid);
 
-      for (const child of (node.children ?? [])) {
+      for (const child of node.children ?? []) {
         renderNode(child as typeof node, depth + 1);
       }
     };
@@ -290,7 +318,13 @@ export function generateFuelSurface(data: CanvasVentureData): string {
 
   const daysLeft = data.fuel?.daysUntilExhausted;
   components.push(card("fuel-exhaust", ["fuel-exhaust-val", "fuel-exhaust-lbl"]));
-  components.push(text("fuel-exhaust-val", daysLeft !== null && daysLeft !== undefined ? `${daysLeft}d` : "N/A", "h2"));
+  components.push(
+    text(
+      "fuel-exhaust-val",
+      daysLeft !== null && daysLeft !== undefined ? `${daysLeft}d` : "N/A",
+      "h2",
+    ),
+  );
   components.push(text("fuel-exhaust-lbl", "Days Left", "caption"));
 
   components.push(row("fuel-summary", summaryIds));
@@ -301,7 +335,13 @@ export function generateFuelSurface(data: CanvasVentureData): string {
   for (let i = 0; i < providers.length && i < 10; i++) {
     const p = providers[i];
     const pid = `prov-${i}`;
-    components.push(text(pid, `${p.provider}/${p.model}: ${formatCents(p.costCents)} (${p.eventCount} events)`, "body"));
+    components.push(
+      text(
+        pid,
+        `${p.provider}/${p.model}: ${formatCents(p.costCents)} (${p.eventCount} events)`,
+        "body",
+      ),
+    );
     providerIds.push(pid);
   }
 
@@ -316,7 +356,16 @@ export function generateFuelSurface(data: CanvasVentureData): string {
   components.push(divider("fuel-div"));
   components.push(button("fuel-refresh", "Refresh", "refresh-fuel"));
 
-  components.push(column("root", ["fuel-title", "fuel-summary", "fuel-div", "prov-title", "prov-list", "fuel-refresh"]));
+  components.push(
+    column("root", [
+      "fuel-title",
+      "fuel-summary",
+      "fuel-div",
+      "prov-title",
+      "prov-list",
+      "fuel-refresh",
+    ]),
+  );
 
   return buildJsonl("kaneru-fuel", components, "root");
 }
@@ -324,10 +373,14 @@ export function generateFuelSurface(data: CanvasVentureData): string {
 /** Generate a specific surface by ID. */
 export function generateSurface(surfaceId: CanvasSurfaceId, data: CanvasVentureData): string {
   switch (surfaceId) {
-    case "kaneru-overview": return generateOverviewSurface(data);
-    case "kaneru-missions": return generateMissionsSurface(data);
-    case "kaneru-chain": return generateChainSurface(data);
-    case "kaneru-fuel": return generateFuelSurface(data);
+    case "kaneru-overview":
+      return generateOverviewSurface(data);
+    case "kaneru-missions":
+      return generateMissionsSurface(data);
+    case "kaneru-chain":
+      return generateChainSurface(data);
+    case "kaneru-fuel":
+      return generateFuelSurface(data);
   }
 }
 

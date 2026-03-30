@@ -55,7 +55,7 @@ export class SessionManager {
    * Rename the current session.
    */
   async renameSession(key: string, displayName: string): Promise<void> {
-    await this.client.patchSession({ key, displayName });
+    await this.client.patchSession({ key, label: displayName });
   }
 
   /**

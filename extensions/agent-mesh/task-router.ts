@@ -136,7 +136,11 @@ export class TaskRouter {
         for (const a of available) {
           const perfScore = await this.perfTracker.getScore(a);
           const expertise = this.learningProfiles
-            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            ? await this.learningProfiles.getExpertise(
+                a,
+                classification.domain,
+                classification.taskType,
+              )
             : 0.5;
           // Blend: 40% performance EMA + 60% learned expertise
           const blended = 0.4 * perfScore + 0.6 * expertise;
@@ -158,7 +162,11 @@ export class TaskRouter {
         for (const a of available) {
           const q = stateActions.get(a) ?? 0;
           const expertise = this.learningProfiles
-            ? await this.learningProfiles.getExpertise(a, classification.domain, classification.taskType)
+            ? await this.learningProfiles.getExpertise(
+                a,
+                classification.domain,
+                classification.taskType,
+              )
             : 0.5;
           // Normalize Q-value to 0-1 range (sigmoid-like: q / (1 + |q|))
           const qNorm = q / (1 + Math.abs(q));

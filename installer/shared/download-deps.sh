@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-MAYROS_VERSION="0.3.1"
+MAYROS_VERSION="0.3.2"
 NODE_VERSION="22.16.0"
 CORTEX_VERSION="0.6.3"
 CORTEX_REPO="ApiliumCode/aingle"

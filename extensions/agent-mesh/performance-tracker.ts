@@ -54,7 +54,7 @@ export class PerformanceTracker {
   async recordOutcome(outcome: TaskOutcome): Promise<void> {
     let record = this.cache.get(outcome.agentId);
     if (!record) {
-      record = await this.loadRecord(outcome.agentId);
+      record = (await this.loadRecord(outcome.agentId)) ?? undefined;
     }
 
     if (!record) {

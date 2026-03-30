@@ -112,11 +112,11 @@ function renderVenturesTable(ventures: VentureSummary[]) {
             </tr>
           </thead>
           <tbody>
-            ${ventures.map(
-              (v) => {
-                const pct = fuelPercent(v.fuelSpent, v.fuelLimit);
-                const barColor = pct >= 90 ? "var(--color-warn, #e2a03f)" : "var(--color-ok, #25c281)";
-                return html`
+            ${ventures.map((v) => {
+              const pct = fuelPercent(v.fuelSpent, v.fuelLimit);
+              const barColor =
+                pct >= 90 ? "var(--color-warn, #e2a03f)" : "var(--color-ok, #25c281)";
+              return html`
                   <tr>
                     <td><code>${v.id}</code></td>
                     <td>${v.name}</td>
@@ -140,8 +140,7 @@ function renderVenturesTable(ventures: VentureSummary[]) {
                     <td style="text-align: right;">${v.missionCount}</td>
                   </tr>
                 `;
-              },
-            )}
+            })}
           </tbody>
         </table>
       </div>
@@ -158,10 +157,13 @@ function renderMissionColumn(status: string, missions: MissionSummary[]) {
         </span>
         <span class="muted" style="font-size: 0.8em;">(${missions.length})</span>
       </div>
-      ${missions.length === 0
-        ? html`<div class="muted" style="font-size: 0.85em; padding: 8px 0;">No missions</div>`
-        : missions.map(
-            (m) => html`
+      ${
+        missions.length === 0
+          ? html`
+              <div class="muted" style="font-size: 0.85em; padding: 8px 0">No missions</div>
+            `
+          : missions.map(
+              (m) => html`
               <div
                 style="
                   background: var(--bg-secondary);
@@ -175,12 +177,17 @@ function renderMissionColumn(status: string, missions: MissionSummary[]) {
                   ${priorityBadge(m.priority)}
                 </div>
                 <div style="font-size: 0.9em; margin-bottom: 4px;">${m.title}</div>
-                ${m.claimedBy
-                  ? html`<div class="muted" style="font-size: 0.8em;">Agent: <code>${m.claimedBy}</code></div>`
-                  : html`<div class="muted" style="font-size: 0.8em;">Unclaimed</div>`}
+                ${
+                  m.claimedBy
+                    ? html`<div class="muted" style="font-size: 0.8em;">Agent: <code>${m.claimedBy}</code></div>`
+                    : html`
+                        <div class="muted" style="font-size: 0.8em">Unclaimed</div>
+                      `
+                }
               </div>
             `,
-          )}
+            )
+      }
     </div>
   `;
 }
@@ -261,13 +268,15 @@ export function renderVenturesDashboard(props: VentureDashboardProps) {
         <div style="flex: 1;">
           <span class="muted">Ventures: ${d.ventures.length} | Missions: ${d.missions.length}</span>
         </div>
-        ${props.onNewVenture
-          ? html`<button
+        ${
+          props.onNewVenture
+            ? html`<button
               class="btn btn--sm"
               style="background: var(--accent, #ff5c5c); color: var(--accent-foreground, #fff);"
               @click=${() => props.onNewVenture!()}
             >New Venture</button>`
-          : nothing}
+            : nothing
+        }
         <button class="btn btn--sm" ?disabled=${props.loading} @click=${() => props.onRefresh()}>
           Refresh
         </button>
@@ -279,12 +288,14 @@ export function renderVenturesDashboard(props: VentureDashboardProps) {
 
       ${renderMissionBoard(d.missions)}
 
-      ${d.chain && d.chain.length > 0
-        ? renderChainVisualizer({
-            chain: d.chain,
-            ventureId: d.ventures.length > 0 ? d.ventures[0].id : "",
-          })
-        : nothing}
+      ${
+        d.chain && d.chain.length > 0
+          ? renderChainVisualizer({
+              chain: d.chain,
+              ventureId: d.ventures.length > 0 ? d.ventures[0].id : "",
+            })
+          : nothing
+      }
     </section>
   `;
 }

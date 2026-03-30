@@ -26,10 +26,20 @@
  */
 
 export { MamoruSandbox } from "./sandbox.js";
-export type { SandboxPolicy, SandboxStatus, SandboxAvailability, SandboxApplyResult } from "./sandbox.js";
+export type {
+  SandboxPolicy,
+  SandboxStatus,
+  SandboxAvailability,
+  SandboxApplyResult,
+} from "./sandbox.js";
 
 export { EruberuProxy } from "./eruberu-proxy.js";
-export type { InferenceProfile, InferenceLog, InferencePolicy, UsageSummary } from "./eruberu-proxy.js";
+export type {
+  InferenceProfile,
+  InferenceLog,
+  InferencePolicy,
+  UsageSummary,
+} from "./eruberu-proxy.js";
 
 export { MamoruGate } from "./egress-gate.js";
 export type { EgressRule, EgressPolicy, EgressRequest } from "./egress-gate.js";

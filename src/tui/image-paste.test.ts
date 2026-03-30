@@ -61,7 +61,7 @@ describe("image paste", () => {
   });
 
   it("handles image indicator text formatting", () => {
-    const pendingCount = 3;
+    const pendingCount = 3 as number;
     const indicator =
       pendingCount === 1 ? "[1 image attached]" : `[${pendingCount} images attached]`;
     expect(indicator).toBe("[3 images attached]");

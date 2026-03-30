@@ -118,9 +118,7 @@ export class EruberuProxy {
 
   constructor(private readonly ns: string) {
     this.policy = { ...DEFAULT_POLICY };
-    this.profiles = new Map(
-      Object.entries(BUILT_IN_PROFILES).map(([k, v]) => [k, { ...v }]),
-    );
+    this.profiles = new Map(Object.entries(BUILT_IN_PROFILES).map(([k, v]) => [k, { ...v }]));
   }
 
   /**
@@ -180,10 +178,7 @@ export class EruberuProxy {
   /**
    * Check whether a request to a given provider/model is allowed by policy.
    */
-  checkPolicy(
-    provider: string,
-    model: string,
-  ): { allowed: boolean; reason?: string } {
+  checkPolicy(provider: string, model: string): { allowed: boolean; reason?: string } {
     // Check provider
     if (
       this.policy.allowedProviders.length > 0 &&
@@ -196,13 +191,8 @@ export class EruberuProxy {
     }
 
     // Check model against glob patterns
-    if (
-      this.policy.allowedModels.length > 0 &&
-      !this.policy.allowedModels.includes("*")
-    ) {
-      const modelAllowed = this.policy.allowedModels.some((pattern) =>
-        matchGlob(pattern, model),
-      );
+    if (this.policy.allowedModels.length > 0 && !this.policy.allowedModels.includes("*")) {
+      const modelAllowed = this.policy.allowedModels.some((pattern) => matchGlob(pattern, model));
       if (!modelAllowed) {
         return {
           allowed: false,
@@ -217,9 +207,7 @@ export class EruberuProxy {
   /**
    * Log an inference request. Maintains a ring buffer of max 1000 entries.
    */
-  logRequest(
-    entry: Omit<InferenceLog, "id" | "timestamp">,
-  ): InferenceLog {
+  logRequest(entry: Omit<InferenceLog, "id" | "timestamp">): InferenceLog {
     const log: InferenceLog = {
       ...entry,
       id: randomUUID(),

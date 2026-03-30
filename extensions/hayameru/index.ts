@@ -23,7 +23,9 @@ const hayameruPlugin = {
     }
 
     const metrics = new HayameruMetrics();
-    const workDir = api.config?.workspaceDir ?? process.cwd();
+    const workDir =
+      ((api.config as Record<string, unknown> | undefined)?.workspaceDir as string | undefined) ??
+      process.cwd();
 
     // before_agent_run hook — intercept simple code edits
     api.on(
@@ -125,9 +127,10 @@ const hayameruPlugin = {
     // Tool: hayameru_status
     api.registerTool({
       name: "hayameru_status",
+      label: "Hayameru Status",
       description: "Show Hayameru code transform metrics and available transforms",
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: async (_toolCallId: string) => {
         const m = metrics.getMetrics();
         const transforms = listTransforms();
         return {
@@ -152,6 +155,7 @@ const hayameruPlugin = {
               ),
             },
           ],
+          details: undefined,
         };
       },
     });

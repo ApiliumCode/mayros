@@ -125,10 +125,19 @@ if errorlevel 1 (
 echo Configuring Mayros for first use...
 :: Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
 set "CONFIG_FILE=%MAYROS_DIR%\mayros.json"
-if not exist "%CONFIG_FILE%" (
+"%MAYROS_DIR%\node\node.exe" -e "const fs=require('fs');const p=require('path');const f=p.join(process.env.LOCALAPPDATA,'Mayros','mayros.json');let c={};try{c=JSON.parse(fs.readFileSync(f,'utf8'))}catch{}if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');" 2>nul
+if errorlevel 1 (
     echo {"gateway":{"mode":"local","auth":{"mode":"none"}}} > "%CONFIG_FILE%"
-) else (
-    "%MAYROS_DIR%\node\node.exe" -e "const fs=require('fs');const f=process.argv[1];const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" "%CONFIG_FILE%" 2>nul
+)
+:: Bootstrap workspace templates
+set "TEMPLATES=%MAYROS_DIR%\lib\node_modules\@apilium\mayros\docs\reference\templates"
+set "WORKSPACE=%MAYROS_DIR%\workspace"
+if exist "%TEMPLATES%" (
+    if not exist "%WORKSPACE%" mkdir "%WORKSPACE%"
+    for %%F in (AGENTS.md MAYROS.md TOOLS.md IDENTITY.md USER.md HOPE.md BOOTSTRAP.md) do (
+        if exist "%TEMPLATES%\%%F" if not exist "%WORKSPACE%\%%F" copy "%TEMPLATES%\%%F" "%WORKSPACE%\%%F" >nul
+    )
+    if not exist "%WORKSPACE%\MEMORY.md" echo # Memory > "%WORKSPACE%\MEMORY.md"
 )
 echo.
 echo Starting Cortex...
@@ -145,6 +154,7 @@ timeout /t 1 /nobreak >nul
 goto cortexwait
 :startgateway
 echo Starting Gateway...
+"%MAYROS_DIR%\mayros.cmd" gateway install 2>nul
 start "" "%MAYROS_DIR%\mayros.cmd" gateway start
 echo Waiting for gateway to be ready...
 set TRIES=0

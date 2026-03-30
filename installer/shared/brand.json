@@ -16,7 +16,7 @@
     "textMuted": "#52525b",
     "white": "#ffffff"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "cortexVersion": "0.6.3",
   "nodeVersion": "22",
   "gatewayPort": 18789,

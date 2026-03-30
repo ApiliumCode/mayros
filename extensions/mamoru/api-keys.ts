@@ -17,9 +17,9 @@ export type ApiKey = {
   id: string;
   name: string;
   agentId: string;
-  keyHash: string;       // SHA-256 hash of the key (never store plaintext)
-  prefix: string;        // first 8 chars for identification (e.g., "mk_a1b2c3d4")
-  scopes: string[];      // e.g., ["read", "write", "execute"]
+  keyHash: string; // SHA-256 hash of the key (never store plaintext)
+  prefix: string; // first 8 chars for identification (e.g., "mk_a1b2c3d4")
+  scopes: string[]; // e.g., ["read", "write", "execute"]
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -28,7 +28,7 @@ export type ApiKey = {
 
 export type ApiKeyCreateResult = {
   key: ApiKey;
-  plaintext: string;     // shown ONCE at creation, never stored
+  plaintext: string; // shown ONCE at creation, never stored
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -131,11 +131,17 @@ export class MamoruApiKeys {
       // Rollback: delete any triples that were created
       for (const pred of created) {
         try {
-          const existing = await this.client.listTriples({ subject: sub, predicate: pred, limit: 1 });
+          const existing = await this.client.listTriples({
+            subject: sub,
+            predicate: pred,
+            limit: 1,
+          });
           for (const t of existing.triples) {
             if (t.id) await this.client.deleteTriple(t.id);
           }
-        } catch { /* best-effort cleanup */ }
+        } catch {
+          /* best-effort cleanup */
+        }
       }
       throw err;
     }
@@ -208,7 +214,11 @@ export class MamoruApiKeys {
 
       // Update lastUsedAt — delete old triple first to avoid duplication
       const now = new Date().toISOString();
-      const existing = await this.client.listTriples({ subject, predicate: this.predicate(PRED.lastUsedAt), limit: 1 });
+      const existing = await this.client.listTriples({
+        subject,
+        predicate: this.predicate(PRED.lastUsedAt),
+        limit: 1,
+      });
       for (const t of existing.triples) {
         if (t.id) await this.client.deleteTriple(t.id);
       }

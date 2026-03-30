@@ -35,13 +35,25 @@ function textResult(text: string): ToolContent {
   return { content: [{ type: "text" as const, text }] };
 }
 
-const VALID_MISSION_STATUSES = new Set(["queued", "ready", "active", "review", "complete", "abandoned"]);
+const VALID_MISSION_STATUSES = new Set([
+  "queued",
+  "ready",
+  "active",
+  "review",
+  "complete",
+  "abandoned",
+]);
 const VALID_PRIORITIES = new Set(["critical", "high", "medium", "low"]);
 const VALID_TRIGGERS = new Set(["timer", "assignment", "mention", "mission-ready", "escalation"]);
 
-function validateEnum<T extends string>(value: string | undefined, valid: Set<string>, label: string): T | undefined {
+function validateEnum<T extends string>(
+  value: string | undefined,
+  valid: Set<string>,
+  label: string,
+): T | undefined {
   if (value === undefined) return undefined;
-  if (!valid.has(value)) throw new Error(`Invalid ${label}: "${value}". Valid: ${[...valid].join(", ")}`);
+  if (!valid.has(value))
+    throw new Error(`Invalid ${label}: "${value}". Valid: ${[...valid].join(", ")}`);
   return value as T;
 }
 
@@ -191,8 +203,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
     // ------------------------------------------------------------------
     {
       name: "kaneru_venture_list",
-      description:
-        "List all Kaneru ventures with their status, prefix, and fuel limits.",
+      description: "List all Kaneru ventures with their status, prefix, and fuel limits.",
       parameters: Type.Object({}),
       execute: async (_callId: string, _params: Record<string, unknown>) => {
         try {
@@ -202,12 +213,9 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
             return textResult("No ventures found.");
           }
           const lines = ventures.map(
-            (v) =>
-              `  [${v.status}] ${v.prefix} — ${v.name} (id: ${v.id}, fuel: ${v.fuelLimit}c)`,
+            (v) => `  [${v.status}] ${v.prefix} — ${v.name} (id: ${v.id}, fuel: ${v.fuelLimit}c)`,
           );
-          return textResult(
-            `${ventures.length} venture(s):\n${lines.join("\n")}`,
-          );
+          return textResult(`${ventures.length} venture(s):\n${lines.join("\n")}`);
         } catch (err) {
           return textResult(`Error: ${String(err)}`);
         }
@@ -225,9 +233,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       parameters: Type.Object({
         ventureId: Type.String({ description: "Venture ID to create the mission in" }),
         title: Type.String({ description: "Mission title" }),
-        description: Type.Optional(
-          Type.String({ description: "Detailed mission description" }),
-        ),
+        description: Type.Optional(Type.String({ description: "Detailed mission description" })),
         priority: Type.Optional(
           Type.String({
             description: "Priority: critical, high, medium, low (default: medium)",
@@ -244,7 +250,11 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
             ventureId: params.ventureId as string,
             title: params.title as string,
             description: (params.description as string | undefined) ?? undefined,
-            priority: validateEnum(params.priority as string | undefined, VALID_PRIORITIES, "priority"),
+            priority: validateEnum(
+              params.priority as string | undefined,
+              VALID_PRIORITIES,
+              "priority",
+            ),
             directiveId: (params.directiveId as string | undefined) ?? undefined,
           });
           return textResult(
@@ -305,21 +315,23 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
     // ------------------------------------------------------------------
     {
       name: "kaneru_mission_list",
-      description:
-        "List missions for a venture with optional status filter.",
+      description: "List missions for a venture with optional status filter.",
       parameters: Type.Object({
         ventureId: Type.String({ description: "Venture ID to list missions for" }),
         status: Type.Optional(
           Type.String({
-            description:
-              "Filter by status: queued, ready, active, review, complete, abandoned",
+            description: "Filter by status: queued, ready, active, review, complete, abandoned",
           }),
         ),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {
           const mgr = getMissionManager();
-          const status = validateEnum<MissionStatus>(params.status as string | undefined, VALID_MISSION_STATUSES, "status");
+          const status = validateEnum<MissionStatus>(
+            params.status as string | undefined,
+            VALID_MISSION_STATUSES,
+            "status",
+          );
           const missions = await mgr.list(params.ventureId as string, { status });
           if (missions.length === 0) {
             const filterNote = status ? ` with status "${status}"` : "";
@@ -330,9 +342,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
               `  [${m.status}] ${m.identifier} — ${m.title} (${m.priority})` +
               (m.claimedBy ? ` claimed by ${m.claimedBy}` : ""),
           );
-          return textResult(
-            `${missions.length} mission(s):\n${lines.join("\n")}`,
-          );
+          return textResult(`${missions.length} mission(s):\n${lines.join("\n")}`);
         } catch (err) {
           return textResult(`Error: ${String(err)}`);
         }
@@ -350,15 +360,18 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
       parameters: Type.Object({
         missionId: Type.String({ description: "Mission ID to transition" }),
         status: Type.String({
-          description:
-            "Target status: queued, ready, active, review, complete, abandoned",
+          description: "Target status: queued, ready, active, review, complete, abandoned",
         }),
         runId: Type.String({ description: "Current run ID for authorization" }),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {
           const mgr = getMissionManager();
-          const validatedStatus = validateEnum<MissionStatus>(params.status as string, VALID_MISSION_STATUSES, "status")!;
+          const validatedStatus = validateEnum<MissionStatus>(
+            params.status as string,
+            VALID_MISSION_STATUSES,
+            "status",
+          )!;
           const mission = await mgr.transition(
             params.missionId as string,
             validatedStatus,
@@ -403,16 +416,12 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
 
           const agentLines =
             summary.byAgent.length > 0
-              ? summary.byAgent
-                  .map((a) => `    ${a.agentId}: ${a.totalCents}c`)
-                  .join("\n")
+              ? summary.byAgent.map((a) => `    ${a.agentId}: ${a.totalCents}c`).join("\n")
               : "    (none)";
 
           const missionLines =
             summary.byMission.length > 0
-              ? summary.byMission
-                  .map((m) => `    ${m.missionId}: ${m.totalCents}c`)
-                  .join("\n")
+              ? summary.byMission.map((m) => `    ${m.missionId}: ${m.totalCents}c`).join("\n")
               : "    (none)";
 
           return textResult(
@@ -442,14 +451,17 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
         agentId: Type.String({ description: "Agent ID to trigger pulse for" }),
         ventureId: Type.String({ description: "Venture context for the pulse" }),
         trigger: Type.String({
-          description:
-            "Trigger type: timer, assignment, mention, mission-ready, escalation",
+          description: "Trigger type: timer, assignment, mention, mission-ready, escalation",
         }),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {
           const scheduler = getPulseScheduler();
-          const validatedTrigger = validateEnum<PulseTrigger>(params.trigger as string, VALID_TRIGGERS, "trigger")!;
+          const validatedTrigger = validateEnum<PulseTrigger>(
+            params.trigger as string,
+            VALID_TRIGGERS,
+            "trigger",
+          )!;
           const pulse = await scheduler.trigger(
             params.agentId as string,
             params.ventureId as string,
@@ -507,14 +519,13 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
     // ------------------------------------------------------------------
     {
       name: "kaneru_learn_top",
-      description:
-        "Get top agents for a given domain and task type, ranked by expertise score.",
+      description: "Get top agents for a given domain and task type, ranked by expertise score.",
       parameters: Type.Object({
         domain: Type.String({ description: "Domain (e.g. typescript, python, rust)" }),
-        taskType: Type.String({ description: "Task type (e.g. code-review, debugging, implementation)" }),
-        limit: Type.Optional(
-          Type.Number({ description: "Max results (default: 10)" }),
-        ),
+        taskType: Type.String({
+          description: "Task type (e.g. code-review, debugging, implementation)",
+        }),
+        limit: Type.Optional(Type.Number({ description: "Max results (default: 10)" })),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {
@@ -526,9 +537,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
             limit,
           );
           if (profiles.length === 0) {
-            return textResult(
-              `No agents found for ${params.domain}:${params.taskType}`,
-            );
+            return textResult(`No agents found for ${params.domain}:${params.taskType}`);
           }
           const lines = profiles.map(
             (p) =>
@@ -553,12 +562,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
         "Query consensus decision history with optional venture filter. " +
         "Returns decisions sorted by most recent first.",
       parameters: Type.Object({
-        ventureId: Type.Optional(
-          Type.String({ description: "Filter by venture ID" }),
-        ),
-        limit: Type.Optional(
-          Type.Number({ description: "Max results (default: 20)" }),
-        ),
+        ventureId: Type.Optional(Type.String({ description: "Filter by venture ID" })),
+        limit: Type.Optional(Type.Number({ description: "Max results (default: 20)" })),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {
@@ -577,9 +582,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
               `    Outcome: ${d.resolvedValue}\n` +
               `    Decided: ${d.decidedAt}`,
           );
-          return textResult(
-            `${decisions.length} decision(s):\n${lines.join("\n")}`,
-          );
+          return textResult(`${decisions.length} decision(s):\n${lines.join("\n")}`);
         } catch (err) {
           return textResult(`Error: ${String(err)}`);
         }
@@ -624,12 +627,8 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
           if (templates.length === 0) {
             return textResult("No templates found.");
           }
-          const lines = templates.map(
-            (t) => `  ${t.id} — ${t.name}\n    ${t.description}`,
-          );
-          return textResult(
-            `${templates.length} template(s):\n${lines.join("\n")}`,
-          );
+          const lines = templates.map((t) => `  ${t.id} — ${t.name}\n    ${t.description}`);
+          return textResult(`${templates.length} template(s):\n${lines.join("\n")}`);
         } catch (err) {
           return textResult(`Error: ${String(err)}`);
         }
@@ -712,9 +711,7 @@ export function createVentureTools(deps: VentureToolDeps): AdaptableTool[] & { d
         stdout: Type.String({ description: "Standard output" }),
         stderr: Type.String({ description: "Standard error output" }),
         durationMs: Type.Number({ description: "Execution duration in milliseconds" }),
-        missionId: Type.Optional(
-          Type.String({ description: "Associated mission ID (if any)" }),
-        ),
+        missionId: Type.Optional(Type.String({ description: "Associated mission ID (if any)" })),
       }),
       execute: async (_callId: string, params: Record<string, unknown>) => {
         try {

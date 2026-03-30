@@ -291,7 +291,12 @@ const semanticMemoryPlugin = {
           if (writeResult === null) {
             // Queue writes for replay when Cortex recovers
             for (const t of triples) {
-              writeQueue.push({ type: "createTriple", payload: t });
+              writeQueue.enqueue({
+                type: "createTriple",
+                payload: t,
+                timestamp: Date.now(),
+                attempts: 0,
+              });
             }
             return {
               content: [
@@ -1804,7 +1809,12 @@ const semanticMemoryPlugin = {
           try {
             await client.createTriple(t as Parameters<typeof client.createTriple>[0]);
           } catch {
-            writeQueue.push({ type: "createTriple", payload: t });
+            writeQueue.enqueue({
+              type: "createTriple",
+              payload: t,
+              timestamp: Date.now(),
+              attempts: 0,
+            });
           }
         }
         api.logger.info(`memory-semantic: session node created (${event.sessionId})`);
@@ -1839,7 +1849,12 @@ const semanticMemoryPlugin = {
         try {
           await client.createTriple(endTriple);
         } catch {
-          writeQueue.push({ type: "createTriple", payload: endTriple });
+          writeQueue.enqueue({
+            type: "createTriple",
+            payload: endTriple,
+            timestamp: Date.now(),
+            attempts: 0,
+          });
         }
       }
 
