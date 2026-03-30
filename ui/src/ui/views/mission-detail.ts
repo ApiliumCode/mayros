@@ -119,19 +119,26 @@ function renderDetails(props: MissionDetailProps) {
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin-top: 16px; font-size: 0.9em;">
       <div class="muted">Claimed by</div>
       <div>
-        ${props.mission.claimedBy
-          ? html`<code>${props.mission.claimedBy}</code>`
-          : html`<span class="muted">Unclaimed</span>`}
+        ${
+          props.mission.claimedBy
+            ? html`<code>${props.mission.claimedBy}</code>`
+            : html`
+                <span class="muted">Unclaimed</span>
+              `
+        }
       </div>
-      ${props.mission.ventureId
-        ? html`
+      ${
+        props.mission.ventureId
+          ? html`
             <div class="muted">Venture</div>
             <div><code>${props.mission.ventureId}</code></div>
           `
-        : nothing}
+          : nothing
+      }
     </div>
-    ${props.mission.description
-      ? html`
+    ${
+      props.mission.description
+        ? html`
           <div style="margin-top: 16px;">
             <div class="muted" style="font-size: 0.85em; margin-bottom: 4px;">Description</div>
             <div style="
@@ -144,7 +151,8 @@ function renderDetails(props: MissionDetailProps) {
             ">${props.mission.description}</div>
           </div>
         `
-      : nothing}
+        : nothing
+    }
   `;
 }
 
@@ -154,10 +162,13 @@ function renderComments(props: MissionDetailProps) {
       <div class="muted" style="font-size: 0.85em; margin-bottom: 8px;">
         Comments (${props.comments.length})
       </div>
-      ${props.comments.length === 0
-        ? html`<div class="muted" style="font-size: 0.85em; padding: 8px 0;">No comments yet.</div>`
-        : props.comments.map(
-            (c) => html`
+      ${
+        props.comments.length === 0
+          ? html`
+              <div class="muted" style="font-size: 0.85em; padding: 8px 0">No comments yet.</div>
+            `
+          : props.comments.map(
+              (c) => html`
               <div style="
                 background: var(--bg-secondary);
                 border-radius: 6px;
@@ -171,7 +182,8 @@ function renderComments(props: MissionDetailProps) {
                 <div style="font-size: 0.9em; line-height: 1.4; white-space: pre-wrap;">${c.content}</div>
               </div>
             `,
-          )}
+            )
+      }
     </div>
   `;
 }
@@ -196,7 +208,9 @@ function renderCommentInput(props: MissionDetailProps) {
       <input
         type="text"
         placeholder="Add a comment..."
-        @input=${(e: Event) => { inputValue = (e.target as HTMLInputElement).value; }}
+        @input=${(e: Event) => {
+          inputValue = (e.target as HTMLInputElement).value;
+        }}
         @keydown=${(e: KeyboardEvent) => {
           if (e.key === "Enter") {
             handleSubmit();

@@ -67,7 +67,10 @@ export async function loadKaneruDashboard(state: KaneruDashboardState): Promise<
   state.kaneruLoading = true;
   state.kaneruError = null;
   try {
-    const response = await state.client.request("kaneru.dashboard", {}) as KaneruDashboardResponse;
+    const response = (await state.client.request(
+      "kaneru.dashboard",
+      {},
+    )) as KaneruDashboardResponse;
     state.kaneruDashboard = response;
     // Populate squad builder agents from response
     if (response.availableAgents) {

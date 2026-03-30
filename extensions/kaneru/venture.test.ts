@@ -128,7 +128,12 @@ describe("VentureManager", () => {
 
   describe("create", () => {
     it("creates venture with correct fields", async () => {
-      const v = await mgr.create({ name: "Alpha", directive: "Build stuff", prefix: "alp", fuelLimit: 5000 });
+      const v = await mgr.create({
+        name: "Alpha",
+        directive: "Build stuff",
+        prefix: "alp",
+        fuelLimit: 5000,
+      });
       expect(v.name).toBe("Alpha");
       expect(v.directive).toBe("Build stuff");
       expect(v.fuelLimit).toBe(5000);
@@ -163,9 +168,9 @@ describe("VentureManager", () => {
 
     it("rejects duplicate prefix", async () => {
       await mgr.create({ name: "First", directive: "d", prefix: "DUP" });
-      await expect(
-        mgr.create({ name: "Second", directive: "d", prefix: "dup" }),
-      ).rejects.toThrow("already in use");
+      await expect(mgr.create({ name: "Second", directive: "d", prefix: "dup" })).rejects.toThrow(
+        "already in use",
+      );
     });
   });
 

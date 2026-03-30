@@ -14,7 +14,7 @@ export function stripBrackets(s: string): string {
  */
 export function sanitizeTripleValue(s: string): string {
   return s
-    .replace(/\0/g, "")           // null bytes
+    .replace(/\0/g, "") // null bytes
     .replace(/[\x01-\x08\x0b\x0c\x0e-\x1f]/g, "") // control chars (keep \n \r \t)
-    .replace(/^<|>$/g, "");       // leading < or trailing > that mimic RDF notation
+    .replace(/^<|>$/g, ""); // leading < or trailing > that mimic RDF notation
 }

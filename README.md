@@ -100,13 +100,13 @@ A detailed data loss warning is always shown before deletion — listing every c
 
 Zero-setup installers that bundle Node.js + AIngle Cortex — no prerequisites required.
 
-| Platform | Format | Download |
-|----------|--------|----------|
-| **Windows** | `.exe` (NSIS) | [Releases](https://github.com/ApiliumCode/mayros/releases) |
-| **macOS (Apple Silicon)** | `.dmg` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
-| **macOS (Intel)** | `.dmg` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
-| **Linux (x64)** | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
-| **Linux (arm64)** | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| Platform                  | Format               | Download                                                   |
+| ------------------------- | -------------------- | ---------------------------------------------------------- |
+| **Windows**               | `.exe` (NSIS)        | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **macOS (Apple Silicon)** | `.dmg`               | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **macOS (Intel)**         | `.dmg`               | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **Linux (x64)**           | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
+| **Linux (arm64)**         | `.AppImage` / `.deb` | [Releases](https://github.com/ApiliumCode/mayros/releases) |
 
 Each installer includes Node.js portable + AIngle Cortex binary, runs `npm install` at install time, creates desktop shortcuts, and adds Mayros to the system PATH.
 
@@ -118,11 +118,11 @@ Run models locally with automatic GPU detection and guided setup. Mayros detects
 
 **Supported runtimes:**
 
-| Runtime | Use case |
-|---------|----------|
-| **Ollama** | Easiest setup — one command install |
-| **vLLM** | High-throughput serving with tensor parallelism |
-| **NVIDIA NIM** | Optimized containers for NVIDIA GPUs |
+| Runtime        | Use case                                        |
+| -------------- | ----------------------------------------------- |
+| **Ollama**     | Easiest setup — one command install             |
+| **vLLM**       | High-throughput serving with tensor parallelism |
+| **NVIDIA NIM** | Optimized containers for NVIDIA GPUs            |
 
 **GPU detection:** NVIDIA (nvidia-smi), AMD/Intel (PowerShell on Windows, lspci on Linux), Apple Silicon (sysctl), Intel Mac (system_profiler), Raspberry Pi (BCM2 chipset).
 
@@ -455,17 +455,17 @@ The portal at `http://localhost:18789` includes:
 
 Any MCP client (Claude, Cursor, Cline) gets access to 24 Kaneru tools:
 
-| Tool | Purpose |
-|------|---------|
-| `kaneru_venture_create/list` | Venture CRUD |
-| `kaneru_mission_create/claim/list/transition` | Mission lifecycle |
-| `kaneru_fuel_summary/analytics/forecast` | Cost control |
-| `kaneru_dojo_list/install` | Venture templates |
-| `kaneru_learn_profile/top` | Agent expertise |
-| `kaneru_decisions_list/explain` | Decision audit |
-| `kaneru_sync/terminal_exec` | P2P sync + remote execution |
-| `kaneru_squad_create/run/status` | Multi-agent squads |
-| `kaneru_delegate/consensus/route/fuse/mailbox` | Coordination |
+| Tool                                           | Purpose                     |
+| ---------------------------------------------- | --------------------------- |
+| `kaneru_venture_create/list`                   | Venture CRUD                |
+| `kaneru_mission_create/claim/list/transition`  | Mission lifecycle           |
+| `kaneru_fuel_summary/analytics/forecast`       | Cost control                |
+| `kaneru_dojo_list/install`                     | Venture templates           |
+| `kaneru_learn_profile/top`                     | Agent expertise             |
+| `kaneru_decisions_list/explain`                | Decision audit              |
+| `kaneru_sync/terminal_exec`                    | P2P sync + remote execution |
+| `kaneru_squad_create/run/status`               | Multi-agent squads          |
+| `kaneru_delegate/consensus/route/fuse/mailbox` | Coordination                |
 
 CLI: `mayros kaneru` — 18 subcommand groups with 40+ commands total
 

@@ -80,12 +80,18 @@ async function main() {
         const needsUpdate =
           installed[0] < required[0] ||
           (installed[0] === required[0] && installed[1] < required[1]) ||
-          (installed[0] === required[0] && installed[1] === required[1] && installed[2] < required[2]);
+          (installed[0] === required[0] &&
+            installed[1] === required[1] &&
+            installed[2] < required[2]);
         if (!needsUpdate) {
-          console.log(`[mayros] AIngle Cortex v${match[1]} is up to date (requires >=${REQUIRED_VERSION})`);
+          console.log(
+            `[mayros] AIngle Cortex v${match[1]} is up to date (requires >=${REQUIRED_VERSION})`,
+          );
           return;
         }
-        console.log(`[mayros] AIngle Cortex v${match[1]} installed, updating to >=${REQUIRED_VERSION}...`);
+        console.log(
+          `[mayros] AIngle Cortex v${match[1]} installed, updating to >=${REQUIRED_VERSION}...`,
+        );
       }
     } catch {
       // Can't determine version — proceed with install/update
@@ -165,7 +171,9 @@ async function main() {
       } catch {
         // If locked, try direct copy (Windows)
         copyFileSync(candidatePath, binaryPath);
-        try { unlinkSync(candidatePath); } catch {}
+        try {
+          unlinkSync(candidatePath);
+        } catch {}
         console.log(`[mayros] Overwrote ${BINARY_NAME} with ${candidates[0]}`);
         candidates.length = 0;
       }
@@ -178,12 +186,16 @@ async function main() {
 
     // Clean up .old
     const oldPath = binaryPath + ".old";
-    try { if (existsSync(oldPath)) unlinkSync(oldPath); } catch {}
+    try {
+      if (existsSync(oldPath)) unlinkSync(oldPath);
+    } catch {}
   } else if (!existsSync(binaryPath)) {
     console.warn(
       `[mayros] Cortex binary not found after extraction. Install later with: mayros update`,
     );
-    try { unlinkSync(archivePath); } catch {}
+    try {
+      unlinkSync(archivePath);
+    } catch {}
     return;
   }
 
@@ -192,11 +204,15 @@ async function main() {
   }
 
   // Cleanup archive and leftover suffixed binaries
-  try { unlinkSync(archivePath); } catch {}
+  try {
+    unlinkSync(archivePath);
+  } catch {}
   for (const leftover of readdirSync(INSTALL_DIR).filter(
     (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
   )) {
-    try { unlinkSync(join(INSTALL_DIR, leftover)); } catch {}
+    try {
+      unlinkSync(join(INSTALL_DIR, leftover));
+    } catch {}
   }
 
   console.log(`[mayros] AIngle Cortex installed at ${binaryPath}`);

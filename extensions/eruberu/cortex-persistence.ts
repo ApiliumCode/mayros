@@ -16,11 +16,7 @@ import type { QTableData } from "./q-learning.js";
 
 export type CortexPersistenceClient = {
   createTriple(params: { subject: string; predicate: string; object: string }): Promise<unknown>;
-  listTriples(params: {
-    subject?: string;
-    predicate?: string;
-    limit?: number;
-  }): Promise<{
+  listTriples(params: { subject?: string; predicate?: string; limit?: number }): Promise<{
     triples: Array<{ id?: string; subject: string; predicate: string; object: unknown }>;
   }>;
   deleteTriple(id: string): Promise<void>;

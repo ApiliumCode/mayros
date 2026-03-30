@@ -106,11 +106,46 @@ const POPULATED_DATA: CanvasVentureData = {
     },
   ],
   missions: [
-    { id: "m1", identifier: "ALP-1", title: "Setup infra", status: "active", priority: "high", claimedBy: "agent-1" },
-    { id: "m2", identifier: "ALP-2", title: "Write tests", status: "ready", priority: "medium", claimedBy: null },
-    { id: "m3", identifier: "ALP-3", title: "Deploy", status: "queued", priority: "low", claimedBy: null },
-    { id: "m4", identifier: "BET-1", title: "Research", status: "complete", priority: "medium", claimedBy: "agent-2" },
-    { id: "m5", identifier: "ALP-4", title: "Review PR", status: "review", priority: "critical", claimedBy: "agent-1" },
+    {
+      id: "m1",
+      identifier: "ALP-1",
+      title: "Setup infra",
+      status: "active",
+      priority: "high",
+      claimedBy: "agent-1",
+    },
+    {
+      id: "m2",
+      identifier: "ALP-2",
+      title: "Write tests",
+      status: "ready",
+      priority: "medium",
+      claimedBy: null,
+    },
+    {
+      id: "m3",
+      identifier: "ALP-3",
+      title: "Deploy",
+      status: "queued",
+      priority: "low",
+      claimedBy: null,
+    },
+    {
+      id: "m4",
+      identifier: "BET-1",
+      title: "Research",
+      status: "complete",
+      priority: "medium",
+      claimedBy: "agent-2",
+    },
+    {
+      id: "m5",
+      identifier: "ALP-4",
+      title: "Review PR",
+      status: "review",
+      priority: "critical",
+      claimedBy: "agent-1",
+    },
   ],
   chain: [
     {
@@ -226,7 +261,9 @@ describe("canvas-surfaces", () => {
     it("renders chain nodes for populated data", () => {
       const jsonl = generateChainSurface(POPULATED_DATA);
       const update = getSurfaceUpdate(jsonl);
-      const chainCards = update!.components.filter((c) => c.id.startsWith("chain-") && c.component.Card);
+      const chainCards = update!.components.filter(
+        (c) => c.id.startsWith("chain-") && c.component.Card,
+      );
       // Should have at least 2 nodes (agent-1 + agent-2)
       expect(chainCards.length).toBeGreaterThanOrEqual(2);
     });
@@ -246,7 +283,9 @@ describe("canvas-surfaces", () => {
     it("shows provider breakdown for populated data", () => {
       const jsonl = generateFuelSurface(POPULATED_DATA);
       const update = getSurfaceUpdate(jsonl);
-      const providers = update!.components.filter((c) => c.id.startsWith("prov-") && !c.id.includes("title") && !c.id.includes("list"));
+      const providers = update!.components.filter(
+        (c) => c.id.startsWith("prov-") && !c.id.includes("title") && !c.id.includes("list"),
+      );
       expect(providers.length).toBe(2);
     });
 
@@ -263,7 +302,10 @@ describe("canvas-surfaces", () => {
       const update = getSurfaceUpdate(jsonl);
       const exhaustComp = update!.components.find((c) => c.id === "fuel-exhaust-val");
       expect(exhaustComp).toBeDefined();
-      const text = (exhaustComp!.component.Text as Record<string, unknown>).text as Record<string, unknown>;
+      const text = (exhaustComp!.component.Text as Record<string, unknown>).text as Record<
+        string,
+        unknown
+      >;
       expect(text.literalString).toBe("N/A");
     });
   });

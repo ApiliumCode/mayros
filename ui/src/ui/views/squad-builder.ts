@@ -43,12 +43,8 @@ function renderAgentCard(
   selected: boolean,
   onToggle: (agentId: string) => void,
 ) {
-  const borderColor = selected
-    ? "var(--color-ok, #25c281)"
-    : "var(--border-color, #444)";
-  const bgColor = selected
-    ? "var(--bg-secondary)"
-    : "transparent";
+  const borderColor = selected ? "var(--color-ok, #25c281)" : "var(--border-color, #444)";
+  const bgColor = selected ? "var(--bg-secondary)" : "transparent";
 
   return html`
     <div
@@ -85,11 +81,13 @@ function renderAgentCard(
           </div>
         </div>
       </div>
-      ${agent.expertise
-        ? html`<div class="muted" style="font-size: 0.75em; margin-top: 6px;">
+      ${
+        agent.expertise
+          ? html`<div class="muted" style="font-size: 0.75em; margin-top: 6px;">
             ${agent.expertise}
           </div>`
-        : nothing}
+          : nothing
+      }
     </div>
   `;
 }
@@ -97,7 +95,7 @@ function renderAgentCard(
 function renderAgentGrid(props: SquadBuilderProps) {
   if (props.availableAgents.length === 0) {
     return html`
-      <div class="muted" style="margin-top: 12px;">
+      <div class="muted" style="margin-top: 12px">
         No agents available. Create agents first to build a squad.
       </div>
     `;
@@ -111,11 +109,7 @@ function renderAgentGrid(props: SquadBuilderProps) {
       margin-top: 12px;
     ">
       ${props.availableAgents.map((agent) =>
-        renderAgentCard(
-          agent,
-          props.selectedAgents.includes(agent.agentId),
-          props.onToggleAgent,
-        ),
+        renderAgentCard(agent, props.selectedAgents.includes(agent.agentId), props.onToggleAgent),
       )}
     </div>
   `;
@@ -164,7 +158,8 @@ function renderConfigSection(props: SquadBuilderProps) {
           "
         >
           ${STRATEGIES.map(
-            (s) => html`<option value=${s.value} ?selected=${props.strategy === s.value}>${s.label}</option>`,
+            (s) =>
+              html`<option value=${s.value} ?selected=${props.strategy === s.value}>${s.label}</option>`,
           )}
         </select>
       </div>
@@ -174,9 +169,7 @@ function renderConfigSection(props: SquadBuilderProps) {
 
 function renderFooter(props: SquadBuilderProps) {
   const canCreate =
-    props.selectedAgents.length > 0 &&
-    props.squadName.trim().length > 0 &&
-    !props.creating;
+    props.selectedAgents.length > 0 && props.squadName.trim().length > 0 && !props.creating;
 
   return html`
     <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color, #444);">

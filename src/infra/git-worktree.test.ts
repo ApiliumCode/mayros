@@ -291,8 +291,12 @@ describe("git-worktree", () => {
       const { isWorktreePath } = await import("./git-worktree.js");
       const repoRoot = path.resolve("/repo");
 
-      expect(isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a"), repoRoot)).toBe(true);
-      expect(isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a/src/file.ts"), repoRoot)).toBe(true);
+      expect(isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a"), repoRoot)).toBe(
+        true,
+      );
+      expect(
+        isWorktreePath(path.join(repoRoot, ".mayros/worktrees/feature-a/src/file.ts"), repoRoot),
+      ).toBe(true);
     });
 
     it("returns false for paths outside worktree base", async () => {

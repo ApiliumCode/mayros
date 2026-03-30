@@ -59,7 +59,8 @@ export const pt_BR: TranslationMap = {
     mcp: "Metricas do servidor MCP, uso de ferramentas e status de conexao.",
     ventures: "Projetos venture, quadros de missoes e orcamentos de combustivel.",
     kaneru: "Esquadroes multi-agente, roteamento Q-learning e decisoes por consenso.",
-    canvas: "Superficies A2UI com contexto de ventures: visao geral, missoes, cadeia e combustivel.",
+    canvas:
+      "Superficies A2UI com contexto de ventures: visao geral, missoes, cadeia e combustivel.",
   },
   overview: {
     access: {

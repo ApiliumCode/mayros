@@ -91,8 +91,8 @@ export class MissionCommentService {
       if (comment) comments.push(comment);
     }
 
-    return comments.sort((a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    return comments.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }
 

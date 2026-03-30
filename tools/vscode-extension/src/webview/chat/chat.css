@@ -101,8 +101,14 @@
 }
 
 @keyframes msg-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message--user {
@@ -168,8 +174,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .message__tools {
@@ -266,7 +277,9 @@
   border: none;
   cursor: pointer;
   font-family: inherit;
-  transition: background-color 0.12s ease, opacity 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    opacity 0.12s ease;
 }
 
 .input-area__btn:disabled {

@@ -46,10 +46,7 @@ function installFetchMock() {
 
     // POST /api/v1/dag/sync/pull
     if (urlStr.includes("/api/v1/dag/sync/pull") && method === "POST") {
-      return new Response(
-        JSON.stringify({ triples_added: 5, conflicts: 1 }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ triples_added: 5, conflicts: 1 }), { status: 200 });
     }
 
     // POST /api/v1/query — pattern query

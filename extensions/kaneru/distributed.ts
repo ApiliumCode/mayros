@@ -181,9 +181,8 @@ export class DistributedVentureManager {
       limit: 1,
     });
 
-    const lastSyncAt = syncTriples.triples.length > 0
-      ? String(syncTriples.triples[0].object)
-      : null;
+    const lastSyncAt =
+      syncTriples.triples.length > 0 ? String(syncTriples.triples[0].object) : null;
 
     return {
       ventureId,
@@ -225,5 +224,4 @@ export class DistributedVentureManager {
 
     return newPeers;
   }
-
 }

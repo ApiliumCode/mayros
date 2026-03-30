@@ -152,7 +152,9 @@ export function registerMamoruCli(program: Command) {
           console.log("  (none)");
         } else {
           for (const req of pending) {
-            console.log(`  ${req.id}  ${req.host}:${req.port}  binary=${req.binary ?? "unknown"}  [${req.status}]`);
+            console.log(
+              `  ${req.id}  ${req.host}:${req.port}  binary=${req.binary ?? "unknown"}  [${req.status}]`,
+            );
           }
         }
       } catch (err) {
@@ -259,13 +261,21 @@ export function registerMamoruCli(program: Command) {
         console.log(`Inference Logs (last ${logs.length}):`);
         for (const log of logs) {
           const ts = new Date(log.timestamp).toISOString();
-          console.log(`  ${ts}  ${log.model}  ${log.inputTokens}→${log.outputTokens}  ${log.durationMs}ms  [${log.status}]`);
+          console.log(
+            `  ${ts}  ${log.model}  ${log.inputTokens}→${log.outputTokens}  ${log.durationMs}ms  [${log.status}]`,
+          );
         }
 
         console.log("\nUsage Summary:");
         console.log(`  Total requests: ${summary.totalRequests}`);
         console.log(`  Total tokens:   ${summary.totalTokens}`);
-        console.log(`  By provider:    ${Object.entries(summary.byProvider).map(([k, v]) => `${k}=${v}`).join(", ") || "none"}`);
+        console.log(
+          `  By provider:    ${
+            Object.entries(summary.byProvider)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(", ") || "none"
+          }`,
+        );
       } catch (err) {
         handleError(err);
       }
@@ -330,7 +340,9 @@ export function registerMamoruCli(program: Command) {
         } else {
           for (const k of keyList) {
             const exp = k.expiresAt ? new Date(k.expiresAt).toISOString() : "never";
-            console.log(`  ${k.id}  ${k.name}  expires=${exp}  scopes=${(k.scopes ?? []).join(",") || "all"}`);
+            console.log(
+              `  ${k.id}  ${k.name}  expires=${exp}  scopes=${(k.scopes ?? []).join(",") || "all"}`,
+            );
           }
         }
       } catch (err) {
@@ -345,27 +357,32 @@ export function registerMamoruCli(program: Command) {
     .requiredOption("--name <n>", "Key name")
     .option("--scopes <scopes>", "Comma-separated scopes")
     .option("--expires-in-days <days>", "Expiration in days")
-    .action(async (opts: { agent: string; name: string; scopes?: string; expiresInDays?: string }) => {
-      const parent = mamoru.opts();
-      try {
-        const { stack } = await loadMamoruStack(parent);
-        if (!stack.apiKeys) {
-          console.error("API keys require a Cortex connection.");
-          process.exitCode = 1;
-          return;
+    .action(
+      async (opts: { agent: string; name: string; scopes?: string; expiresInDays?: string }) => {
+        const parent = mamoru.opts();
+        try {
+          const { stack } = await loadMamoruStack(parent);
+          if (!stack.apiKeys) {
+            console.error("API keys require a Cortex connection.");
+            process.exitCode = 1;
+            return;
+          }
+          const scopes = opts.scopes ? opts.scopes.split(",").map((s) => s.trim()) : undefined;
+          const expiresInDays = opts.expiresInDays ? parseInt(opts.expiresInDays, 10) : undefined;
+          const result = await stack.apiKeys.create(opts.agent, opts.name, {
+            scopes,
+            expiresInDays,
+          });
+          console.log(`API key created: ${result.key.id}`);
+          console.log(`  Name:      ${result.key.name}`);
+          console.log(`  Plaintext: ${result.plaintext}`);
+          console.log("");
+          console.log("  Save this key now. It will not be shown again.");
+        } catch (err) {
+          handleError(err);
         }
-        const scopes = opts.scopes ? opts.scopes.split(",").map((s) => s.trim()) : undefined;
-        const expiresInDays = opts.expiresInDays ? parseInt(opts.expiresInDays, 10) : undefined;
-        const result = await stack.apiKeys.create(opts.agent, opts.name, { scopes, expiresInDays });
-        console.log(`API key created: ${result.key.id}`);
-        console.log(`  Name:      ${result.key.name}`);
-        console.log(`  Plaintext: ${result.plaintext}`);
-        console.log("");
-        console.log("  Save this key now. It will not be shown again.");
-      } catch (err) {
-        handleError(err);
-      }
-    });
+      },
+    );
 
   keys
     .command("revoke")
@@ -500,7 +517,10 @@ export function registerMamoruCli(program: Command) {
   model
     .command("suggest")
     .description("Suggest local models based on GPU capabilities")
-    .option("--activity <type>", "Filter by activity: coding, chat, reasoning, creative, analysis, multilingual, vision, agents")
+    .option(
+      "--activity <type>",
+      "Filter by activity: coding, chat, reasoning, creative, analysis, multilingual, vision, agents",
+    )
     .action(async (opts: { activity?: string }) => {
       const parent = mamoru.opts();
       try {
@@ -516,16 +536,24 @@ export function registerMamoruCli(program: Command) {
             process.exitCode = 1;
             return;
           }
-          const activity = opts.activity as Parameters<typeof stack.localModel.suggestByActivity>[0];
+          const activity = opts.activity as Parameters<
+            typeof stack.localModel.suggestByActivity
+          >[0];
           const models = stack.localModel.suggestByActivity(activity, gpu);
-          const activityInfo = stack.localModel.listActivities().find((a) => a.activity === activity);
-          console.log(`Models for "${activityInfo?.label ?? activity}" (VRAM: ${gpu.vramMB}MB ${gpu.vendor}):`);
+          const activityInfo = stack.localModel
+            .listActivities()
+            .find((a) => a.activity === activity);
+          console.log(
+            `Models for "${activityInfo?.label ?? activity}" (VRAM: ${gpu.vramMB}MB ${gpu.vendor}):`,
+          );
           console.log(`  ${activityInfo?.description ?? ""}\n`);
           if (models.length === 0) {
             console.log("  No models found for your hardware and selected activity.");
           } else {
             for (const m of models) {
-              console.log(`  ${m.id}  ${m.parameters}  ${m.provider}  vram=${m.vramRequired}MB  ctx=${m.contextLength}  ${m.runtime}`);
+              console.log(
+                `  ${m.id}  ${m.parameters}  ${m.provider}  vram=${m.vramRequired}MB  ctx=${m.contextLength}  ${m.runtime}`,
+              );
               console.log(`    ${m.strengths}`);
             }
           }
@@ -537,10 +565,14 @@ export function registerMamoruCli(program: Command) {
             console.log("  No models found for your hardware.");
           } else {
             for (const s of suggestions) {
-              console.log(`  ${s.model}  runtime=${s.runtime}  vram=${s.vramRequired}MB  — ${s.reason}`);
+              console.log(
+                `  ${s.model}  runtime=${s.runtime}  vram=${s.vramRequired}MB  — ${s.reason}`,
+              );
             }
           }
-          console.log("\n  Tip: Use --activity <type> to filter by task. Run 'mayros mamoru model activities' for a list.");
+          console.log(
+            "\n  Tip: Use --activity <type> to filter by task. Run 'mayros mamoru model activities' for a list.",
+          );
         }
       } catch (err) {
         handleError(err);

@@ -105,7 +105,9 @@ async function createFacade(opts: {
   cortexPort?: string;
   cortexToken?: string;
 }) {
-  let mod: { KaneruFacade: typeof import("../../extensions/agent-mesh/kaneru-facade.js").KaneruFacade };
+  let mod: {
+    KaneruFacade: typeof import("../../extensions/agent-mesh/kaneru-facade.js").KaneruFacade;
+  };
   try {
     mod = await import("../../extensions/agent-mesh/kaneru-facade.js");
   } catch {
@@ -418,29 +420,31 @@ export function registerKaneruCli(program: Command) {
     .requiredOption("--prefix <prefix>", "Short prefix for the venture")
     .requiredOption("--directive <text>", "Venture directive / objective")
     .option("--fuel-limit <cents>", "Fuel limit in cents")
-    .action(async (opts: { name: string; prefix: string; directive: string; fuelLimit?: string }) => {
-      const parent = kaneru.opts();
-      const mgrs = await createVentureManagers(parent);
-      try {
-        const v = await mgrs.venture.create({
-          name: opts.name,
-          prefix: opts.prefix,
-          directive: opts.directive,
-          fuelLimit: opts.fuelLimit ? parseInt(opts.fuelLimit, 10) : undefined,
-        });
-        console.log(`Venture created: ${v.id}`);
-        console.log(`  Name: ${v.name}`);
-        console.log(`  Prefix: ${v.prefix}`);
-        console.log(`  Directive: ${v.directive}`);
-        if (v.fuelLimit !== undefined) {
-          console.log(`  Fuel limit: ${v.fuelLimit} cents`);
+    .action(
+      async (opts: { name: string; prefix: string; directive: string; fuelLimit?: string }) => {
+        const parent = kaneru.opts();
+        const mgrs = await createVentureManagers(parent);
+        try {
+          const v = await mgrs.venture.create({
+            name: opts.name,
+            prefix: opts.prefix,
+            directive: opts.directive,
+            fuelLimit: opts.fuelLimit ? parseInt(opts.fuelLimit, 10) : undefined,
+          });
+          console.log(`Venture created: ${v.id}`);
+          console.log(`  Name: ${v.name}`);
+          console.log(`  Prefix: ${v.prefix}`);
+          console.log(`  Directive: ${v.directive}`);
+          if (v.fuelLimit !== undefined) {
+            console.log(`  Fuel limit: ${v.fuelLimit} cents`);
+          }
+        } catch (err) {
+          handleError(err);
+        } finally {
+          mgrs.destroy();
         }
-      } catch (err) {
-        handleError(err);
-      } finally {
-        mgrs.destroy();
-      }
-    });
+      },
+    );
 
   // mayros kaneru venture list
   venture
@@ -541,7 +545,10 @@ export function registerKaneruCli(program: Command) {
       const parent = kaneru.opts();
       const mgrs = await createVentureManagers(parent);
       try {
-        const missions = await mgrs.mission.list(opts.venture, opts.status ? { status: opts.status as "queued" } : undefined);
+        const missions = await mgrs.mission.list(
+          opts.venture,
+          opts.status ? { status: opts.status as "queued" } : undefined,
+        );
         if (missions.length === 0) {
           console.log("No missions found.");
           return;
@@ -596,7 +603,11 @@ export function registerKaneruCli(program: Command) {
       const parent = kaneru.opts();
       const mgrs = await createVentureManagers(parent);
       try {
-        const result = await mgrs.mission.transition(opts.mission, opts.status as "queued", opts.run);
+        const result = await mgrs.mission.transition(
+          opts.mission,
+          opts.status as "queued",
+          opts.run,
+        );
         console.log(`Mission transitioned: ${result.id}`);
         console.log(`  Identifier: ${result.identifier}`);
         console.log(`  New status: ${result.status}`);
@@ -618,38 +629,40 @@ export function registerKaneruCli(program: Command) {
     .option("--duration <ms>", "Duration in milliseconds", "0")
     .option("--failed", "Mark as failed instead of success")
     .option("--squad <sid>", "Squad ID for knowledge transfer")
-    .action(async (opts: {
-      mission: string;
-      agent: string;
-      venture: string;
-      title: string;
-      duration: string;
-      failed?: boolean;
-      squad?: string;
-    }) => {
-      const parent = kaneru.opts();
-      const facade = await createFacade(parent);
-      try {
-        const result = await facade.completeMissionWithLearning({
-          missionId: opts.mission,
-          agentId: opts.agent,
-          ventureId: opts.venture,
-          title: opts.title,
-          success: !opts.failed,
-          durationMs: parseInt(opts.duration, 10) || 0,
-          squadId: opts.squad,
-        });
-        console.log("Mission completed with learning:");
-        console.log(`  Expertise: ${(result.profile.expertise * 100).toFixed(1)}%`);
-        console.log(`  Domain: ${result.profile.domain}`);
-        console.log(`  Task type: ${result.profile.taskType}`);
-        console.log(`  Notification: ${result.notification.message.split("\n")[0]}`);
-      } catch (err) {
-        handleError(err);
-      } finally {
-        facade.destroy();
-      }
-    });
+    .action(
+      async (opts: {
+        mission: string;
+        agent: string;
+        venture: string;
+        title: string;
+        duration: string;
+        failed?: boolean;
+        squad?: string;
+      }) => {
+        const parent = kaneru.opts();
+        const facade = await createFacade(parent);
+        try {
+          const result = await facade.completeMissionWithLearning({
+            missionId: opts.mission,
+            agentId: opts.agent,
+            ventureId: opts.venture,
+            title: opts.title,
+            success: !opts.failed,
+            durationMs: parseInt(opts.duration, 10) || 0,
+            squadId: opts.squad,
+          });
+          console.log("Mission completed with learning:");
+          console.log(`  Expertise: ${(result.profile.expertise * 100).toFixed(1)}%`);
+          console.log(`  Domain: ${result.profile.domain}`);
+          console.log(`  Task type: ${result.profile.taskType}`);
+          console.log(`  Notification: ${result.notification.message.split("\n")[0]}`);
+        } catch (err) {
+          handleError(err);
+        } finally {
+          facade.destroy();
+        }
+      },
+    );
 
   // ------------------------------------------------------------------
   // mayros kaneru pulse
@@ -672,7 +685,9 @@ export function registerKaneruCli(program: Command) {
           const triggerList = opts.triggers
             ?.split(",")
             .map((t) => t.trim())
-            .filter(Boolean) as import("../../extensions/kaneru/pulse.js").PulseTrigger[] | undefined;
+            .filter(Boolean) as
+            | import("../../extensions/kaneru/pulse.js").PulseTrigger[]
+            | undefined;
           await mgrs.pulse.register(opts.agent, opts.venture, {
             interval: opts.interval,
             triggers: triggerList ?? ["timer"],
@@ -732,7 +747,9 @@ export function registerKaneruCli(program: Command) {
         }
         console.log(`Queued pulses (${queued.length}):\n`);
         for (const p of queued) {
-          console.log(`  ${p.id}  trigger: ${p.trigger}  coalesced: ${p.coalescedCount}  requested: ${p.requestedAt}`);
+          console.log(
+            `  ${p.id}  trigger: ${p.trigger}  coalesced: ${p.coalescedCount}  requested: ${p.requestedAt}`,
+          );
         }
       } catch (err) {
         handleError(err);
@@ -762,7 +779,9 @@ export function registerKaneruCli(program: Command) {
         console.log(`${"=".repeat(40)}`);
         console.log(`  Total spent: ${summary.totalCents} cents`);
         console.log(`  Fuel limit: ${summary.fuelLimit || "unlimited"}`);
-        console.log(`  Remaining: ${summary.fuelLimit ? `${summary.remaining} cents` : "unlimited"}`);
+        console.log(
+          `  Remaining: ${summary.fuelLimit ? `${summary.remaining} cents` : "unlimited"}`,
+        );
         console.log(`  Burn rate: ${summary.burnRate} cents/hour`);
         if (summary.byAgent.length > 0) {
           console.log(`\n  By agent:`);
@@ -795,7 +814,9 @@ export function registerKaneruCli(program: Command) {
         if (analytics.byProvider.length > 0) {
           console.log(`\n  By provider:`);
           for (const p of analytics.byProvider) {
-            console.log(`    ${p.provider}/${p.model}: ${p.costCents} cents (${p.eventCount} events)`);
+            console.log(
+              `    ${p.provider}/${p.model}: ${p.costCents} cents (${p.eventCount} events)`,
+            );
           }
         }
         if (analytics.timeSeries.points.length > 0) {
@@ -1053,7 +1074,9 @@ export function registerKaneruCli(program: Command) {
         }
         console.log(`Top agents for ${opts.domain}:${opts.taskType} (${profiles.length}):\n`);
         for (const p of profiles) {
-          console.log(`  ${p.agentId}  expertise: ${(p.expertise * 100).toFixed(1)}%  success: ${(p.successRate * 100).toFixed(1)}%  missions: ${p.missionCount}`);
+          console.log(
+            `  ${p.agentId}  expertise: ${(p.expertise * 100).toFixed(1)}%  success: ${(p.successRate * 100).toFixed(1)}%  missions: ${p.missionCount}`,
+          );
         }
       } catch (err) {
         handleError(err);
@@ -1085,7 +1108,9 @@ export function registerKaneruCli(program: Command) {
         }
         console.log(`Decisions (${records.length}):\n`);
         for (const d of records) {
-          console.log(`  ${d.id}  [${d.strategy}]  confidence: ${(d.confidence * 100).toFixed(1)}%`);
+          console.log(
+            `  ${d.id}  [${d.strategy}]  confidence: ${(d.confidence * 100).toFixed(1)}%`,
+          );
           console.log(`    Question: ${d.question}`);
           console.log(`    Outcome: ${d.resolvedValue}`);
           console.log(`    Decided: ${d.decidedAt}`);
@@ -1249,9 +1274,8 @@ export function registerKaneruCli(program: Command) {
       const parent = kaneru.opts();
       const mgrs = await createVentureManagers(parent);
       try {
-        const { DistributedVentureManager } = await import(
-          "../../extensions/kaneru/distributed.js"
-        );
+        const { DistributedVentureManager } =
+          await import("../../extensions/kaneru/distributed.js");
         const dist = new DistributedVentureManager(mgrs.client, "mayros");
         const newPeers = await dist.discoverPeers(opts.venture);
         if (newPeers.length === 0) {
@@ -1291,7 +1315,8 @@ export function registerKaneruCli(program: Command) {
         const client = new CortexClient({ host, port, authToken: parent.cortexToken });
         const ns = "mayros";
         const dojoSvc = new DojoService(
-          client, ns,
+          client,
+          ns,
           new VentureManager(client, ns),
           new ChainManager(client, ns),
           new DirectiveManager(client, ns),

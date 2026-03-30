@@ -66,7 +66,9 @@ function parseProjectTriples(
     const pred = stripBrackets(String(t.predicate));
     if (pred.startsWith(prefix)) {
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       fields[pred.slice(prefix.length)] = val;
@@ -178,7 +180,12 @@ export class ProjectManager {
   }
 
   /** Update project fields. */
-  async update(id: string, patch: Partial<Pick<Project, "name" | "owner" | "status" | "targetDate" | "category" | "description">>): Promise<Project> {
+  async update(
+    id: string,
+    patch: Partial<
+      Pick<Project, "name" | "owner" | "status" | "targetDate" | "category" | "description">
+    >,
+  ): Promise<Project> {
     const project = await this.get(id);
     if (!project) throw new Error(`Project not found: ${id}`);
 
@@ -190,8 +197,10 @@ export class ProjectManager {
     if (patch.owner !== undefined) updates.push(["owner", sanitizeTripleValue(patch.owner ?? "")]);
     if (patch.status !== undefined) updates.push(["status", patch.status]);
     if (patch.targetDate !== undefined) updates.push(["targetDate", patch.targetDate]);
-    if (patch.category !== undefined) updates.push(["category", sanitizeTripleValue(patch.category)]);
-    if (patch.description !== undefined) updates.push(["description", sanitizeTripleValue(patch.description)]);
+    if (patch.category !== undefined)
+      updates.push(["category", sanitizeTripleValue(patch.category)]);
+    if (patch.description !== undefined)
+      updates.push(["description", sanitizeTripleValue(patch.description)]);
 
     for (const [field, value] of updates) {
       const existing = await this.client.listTriples({

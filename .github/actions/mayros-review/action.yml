@@ -54,27 +54,6 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
-    - name: Install Mayros
-      id: install-mayros
-      shell: bash
-      run: |
-        MAYROS_VERSION="${{ inputs.mayros-version }}"
-        # Sanitize version string: only allow semver chars and "latest"
-        if [[ ! "$MAYROS_VERSION" =~ ^[a-zA-Z0-9.\-]+$ ]]; then
-          echo "::error::Invalid mayros-version format: ${MAYROS_VERSION}"
-          exit 1
-        fi
-
-        echo "Installing @apilium/mayros@${MAYROS_VERSION}..."
-        if npm install -g "@apilium/mayros@${MAYROS_VERSION}"; then
-          echo "installed=global" >> "$GITHUB_OUTPUT"
-          echo "Mayros installed globally"
-          mayros --version || true
-        else
-          echo "::warning::Global install failed, will fall back to npx"
-          echo "installed=npx" >> "$GITHUB_OUTPUT"
-        fi
-
     - name: Get PR diff
       id: get-diff
       shell: bash
@@ -155,18 +134,32 @@ runs:
 
         PROMPT_CONTENT=$(cat /tmp/review-prompt.txt)
 
-        # Determine the mayros command to use (global install or npx fallback)
-        if command -v mayros &>/dev/null; then
-          MAYROS_CMD="mayros"
-        else
-          MAYROS_CMD="npx -y @apilium/mayros@${{ inputs.mayros-version }}"
-        fi
+        # Call Anthropic API directly — Mayros CLI needs gateway+cortex which
+        # aren't available in CI. A simple curl call is more reliable here.
+        MODEL_ID="${INPUT_MODEL#anthropic/}"
 
-        # Run review with proper argument separation
         set +e
-        REVIEW=$($MAYROS_CMD -p "$PROMPT_CONTENT" --model "$INPUT_MODEL" 2>/tmp/mayros-stderr.txt)
+        REVIEW=$(curl -sS --max-time 120 \
+          -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "content-type: application/json" \
+          -d "$(jq -n --arg prompt "$PROMPT_CONTENT" --arg model "$MODEL_ID" \
+            '{model: $model, max_tokens: 4096, messages: [{role: "user", content: $prompt}]}')" \
+          "https://api.anthropic.com/v1/messages" 2>/tmp/mayros-stderr.txt)
         EXIT_CODE=$?
         set -e
+
+        if [ $EXIT_CODE -eq 0 ]; then
+          REVIEW=$(echo "$REVIEW" | jq -r '.content[0].text // empty' 2>/dev/null)
+          if [ -z "$REVIEW" ]; then
+            API_ERROR=$(echo "$REVIEW" | jq -r '.error.message // "unknown API error"' 2>/dev/null)
+            echo "::error::Anthropic API error: ${API_ERROR}"
+            echo "review-length=0" >> "$GITHUB_OUTPUT"
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          EXIT_CODE=0
+        fi
 
         if [ $EXIT_CODE -ne 0 ]; then
           STDERR_MSG=$(cat /tmp/mayros-stderr.txt 2>/dev/null || echo "unknown error")

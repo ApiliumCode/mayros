@@ -174,7 +174,16 @@ describe("LocalModelSetup", () => {
         coveredActivities.add(a);
       }
     }
-    const allActivities: ModelActivity[] = ["coding", "chat", "reasoning", "creative", "analysis", "multilingual", "vision", "agents"];
+    const allActivities: ModelActivity[] = [
+      "coding",
+      "chat",
+      "reasoning",
+      "creative",
+      "analysis",
+      "multilingual",
+      "vision",
+      "agents",
+    ];
     for (const a of allActivities) {
       expect(coveredActivities.has(a)).toBe(true);
     }

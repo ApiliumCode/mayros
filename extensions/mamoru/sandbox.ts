@@ -41,13 +41,7 @@ export type SandboxApplyResult = {
 
 // ── Default policy ───────────────────────────────────────────────────────
 
-const DEFAULT_READ_ONLY = [
-  "/usr",
-  "/lib",
-  "/proc/self/status",
-  "/etc/ssl",
-  "/etc/resolv.conf",
-];
+const DEFAULT_READ_ONLY = ["/usr", "/lib", "/proc/self/status", "/etc/ssl", "/etc/resolv.conf"];
 
 const DEFAULT_READ_WRITE = [
   resolve(homedir(), ".mayros"),
@@ -143,18 +137,27 @@ export class MamoruSandbox {
         // prlimit can set no-new-privs indirectly; we use a direct approach
         // via /proc/self/attr or prctl helper. The most portable way from
         // Node.js is writing to the proc interface or using a tiny helper.
-        execFileSync("sh", ["-c", `test -f /proc/${pid}/status && grep -q NoNewPrivs /proc/${pid}/status`], {
-          stdio: "pipe",
-          timeout: 5000,
-        });
+        execFileSync(
+          "sh",
+          ["-c", `test -f /proc/${pid}/status && grep -q NoNewPrivs /proc/${pid}/status`],
+          {
+            stdio: "pipe",
+            timeout: 5000,
+          },
+        );
         // NoNewPrivs field exists in status — set it via prctl if not already set
         try {
-          execFileSync("sh", ["-c",
-            // Use perl as a portable prctl(38, 1, 0, 0, 0) wrapper — PR_SET_NO_NEW_PRIVS = 38
-            `perl -e 'require "syscall.ph"; syscall(157, 38, 1, 0, 0, 0)' 2>/dev/null || ` +
-            // Fallback: python3 ctypes
-            `python3 -c "import ctypes; ctypes.CDLL(None).prctl(38,1,0,0,0)" 2>/dev/null || true`,
-          ], { stdio: "pipe", timeout: 5000 });
+          execFileSync(
+            "sh",
+            [
+              "-c",
+              // Use perl as a portable prctl(38, 1, 0, 0, 0) wrapper — PR_SET_NO_NEW_PRIVS = 38
+              `perl -e 'require "syscall.ph"; syscall(157, 38, 1, 0, 0, 0)' 2>/dev/null || ` +
+                // Fallback: python3 ctypes
+                `python3 -c "import ctypes; ctypes.CDLL(None).prctl(38,1,0,0,0)" 2>/dev/null || true`,
+            ],
+            { stdio: "pipe", timeout: 5000 },
+          );
           appliedLayers.push("no-new-privs");
         } catch {
           // Could not set no-new-privs — non-fatal in best_effort mode
@@ -163,7 +166,10 @@ export class MamoruSandbox {
           }
         }
       } catch (err) {
-        if (policy.compatibility === "enforce" && !(err instanceof Error && err.message.includes("mamoru"))) {
+        if (
+          policy.compatibility === "enforce" &&
+          !(err instanceof Error && err.message.includes("mamoru"))
+        ) {
           throw new Error("mamoru: failed to verify no-new-privs support");
         }
       }
@@ -176,10 +182,10 @@ export class MamoruSandbox {
       try {
         const pid = process.pid;
         const limit = policy.process.maxProcesses;
-        execFileSync("prlimit", [
-          `--pid=${pid}`,
-          `--nproc=${limit}:${limit}`,
-        ], { stdio: "pipe", timeout: 5000 });
+        execFileSync("prlimit", [`--pid=${pid}`, `--nproc=${limit}:${limit}`], {
+          stdio: "pipe",
+          timeout: 5000,
+        });
         appliedLayers.push("rlimit-nproc");
       } catch {
         // prlimit may not be installed or may lack permissions
@@ -303,4 +309,3 @@ export class MamoruSandbox {
     return this.appliedPolicy;
   }
 }
-

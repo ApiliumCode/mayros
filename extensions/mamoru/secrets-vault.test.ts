@@ -15,7 +15,12 @@ function createMockClient(): CortexClientLike & {
 
     createTriple: vi.fn(async (req) => {
       const id = `t-${nextId++}`;
-      const triple = { id, subject: req.subject, predicate: req.predicate, object: String(req.object) };
+      const triple = {
+        id,
+        subject: req.subject,
+        predicate: req.predicate,
+        object: String(req.object),
+      };
       triples.push(triple);
       return triple;
     }),

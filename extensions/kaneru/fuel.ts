@@ -87,7 +87,9 @@ function parseFuelTriples(
     if (pred.startsWith(prefix)) {
       const field = pred.slice(prefix.length);
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       fields[field] = val;
@@ -233,10 +235,7 @@ export class FuelController {
   }
 
   /** Check if agent fuel limit is exceeded within a venture context. */
-  async checkAgentLimit(
-    agentId: string,
-    agentFuelLimit: number,
-  ): Promise<FuelLimitCheck> {
+  async checkAgentLimit(agentId: string, agentFuelLimit: number): Promise<FuelLimitCheck> {
     const totalSpent = await this.agentSpend(agentId);
 
     return {
