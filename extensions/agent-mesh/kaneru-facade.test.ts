@@ -240,9 +240,7 @@ describe("KaneruFacade", () => {
 
       // startWorkflow looks up a workflow by name — since no workflows are
       // registered in tests, it should throw a "not found" error
-      await expect(
-        facade.squadRun("squad-123", "unknown-mission"),
-      ).rejects.toThrow();
+      await expect(facade.squadRun("squad-123", "unknown-mission")).rejects.toThrow();
     });
   });
 

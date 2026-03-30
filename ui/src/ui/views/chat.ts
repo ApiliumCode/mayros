@@ -451,7 +451,9 @@ export function renderChat(props: ChatProps) {
               if (e.shiftKey) return;
               if (!props.connected) return;
               e.preventDefault();
-              if (canCompose) { props.onSend(); }
+              if (canCompose) {
+                props.onSend();
+              }
             }}
             @input=${(e: Event) => {
               const target = e.target as HTMLTextAreaElement;
@@ -483,16 +485,20 @@ export function renderChat(props: ChatProps) {
 
             <!-- Right side: mic + send -->
             <div style="display: flex; align-items: center; gap: 6px;">
-              ${props.onToggleVoice ? html`
+              ${
+                props.onToggleVoice
+                  ? html`
                 <button
                   style="
                     width: 34px; height: 34px; border-radius: 50%;
                     border: none; cursor: pointer; display: flex;
                     align-items: center; justify-content: center;
                     transition: all 0.2s;
-                    ${props.voiceRecording
-                      ? `background: var(--accent, #ff5c5c); color: white; box-shadow: 0 0 8px rgba(255,92,92,0.4);`
-                      : `background: transparent; color: var(--border-hover, #52525b);`}
+                    ${
+                      props.voiceRecording
+                        ? `background: var(--accent, #ff5c5c); color: white; box-shadow: 0 0 8px rgba(255,92,92,0.4);`
+                        : `background: transparent; color: var(--border-hover, #52525b);`
+                    }
                   "
                   ?disabled=${!props.connected}
                   @click=${props.onToggleVoice}
@@ -504,7 +510,9 @@ export function renderChat(props: ChatProps) {
                     <line x1="12" x2="12" y1="19" y2="22"/>
                   </svg>
                 </button>
-              ` : nothing}
+              `
+                  : nothing
+              }
               <button
                 style="
                   height: 34px; padding: 0 16px; border-radius: 17px;
@@ -512,7 +520,7 @@ export function renderChat(props: ChatProps) {
                   background: var(--accent, #ff5c5c); color: white;
                   display: flex; align-items: center; gap: 6px;
                   transition: opacity 0.2s;
-                  ${!props.connected ? 'opacity: 0.5;' : ''}
+                  ${!props.connected ? "opacity: 0.5;" : ""}
                 "
                 ?disabled=${!props.connected}
                 @click=${props.onSend}

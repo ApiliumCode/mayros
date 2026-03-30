@@ -135,7 +135,10 @@ export class CostAnalyticsService {
 
   // ---------- Builders ----------
 
-  private buildTimeSeries(events: FuelEvent[], period: "daily" | "weekly" | "monthly"): CostTimeSeries {
+  private buildTimeSeries(
+    events: FuelEvent[],
+    period: "daily" | "weekly" | "monthly",
+  ): CostTimeSeries {
     const buckets = new Map<string, { costCents: number; eventCount: number }>();
 
     for (const e of events) {
@@ -154,11 +157,28 @@ export class CostAnalyticsService {
   }
 
   private buildByProvider(events: FuelEvent[]): CostByProvider {
-    const map = new Map<string, { provider: string; model: string; costCents: number; inputTokens: number; outputTokens: number; eventCount: number }>();
+    const map = new Map<
+      string,
+      {
+        provider: string;
+        model: string;
+        costCents: number;
+        inputTokens: number;
+        outputTokens: number;
+        eventCount: number;
+      }
+    >();
 
     for (const e of events) {
       const key = `${e.provider}:${e.model}`;
-      const entry = map.get(key) ?? { provider: e.provider, model: e.model, costCents: 0, inputTokens: 0, outputTokens: 0, eventCount: 0 };
+      const entry = map.get(key) ?? {
+        provider: e.provider,
+        model: e.model,
+        costCents: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        eventCount: 0,
+      };
       entry.costCents += e.costCents;
       entry.inputTokens += e.inputTokens;
       entry.outputTokens += e.outputTokens;
@@ -169,7 +189,9 @@ export class CostAnalyticsService {
     return [...map.values()].sort((a, b) => b.costCents - a.costCents);
   }
 
-  private buildByAgent(events: FuelEvent[]): Array<{ agentId: string; costCents: number; eventCount: number }> {
+  private buildByAgent(
+    events: FuelEvent[],
+  ): Array<{ agentId: string; costCents: number; eventCount: number }> {
     const map = new Map<string, { costCents: number; eventCount: number }>();
 
     for (const e of events) {
@@ -201,7 +223,12 @@ export class CostAnalyticsService {
 
   private buildForecast(events: FuelEvent[], fuelLimit: number): CostForecast {
     if (events.length < 2) {
-      return { projectedMonthlyCents: 0, burnRateCentsPerHour: 0, daysUntilExhausted: null, confidence: "low" };
+      return {
+        projectedMonthlyCents: 0,
+        burnRateCentsPerHour: 0,
+        daysUntilExhausted: null,
+        confidence: "low",
+      };
     }
 
     const sorted = [...events].sort(
@@ -214,7 +241,12 @@ export class CostAnalyticsService {
 
     const hours = (lastTs - firstTs) / (1000 * 60 * 60);
     if (hours <= 0) {
-      return { projectedMonthlyCents: 0, burnRateCentsPerHour: 0, daysUntilExhausted: null, confidence: "low" };
+      return {
+        projectedMonthlyCents: 0,
+        burnRateCentsPerHour: 0,
+        daysUntilExhausted: null,
+        confidence: "low",
+      };
     }
 
     const burnRate = totalCents / hours;
@@ -229,7 +261,12 @@ export class CostAnalyticsService {
     // Confidence based on data volume
     const confidence = events.length > 100 ? "high" : events.length > 20 ? "medium" : "low";
 
-    return { projectedMonthlyCents: projectedMonthly, burnRateCentsPerHour: Math.round(burnRate), daysUntilExhausted, confidence };
+    return {
+      projectedMonthlyCents: projectedMonthly,
+      burnRateCentsPerHour: Math.round(burnRate),
+      daysUntilExhausted,
+      confidence,
+    };
   }
 
   private buildEfficiency(events: FuelEvent[]): CostEfficiency {

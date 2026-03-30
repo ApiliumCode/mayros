@@ -58,9 +58,10 @@ const kakeruPlugin = {
     // Tool: platform_status
     api.registerTool({
       name: "platform_status",
+      label: "Platform Status",
       description: "List all registered platform bridges and their status",
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: async (_toolCallId: string) => {
         const bridges = coordinator.listBridges();
         return {
           content: [
@@ -69,6 +70,7 @@ const kakeruPlugin = {
               text: JSON.stringify(bridges, null, 2),
             },
           ],
+          details: undefined,
         };
       },
     });
@@ -76,6 +78,7 @@ const kakeruPlugin = {
     // Tool: platform_execute
     api.registerTool({
       name: "platform_execute",
+      label: "Platform Execute",
       description: "Execute a task on a specific platform bridge",
       parameters: Type.Object({
         platform: Type.String({ description: "Platform ID (claude, codex)" }),
@@ -85,19 +88,22 @@ const kakeruPlugin = {
         ),
         timeout: Type.Optional(Type.Number({ description: "Timeout in ms" })),
       }),
-      execute: async (params: {
-        platform: string;
-        prompt: string;
-        workDir?: string;
-        timeout?: number;
-      }) => {
+      execute: async (
+        _toolCallId: string,
+        params: {
+          platform: string;
+          prompt: string;
+          workDir?: string;
+          timeout?: number;
+        },
+      ) => {
         const bridge = coordinator.getBridge(params.platform);
         if (!bridge) {
           return {
             content: [
               { type: "text" as const, text: `Platform "${params.platform}" not registered` },
             ],
-            isError: true,
+            details: undefined,
           };
         }
 
@@ -117,11 +123,12 @@ const kakeruPlugin = {
                 text: JSON.stringify(result, null, 2),
               },
             ],
+            details: undefined,
           };
         } catch (err) {
           return {
             content: [{ type: "text" as const, text: `Execution failed: ${String(err)}` }],
-            isError: true,
+            details: undefined,
           };
         }
       },
@@ -130,6 +137,7 @@ const kakeruPlugin = {
     // Tool: platform_workflow
     api.registerTool({
       name: "platform_workflow",
+      label: "Platform Workflow",
       description: "Execute tasks across multiple platforms in parallel",
       parameters: Type.Object({
         tasks: Type.Array(
@@ -140,10 +148,16 @@ const kakeruPlugin = {
           }),
         ),
       }),
-      execute: async (params: {
-        tasks: Array<{ platform: string; prompt: string; filePaths?: string[] }>;
-      }) => {
-        const workDir = api.config?.workspaceDir ?? process.cwd();
+      execute: async (
+        _toolCallId: string,
+        params: {
+          tasks: Array<{ platform: string; prompt: string; filePaths?: string[] }>;
+        },
+      ) => {
+        const workDir =
+          ((api.config as Record<string, unknown> | undefined)?.workspaceDir as
+            | string
+            | undefined) ?? process.cwd();
         const workflowTasks = params.tasks.map((t) => ({
           platformId: t.platform,
           task: {
@@ -167,6 +181,7 @@ const kakeruPlugin = {
               text: JSON.stringify(output, null, 2),
             },
           ],
+          details: undefined,
         };
       },
     });

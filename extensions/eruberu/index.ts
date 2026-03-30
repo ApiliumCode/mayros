@@ -79,7 +79,7 @@ const eruberuPlugin = {
             | undefined;
           const host = (cortexCfg?.host as string | undefined) ?? "127.0.0.1";
           const port = (cortexCfg?.port as number | undefined) ?? 19090;
-          cortexClient = new CortexClient(host, port) as unknown as CortexPersistenceClient;
+          cortexClient = new CortexClient({ host, port }) as unknown as CortexPersistenceClient;
           const data = await loadFromCortex(cortexClient);
           if (Object.keys(data).length > 0) {
             qTable.import(data);
@@ -121,14 +121,17 @@ const eruberuPlugin = {
     // before_model_resolve — main routing logic
     api.on(
       "before_model_resolve",
-      async (event) => {
+      async (event, ctx) => {
         if (!qTable || !cfg.enabled) return;
 
+        // Extended event properties may be passed at runtime
+        const ext = event as Record<string, unknown>;
+
         // Skip if agent has explicit model override
-        if (event.modelOverride) return;
+        if (ext.modelOverride) return;
 
         // Determine task type from prompt
-        const prompt = event.prompt ?? event.systemPrompt ?? "";
+        const prompt = event.prompt ?? (ext.systemPrompt as string | undefined) ?? "";
         const taskType = classifyTask(prompt);
 
         // Get budget status
@@ -150,7 +153,7 @@ const eruberuPlugin = {
         if (cfg.budgetDrivenFallback && budgetFraction !== undefined) {
           if (budgetFraction >= cfg.budgetCriticalThreshold) {
             // Force cheapest model
-            pendingDecisions.set(event.runId, {
+            pendingDecisions.set((ext.runId as string) ?? ctx.sessionId ?? "unknown", {
               state,
               action: "cost-optimized:",
               startTime: Date.now(),
@@ -160,7 +163,7 @@ const eruberuPlugin = {
             };
           }
           if (budgetFraction >= cfg.budgetWarnThreshold) {
-            pendingDecisions.set(event.runId, {
+            pendingDecisions.set((ext.runId as string) ?? ctx.sessionId ?? "unknown", {
               state,
               action: "cost-optimized:",
               startTime: Date.now(),
@@ -188,7 +191,7 @@ const eruberuPlugin = {
         const [strategyPart, providerPart] = chosenAction.split(":");
         const strategy = (strategyPart || "default") as ModelRoutingStrategy;
 
-        pendingDecisions.set(event.runId, {
+        pendingDecisions.set((ext.runId as string) ?? ctx.sessionId ?? "unknown", {
           state,
           action: chosenAction,
           startTime: Date.now(),
@@ -210,17 +213,20 @@ const eruberuPlugin = {
     api.on("llm_output", async (event) => {
       if (!qTable) return;
 
+      // Extended event properties may be passed at runtime
+      const ext = event as Record<string, unknown>;
+
       const decision = pendingDecisions.get(event.runId);
       if (!decision) return;
       pendingDecisions.delete(event.runId);
 
       const latencyMs = Date.now() - decision.startTime;
-      const usage = event.usage as { input?: number; output?: number; total?: number } | undefined;
+      const usage = event.usage;
       const totalTokens = usage?.total ?? (usage?.input ?? 0) + (usage?.output ?? 0);
 
       // Compute reward signal
       const signal: RewardSignal = {
-        success: event.error ? -1.0 : 1.0,
+        success: ext.error ? -1.0 : 1.0,
         costEfficiency: 0,
         qualityProxy: 0,
         latencyPenalty: 0,
@@ -245,7 +251,7 @@ const eruberuPlugin = {
       }
 
       // Rate limit penalty
-      if (event.rateLimited) {
+      if (ext.rateLimited) {
         signal.rateLimitPenalty = -0.8;
       }
 

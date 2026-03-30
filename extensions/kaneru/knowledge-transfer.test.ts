@@ -171,7 +171,11 @@ describe("KnowledgeTransferService", () => {
 
       const result = await svc.transferOnComplete("agent-1", "m-1");
 
-      expect(fusion.merge).toHaveBeenCalledWith("private:agent-1", "test:shared:venture", "additive");
+      expect(fusion.merge).toHaveBeenCalledWith(
+        "private:agent-1",
+        "test:shared:venture",
+        "additive",
+      );
       expect(result.sourceAgent).toBe("agent-1");
       expect(result.missionId).toBe("m-1");
       expect(result.triplesTransferred).toBe(15);
@@ -237,11 +241,7 @@ describe("KnowledgeTransferService", () => {
 
       // Default maxTriples is 100, so 200 should be capped
       expect(result.triplesTransferred).toBe(100);
-      expect(fusion.merge).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(String),
-        "additive",
-      );
+      expect(fusion.merge).toHaveBeenCalledWith(expect.any(String), expect.any(String), "additive");
     });
   });
 });

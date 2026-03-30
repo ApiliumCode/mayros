@@ -129,17 +129,16 @@ export class DistributedVentureManager {
       try {
         // Push local state to peer
         const pushResult = await this.client.dagSync({
-          target: peer,
-          tips: localTips,
+          local_tips: localTips,
         });
-        totalActionsSynced += pushResult.actions_sent ?? 0;
+        totalActionsSynced += pushResult.action_count ?? 0;
 
         // Pull remote state from peer
         const pullResult = await this.client.dagSyncPull({
-          source: peer,
+          peer_url: peer,
         });
-        totalTriplesAdded += pullResult.triples_added ?? 0;
-        totalConflicts += pullResult.conflicts ?? 0;
+        totalTriplesAdded += pullResult.ingested ?? 0;
+        totalConflicts += pullResult.already_had ?? 0;
       } catch {
         // Peer unreachable — skip silently
       }
@@ -181,9 +180,8 @@ export class DistributedVentureManager {
       limit: 1,
     });
 
-    const lastSyncAt = syncTriples.triples.length > 0
-      ? String(syncTriples.triples[0].object)
-      : null;
+    const lastSyncAt =
+      syncTriples.triples.length > 0 ? String(syncTriples.triples[0].object) : null;
 
     return {
       ventureId,
@@ -225,5 +223,4 @@ export class DistributedVentureManager {
 
     return newPeers;
   }
-
 }

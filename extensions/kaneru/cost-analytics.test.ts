@@ -163,8 +163,14 @@ describe("CostAnalyticsService", () => {
 
   describe("analyze", () => {
     it("returns full analytics object", async () => {
-      storeFuelEvent("test", makeFuelEvent({ id: "e1", costCents: 100, occurredAt: "2026-03-01T10:00:00Z" }));
-      storeFuelEvent("test", makeFuelEvent({ id: "e2", costCents: 200, occurredAt: "2026-03-02T10:00:00Z" }));
+      storeFuelEvent(
+        "test",
+        makeFuelEvent({ id: "e1", costCents: 100, occurredAt: "2026-03-01T10:00:00Z" }),
+      );
+      storeFuelEvent(
+        "test",
+        makeFuelEvent({ id: "e2", costCents: 200, occurredAt: "2026-03-02T10:00:00Z" }),
+      );
 
       const result = await svc.analyze("v1");
       expect(result.ventureId).toBe("v1");
@@ -177,7 +183,10 @@ describe("CostAnalyticsService", () => {
     });
 
     it("respects fuelLimit option", async () => {
-      storeFuelEvent("test", makeFuelEvent({ id: "e1", costCents: 100, occurredAt: "2026-03-01T10:00:00Z" }));
+      storeFuelEvent(
+        "test",
+        makeFuelEvent({ id: "e1", costCents: 100, occurredAt: "2026-03-01T10:00:00Z" }),
+      );
       const result = await svc.analyze("v1", { fuelLimit: 500 });
       expect(result.fuelLimit).toBe(500);
     });
@@ -236,9 +245,30 @@ describe("CostAnalyticsService", () => {
   describe("byProvider", () => {
     it("groups by provider and model", () => {
       const events: FuelEvent[] = [
-        makeFuelEvent({ id: "e1", provider: "openai", model: "gpt-4", costCents: 100, inputTokens: 500, outputTokens: 200 }),
-        makeFuelEvent({ id: "e2", provider: "openai", model: "gpt-4", costCents: 200, inputTokens: 1000, outputTokens: 400 }),
-        makeFuelEvent({ id: "e3", provider: "anthropic", model: "claude-3", costCents: 150, inputTokens: 800, outputTokens: 300 }),
+        makeFuelEvent({
+          id: "e1",
+          provider: "openai",
+          model: "gpt-4",
+          costCents: 100,
+          inputTokens: 500,
+          outputTokens: 200,
+        }),
+        makeFuelEvent({
+          id: "e2",
+          provider: "openai",
+          model: "gpt-4",
+          costCents: 200,
+          inputTokens: 1000,
+          outputTokens: 400,
+        }),
+        makeFuelEvent({
+          id: "e3",
+          provider: "anthropic",
+          model: "claude-3",
+          costCents: 150,
+          inputTokens: 800,
+          outputTokens: 300,
+        }),
       ];
 
       const result = svc.byProvider(events);
@@ -273,9 +303,7 @@ describe("CostAnalyticsService", () => {
     });
 
     it("returns low confidence with fewer than 2 events", () => {
-      const events: FuelEvent[] = [
-        makeFuelEvent({ id: "e1", costCents: 100 }),
-      ];
+      const events: FuelEvent[] = [makeFuelEvent({ id: "e1", costCents: 100 })];
 
       const f = svc.forecast(events, 10000);
       expect(f.confidence).toBe("low");
@@ -299,9 +327,27 @@ describe("CostAnalyticsService", () => {
   describe("efficiency", () => {
     it("computes costPerMission", () => {
       const events: FuelEvent[] = [
-        makeFuelEvent({ id: "e1", costCents: 100, missionId: "m1", inputTokens: 500, outputTokens: 200 }),
-        makeFuelEvent({ id: "e2", costCents: 200, missionId: "m1", inputTokens: 1000, outputTokens: 400 }),
-        makeFuelEvent({ id: "e3", costCents: 300, missionId: "m2", inputTokens: 800, outputTokens: 300 }),
+        makeFuelEvent({
+          id: "e1",
+          costCents: 100,
+          missionId: "m1",
+          inputTokens: 500,
+          outputTokens: 200,
+        }),
+        makeFuelEvent({
+          id: "e2",
+          costCents: 200,
+          missionId: "m1",
+          inputTokens: 1000,
+          outputTokens: 400,
+        }),
+        makeFuelEvent({
+          id: "e3",
+          costCents: 300,
+          missionId: "m2",
+          inputTokens: 800,
+          outputTokens: 300,
+        }),
       ];
 
       // Use the private method through analyze's result — test via the public timeSeries helper
@@ -317,8 +363,24 @@ describe("CostAnalyticsService", () => {
     });
 
     it("handles events with no mission IDs", async () => {
-      storeFuelEvent("test", makeFuelEvent({ id: "e1", costCents: 100, missionId: null, occurredAt: "2026-03-01T00:00:00Z" }));
-      storeFuelEvent("test", makeFuelEvent({ id: "e2", costCents: 200, missionId: null, occurredAt: "2026-03-02T00:00:00Z" }));
+      storeFuelEvent(
+        "test",
+        makeFuelEvent({
+          id: "e1",
+          costCents: 100,
+          missionId: null,
+          occurredAt: "2026-03-01T00:00:00Z",
+        }),
+      );
+      storeFuelEvent(
+        "test",
+        makeFuelEvent({
+          id: "e2",
+          costCents: 200,
+          missionId: null,
+          occurredAt: "2026-03-02T00:00:00Z",
+        }),
+      );
 
       const result = await svc.analyze("v1");
       expect(result.efficiency.costPerMissionCents).toBe(0);

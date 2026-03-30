@@ -142,8 +142,8 @@ export class AgentTerminalService {
       if (exec) executions.push(exec);
     }
 
-    return executions.sort((a, b) =>
-      new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime(),
+    return executions.sort(
+      (a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime(),
     );
   }
 

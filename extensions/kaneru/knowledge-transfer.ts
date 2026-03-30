@@ -119,8 +119,8 @@ export class KnowledgeTransferService {
       if (transfer) transfers.push(transfer);
     }
 
-    return transfers.sort((a, b) =>
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    return transfers.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
   }
 

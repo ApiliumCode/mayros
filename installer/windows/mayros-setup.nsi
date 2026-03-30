@@ -2,7 +2,7 @@
 ; Installs Node.js portable + Cortex binary, then runs npm install for Mayros
 
 !ifndef MAYROS_VERSION
-  !define MAYROS_VERSION "0.3.1"
+  !define MAYROS_VERSION "0.3.2"
 !endif
 !ifndef NODE_VERSION
   !define NODE_VERSION "22"

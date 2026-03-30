@@ -210,9 +210,7 @@ function filterQuickActions(query: string) {
   if (!query.trim()) return QUICK_ACTIONS;
   const lower = query.toLowerCase();
   return QUICK_ACTIONS.filter(
-    (a) =>
-      a.label.toLowerCase().includes(lower) ||
-      a.id.toLowerCase().includes(lower),
+    (a) => a.label.toLowerCase().includes(lower) || a.id.toLowerCase().includes(lower),
   );
 }
 
@@ -245,9 +243,10 @@ export function renderCommandBar(props: CommandBarProps) {
   };
 
   const filteredActions = filterQuickActions(state.query);
-  const showVoice = typeof window !== "undefined" &&
+  const showVoice =
+    typeof window !== "undefined" &&
     (Boolean((window as unknown as Record<string, unknown>).SpeechRecognition) ||
-     Boolean((window as unknown as Record<string, unknown>).webkitSpeechRecognition));
+      Boolean((window as unknown as Record<string, unknown>).webkitSpeechRecognition));
 
   return html`
     <style>${PULSE_KEYFRAMES}</style>
@@ -268,41 +267,42 @@ export function renderCommandBar(props: CommandBarProps) {
             style=${INPUT_STYLE}
             autofocus
           />
-          ${showVoice ? html`
+          ${
+            showVoice
+              ? html`
             <button
               style=${state.recording ? MIC_RECORDING_STYLE : MIC_BUTTON_STYLE}
               @click=${onToggleMic}
               title=${state.recording ? "Stop recording" : "Voice input"}
             >${state.recording ? "\u23F9" : "\uD83C\uDFA4"}</button>
-          ` : nothing}
+          `
+              : nothing
+          }
         </div>
 
         <div style=${DIVIDER_STYLE}></div>
 
         <!-- Content area -->
-        ${state.processing
-          ? html`<div style=${PROCESSING_STYLE}>
+        ${
+          state.processing
+            ? html`<div style=${PROCESSING_STYLE}>
               <span style="animation: commandBarPulse 1s ease-in-out infinite;">&#9679;</span>
               Processing...
             </div>`
-          : nothing
+            : nothing
         }
 
-        ${state.error
-          ? html`<div style=${ERROR_CARD_STYLE}>${state.error}</div>`
-          : nothing
-        }
+        ${state.error ? html`<div style=${ERROR_CARD_STYLE}>${state.error}</div>` : nothing}
 
-        ${state.result
-          ? html`<div style=${RESULT_CARD_STYLE}>${state.result}</div>`
-          : nothing
-        }
+        ${state.result ? html`<div style=${RESULT_CARD_STYLE}>${state.result}</div>` : nothing}
 
-        ${!state.processing && !state.result && !state.error
-          ? html`
+        ${
+          !state.processing && !state.result && !state.error
+            ? html`
             <!-- Context strip -->
-            ${state.ventureContext
-              ? html`<div style=${CONTEXT_STRIP_STYLE}>
+            ${
+              state.ventureContext
+                ? html`<div style=${CONTEXT_STRIP_STYLE}>
                   ${state.ventureContext.name}
                   <span style="opacity: 0.5; margin: 0 6px;">/</span>
                   ${state.ventureContext.activeMissions} active mission${state.ventureContext.activeMissions !== 1 ? "s" : ""}
@@ -310,12 +310,13 @@ export function renderCommandBar(props: CommandBarProps) {
                   $${(state.ventureContext.fuelSpent / 100).toFixed(2)} spent
                 </div>
                 <div style=${DIVIDER_STYLE}></div>`
-              : nothing
+                : nothing
             }
 
             <!-- Quick actions -->
-            ${filteredActions.length > 0
-              ? html`
+            ${
+              filteredActions.length > 0
+                ? html`
                 <div style=${QUICK_ACTIONS_GRID_STYLE}>
                   ${filteredActions.map(
                     (action) => html`
@@ -324,7 +325,8 @@ export function renderCommandBar(props: CommandBarProps) {
                         class="command-bar-action"
                         @click=${() => onQuickAction(action.id)}
                         @mouseenter=${(e: MouseEvent) => {
-                          (e.currentTarget as HTMLElement).style.background = "var(--bg-hover, #262a35)";
+                          (e.currentTarget as HTMLElement).style.background =
+                            "var(--bg-hover, #262a35)";
                         }}
                         @mouseleave=${(e: MouseEvent) => {
                           (e.currentTarget as HTMLElement).style.background = "transparent";
@@ -336,12 +338,13 @@ export function renderCommandBar(props: CommandBarProps) {
                     `,
                   )}
                 </div>`
-              : nothing
+                : nothing
             }
 
             <!-- Active missions -->
-            ${state.activeMissions.length > 0
-              ? html`
+            ${
+              state.activeMissions.length > 0
+                ? html`
                 <div style=${DIVIDER_STYLE}></div>
                 <div style=${MISSIONS_LIST_STYLE}>
                   <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
@@ -357,10 +360,10 @@ export function renderCommandBar(props: CommandBarProps) {
                     `,
                   )}
                 </div>`
-              : nothing
+                : nothing
             }
           `
-          : nothing
+            : nothing
         }
 
         <!-- Footer -->

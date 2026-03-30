@@ -64,7 +64,9 @@ function parseVentureTriples(
     if (pred.startsWith(prefix)) {
       const field = pred.slice(prefix.length);
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       fields[field] = val;
@@ -178,7 +180,9 @@ export class VentureManager {
     // Check prefix uniqueness if changing prefix
     if (patch.prefix !== undefined && patch.prefix.toUpperCase() !== venture.prefix) {
       const existing = await this.list();
-      if (existing.some((v) => v.id !== id && v.prefix.toUpperCase() === patch.prefix!.toUpperCase())) {
+      if (
+        existing.some((v) => v.id !== id && v.prefix.toUpperCase() === patch.prefix!.toUpperCase())
+      ) {
         throw new Error(`Venture prefix "${patch.prefix}" is already in use`);
       }
     }
@@ -189,7 +193,8 @@ export class VentureManager {
     const updates: Array<[string, string | number]> = [["updatedAt", now]];
 
     if (patch.name !== undefined) updates.push(["name", sanitizeTripleValue(patch.name)]);
-    if (patch.directive !== undefined) updates.push(["directive", sanitizeTripleValue(patch.directive)]);
+    if (patch.directive !== undefined)
+      updates.push(["directive", sanitizeTripleValue(patch.directive)]);
     if (patch.fuelLimit !== undefined) updates.push(["fuelLimit", patch.fuelLimit]);
     if (patch.prefix !== undefined) updates.push(["prefix", patch.prefix.toUpperCase()]);
 

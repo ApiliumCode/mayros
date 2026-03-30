@@ -8,26 +8,21 @@
  * Key derivation: scrypt (N=131072, r=8, p=1) from master password + random salt.
  */
 
-import {
-  randomBytes,
-  createCipheriv,
-  createDecipheriv,
-  scryptSync,
-} from "node:crypto";
+import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from "node:crypto";
 import type { CortexClientLike } from "../shared/cortex-client.js";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
 export type Secret = {
   id: string;
-  name: string;            // e.g., "ANTHROPIC_API_KEY"
+  name: string; // e.g., "ANTHROPIC_API_KEY"
   version: number;
-  encryptedValue: string;  // AES-256-GCM encrypted (base64)
-  iv: string;              // initialization vector (base64)
-  tag: string;             // GCM auth tag (base64)
-  salt: string;            // scrypt salt (base64)
+  encryptedValue: string; // AES-256-GCM encrypted (base64)
+  iv: string; // initialization vector (base64)
+  tag: string; // GCM auth tag (base64)
+  salt: string; // scrypt salt (base64)
   scope: "global" | "venture" | "agent";
-  scopeId?: string;        // venture or agent ID
+  scopeId?: string; // venture or agent ID
   createdAt: string;
   rotatedAt: string | null;
 };
@@ -136,10 +131,7 @@ export class MamoruVault {
     const iv = randomBytes(IV_BYTES);
     const cipher = createCipheriv(ALGORITHM, key, iv);
 
-    const encBuf = Buffer.concat([
-      cipher.update(plaintext, "utf8"),
-      cipher.final(),
-    ]);
+    const encBuf = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
     const tag = cipher.getAuthTag();
 
     return {
@@ -153,11 +145,7 @@ export class MamoruVault {
   private decrypt(encrypted: string, iv: string, tag: string, salt: string): string {
     const password = this.requireKey();
     const key = this.deriveKey(password, Buffer.from(salt, "base64"));
-    const decipher = createDecipheriv(
-      ALGORITHM,
-      key,
-      Buffer.from(iv, "base64"),
-    );
+    const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(iv, "base64"));
     decipher.setAuthTag(Buffer.from(tag, "base64"));
 
     return Buffer.concat([
@@ -183,7 +171,7 @@ export class MamoruVault {
     }
 
     const scope = opts?.scope ?? "global";
-    const version = await this.currentVersion(name) + 1;
+    const version = (await this.currentVersion(name)) + 1;
     const now = new Date().toISOString();
     const { encrypted, iv, tag, salt } = this.encrypt(value);
 

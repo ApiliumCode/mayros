@@ -130,7 +130,9 @@ function renderComponent(
       `;
     }
     case "Divider":
-      return html`<hr style="border:none;border-top:1px solid var(--border,#313244);margin:8px 0" />`;
+      return html`
+        <hr style="border: none; border-top: 1px solid var(--border, #313244); margin: 8px 0" />
+      `;
     default:
       return nothing;
   }
@@ -254,9 +256,8 @@ export function renderCanvasEmbed(props: CanvasEmbedProps) {
   const surfaces = parseJsonl(jsonl);
 
   // Filter surfaces based on active tab
-  const visibleSurfaces = activeSurface === "all"
-    ? surfaces
-    : surfaces.filter((s) => s.surfaceId === activeSurface);
+  const visibleSurfaces =
+    activeSurface === "all" ? surfaces : surfaces.filter((s) => s.surfaceId === activeSurface);
 
   const renderedSurfaces = visibleSurfaces.map((surface) => {
     if (!surface.root || !surface.components.has(surface.root)) {
@@ -272,7 +273,13 @@ export function renderCanvasEmbed(props: CanvasEmbedProps) {
   return html`
     <section class="tab-content" style="padding:20px">
       ${tabBar}
-      ${renderedSurfaces.length > 0 ? renderedSurfaces : html`<p style="color:var(--text-secondary,#a6adc8)">No surfaces found for this view.</p>`}
+      ${
+        renderedSurfaces.length > 0
+          ? renderedSurfaces
+          : html`
+              <p style="color: var(--text-secondary, #a6adc8)">No surfaces found for this view.</p>
+            `
+      }
     </section>
   `;
 }

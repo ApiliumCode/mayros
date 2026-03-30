@@ -111,6 +111,7 @@ After=network.target
 
 [Service]
 Type=simple
+WorkingDirectory=/opt/mayros/lib/node_modules/@apilium/mayros
 ExecStart=/opt/mayros/bin/mayros gateway start --foreground
 Restart=on-failure
 RestartSec=5
@@ -153,28 +154,51 @@ exec /opt/mayros/node/bin/node /opt/mayros/lib/node_modules/@apilium/mayros/dist
 EOF
 chmod +x /opt/mayros/bin/mayros
 
-# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
+# Resolve user home directory
 if [ -n "$SUDO_USER" ]; then
   MAYROS_DIR="/home/$SUDO_USER/.mayros"
-  su - "$SUDO_USER" -c "mkdir -p '$MAYROS_DIR'"
-  CONFIG_FILE="$MAYROS_DIR/mayros.json"
-  if [ -f "$CONFIG_FILE" ]; then
-    su - "$SUDO_USER" -c "/opt/mayros/node/bin/node -e \"const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));\"" || true
-  else
-    su - "$SUDO_USER" -c "echo '{\"gateway\":{\"mode\":\"local\",\"auth\":{\"mode\":\"none\"}}}' > '$CONFIG_FILE'"
-  fi
+  RUN_AS="su - $SUDO_USER -c"
+else
+  MAYROS_DIR="$HOME/.mayros"
+  RUN_AS="bash -c"
+fi
+mkdir -p "$MAYROS_DIR"
+
+# Minimal config: gateway.mode=local + auth.mode=none
+CONFIG_FILE="$MAYROS_DIR/mayros.json"
+/opt/mayros/node/bin/node -e "
+  const fs = require('fs');
+  const f = '$CONFIG_FILE';
+  let c = {};
+  try { c = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
+  if (!c.gateway) c.gateway = {};
+  if (!c.gateway.mode) c.gateway.mode = 'local';
+  if (!c.gateway.auth) c.gateway.auth = {};
+  c.gateway.auth.mode = 'none';
+  fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n');
+" 2>/dev/null || echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
+
+# Bootstrap workspace templates so the agent can start
+TEMPLATES="/opt/mayros/lib/node_modules/@apilium/mayros/docs/reference/templates"
+WORKSPACE="$MAYROS_DIR/workspace"
+if [ -d "$TEMPLATES" ]; then
+  mkdir -p "$WORKSPACE"
+  for tmpl in AGENTS.md MAYROS.md TOOLS.md IDENTITY.md USER.md HOPE.md BOOTSTRAP.md; do
+    [ -f "$TEMPLATES/$tmpl" ] && [ ! -f "$WORKSPACE/$tmpl" ] && cp "$TEMPLATES/$tmpl" "$WORKSPACE/$tmpl"
+  done
+  [ ! -f "$WORKSPACE/MEMORY.md" ] && echo "# Memory" > "$WORKSPACE/MEMORY.md"
+fi
+
+# Fix ownership if running as root
+if [ -n "$SUDO_USER" ]; then
+  chown -R "$SUDO_USER:$(id -gn "$SUDO_USER")" "$MAYROS_DIR"
+fi
+
+# Enable and start gateway service
+if [ -n "$SUDO_USER" ]; then
   su - "$SUDO_USER" -c "systemctl --user daemon-reload" || true
   su - "$SUDO_USER" -c "systemctl --user enable mayros-gateway.service" || true
   su - "$SUDO_USER" -c "systemctl --user start mayros-gateway.service" || true
-else
-  MAYROS_DIR="$HOME/.mayros"
-  mkdir -p "$MAYROS_DIR"
-  CONFIG_FILE="$MAYROS_DIR/mayros.json"
-  if [ -f "$CONFIG_FILE" ]; then
-    /opt/mayros/node/bin/node -e "const fs=require('fs');const f='$CONFIG_FILE';const c=JSON.parse(fs.readFileSync(f,'utf8'));if(!c.gateway)c.gateway={};if(!c.gateway.mode)c.gateway.mode='local';if(!c.gateway.auth)c.gateway.auth={};if(!c.gateway.auth.mode)c.gateway.auth.mode='none';fs.writeFileSync(f,JSON.stringify(c,null,2));" || true
-  else
-    echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
-  fi
 fi
 
 echo ""

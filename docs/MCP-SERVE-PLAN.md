@@ -135,11 +135,11 @@ process.on("SIGINT", () => {
 
 ## Task 2: Dedicated MCP Memory Tools
 
-### Problem
+### Problem — MCP API Complexity
 
 The existing `semantic_memory_store` tool is designed for internal agent use. Its API is complex (RDF triples, subjects, predicates). MCP clients need a simpler, more intuitive API.
 
-### Solution
+### Solution — Dedicated MCP Tools
 
 Register dedicated `mayros_*` prefixed tools in the MCP server plugin that wrap the existing Cortex client with a user-friendly API.
 
@@ -797,7 +797,7 @@ Pass `allTools` to `McpServerOptions` instead of `tools`.
 
 ## Task 4: Legacy SSE Transport (Claude Desktop compatibility)
 
-### Problem
+### Problem — SSE Transport Missing
 
 Claude Desktop uses the legacy MCP "HTTP with SSE" transport (`/sse` endpoint + POST to returned URL). The current HTTP transport only supports Streamable HTTP (`POST /mcp`).
 
@@ -936,7 +936,7 @@ const setup = program
 
 ## Task 6: Enhanced Health Check
 
-### Modify `extensions/mcp-server/transport-http.ts`
+### Modify `extensions/mcp-server/transport-http.ts` — Health Endpoint
 
 Change health endpoint to include Cortex status:
 

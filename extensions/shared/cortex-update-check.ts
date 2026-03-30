@@ -251,7 +251,11 @@ export async function installOrUpdateCortex(
         // If rename fails (binary locked), try direct overwrite via copy
         const { copyFile } = await import("node:fs/promises");
         await copyFile(candidate, binaryPath);
-        try { await unlink(candidate); } catch { /* best-effort */ }
+        try {
+          await unlink(candidate);
+        } catch {
+          /* best-effort */
+        }
         log(`Overwrote ${binaryName} with ${candidates[0]}`);
         // Skip the rename below
         candidates.length = 0;
@@ -287,7 +291,11 @@ export async function installOrUpdateCortex(
   for (const leftover of readdirSync(installDir).filter(
     (f) => f.startsWith(baseName + "-") && !f.endsWith(".tar.gz") && !f.endsWith(".zip"),
   )) {
-    try { await unlink(join(installDir, leftover)); } catch { /* best-effort */ }
+    try {
+      await unlink(join(installDir, leftover));
+    } catch {
+      /* best-effort */
+    }
   }
 
   const version = getCortexBinaryVersion(binaryPath);

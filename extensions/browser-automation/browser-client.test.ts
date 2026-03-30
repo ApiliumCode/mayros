@@ -138,12 +138,12 @@ beforeEach(() => {
       default: class {
         constructor() {
           // Return mock instance
-          return mockWsInstance as unknown;
+          return mockWsInstance as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         }
       },
       WebSocket: class {
         constructor() {
-          return mockWsInstance as unknown;
+          return mockWsInstance as any; // eslint-disable-line @typescript-eslint/no-explicit-any
         }
       },
     };

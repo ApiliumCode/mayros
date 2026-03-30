@@ -68,7 +68,9 @@ export class ChainManager {
     const ventureNode = `${this.ns}:venture:${ventureId}`;
     const alreadyDeployed = existing.triples.some((t) => {
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       return val === ventureNode;
@@ -105,7 +107,9 @@ export class ChainManager {
 
     for (const t of deployments.triples) {
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       if (val === ventureNode && t.id) {
@@ -246,7 +250,8 @@ export class ChainManager {
         predicate: agentPredicate(this.ns, "role"),
         limit: 1,
       });
-      const role = roleTriples.triples.length > 0 ? String(roleTriples.triples[0].object) : "member";
+      const role =
+        roleTriples.triples.length > 0 ? String(roleTriples.triples[0].object) : "member";
 
       const escTriples = await this.client.listTriples({
         subject,

@@ -92,7 +92,9 @@ function parseMissionTriples(
     if (pred.startsWith(prefix)) {
       const field = pred.slice(prefix.length);
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       fields[field] = val;
@@ -111,7 +113,8 @@ function parseMissionTriples(
   if (ventureId.startsWith(venturePrefix)) ventureId = ventureId.slice(venturePrefix.length);
 
   let directiveId: string | null = fields.directive ?? null;
-  if (directiveId?.startsWith(directivePrefix)) directiveId = directiveId.slice(directivePrefix.length);
+  if (directiveId?.startsWith(directivePrefix))
+    directiveId = directiveId.slice(directivePrefix.length);
 
   let parentId: string | null = fields.parent ?? null;
   if (parentId?.startsWith(missionPrefix)) parentId = parentId.slice(missionPrefix.length);
@@ -281,7 +284,11 @@ export class MissionManager {
     // Wrong status for claiming
     if (mission.status !== "ready") {
       // Allow stale adoption if active + same agent
-      if (mission.status === "active" && mission.claimedBy === agentId && mission.claimRun !== runId) {
+      if (
+        mission.status === "active" &&
+        mission.claimedBy === agentId &&
+        mission.claimRun !== runId
+      ) {
         return this.adoptClaim(mission, agentId, runId);
       }
       return { ok: false, reason: "wrong_status" };

@@ -32,7 +32,8 @@ describe("pw-tools-core.snapshot navigate guard", () => {
   it("navigates valid network URLs with clamped timeout", async () => {
     const spy = vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockResolvedValue({
       hostname: "example.com",
-      ip: "93.184.216.34",
+      addresses: ["93.184.216.34"],
+      lookup: (() => {}) as unknown as typeof import("node:dns").lookup,
     });
 
     const goto = vi.fn(async () => {});

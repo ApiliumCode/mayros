@@ -22,12 +22,23 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     timeout-minutes: 10
+    env:
+      HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     steps:
+      - name: Check API key availability
+        if: env.HAS_API_KEY != 'true'
+        shell: bash
+        run: |
+          echo "::notice::ANTHROPIC_API_KEY is not configured — skipping PR review"
+          echo "To enable automated reviews, add the ANTHROPIC_API_KEY secret to this repository."
+
       - uses: actions/checkout@v4
+        if: env.HAS_API_KEY == 'true'
         with:
           fetch-depth: 0
 
       - uses: ./.github/actions/mayros-review
+        if: env.HAS_API_KEY == 'true'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

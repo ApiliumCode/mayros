@@ -81,7 +81,9 @@ function parsePulseTriples(
     if (pred.startsWith(prefix)) {
       const field = pred.slice(prefix.length);
       const val =
-        typeof t.object === "object" && t.object !== null && "node" in (t.object as Record<string, unknown>)
+        typeof t.object === "object" &&
+        t.object !== null &&
+        "node" in (t.object as Record<string, unknown>)
           ? stripBrackets(String((t.object as { node: string }).node))
           : String(t.object);
       fields[field] = val;
@@ -326,7 +328,8 @@ export class PulseScheduler {
       predicate: pulsePredicate(this.ns, "claimRun"),
       limit: 1,
     });
-    const claimRun = claimTriples.triples.length > 0 ? String(claimTriples.triples[0].object) : null;
+    const claimRun =
+      claimTriples.triples.length > 0 ? String(claimTriples.triples[0].object) : null;
     if (claimRun !== runId) {
       throw new Error("Only the claiming run can finish/fail this pulse");
     }

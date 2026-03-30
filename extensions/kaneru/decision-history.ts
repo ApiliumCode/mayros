@@ -80,12 +80,19 @@ function parseDecisionTriples(
 
   let votes: Record<string, number> = {};
   if (fields.votes) {
-    try { votes = JSON.parse(fields.votes) as Record<string, number>; } catch { /* ignore */ }
+    try {
+      votes = JSON.parse(fields.votes) as Record<string, number>;
+    } catch {
+      /* ignore */
+    }
   }
 
   let participants: string[] = [];
   if (fields.participants) {
-    participants = fields.participants.split(",").map((s) => s.trim()).filter(Boolean);
+    participants = fields.participants
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   return {
@@ -170,10 +177,7 @@ export class DecisionHistory {
   }
 
   /** Query decisions with optional filters. */
-  async query(opts?: {
-    ventureId?: string;
-    limit?: number;
-  }): Promise<DecisionRecord[]> {
+  async query(opts?: { ventureId?: string; limit?: number }): Promise<DecisionRecord[]> {
     // Query all decisions by finding subjects with the "question" predicate
     const result = await this.client.patternQuery({
       predicate: decisionPredicate(this.ns, "question"),
@@ -198,8 +202,8 @@ export class DecisionHistory {
     }
 
     // Sort by decidedAt descending (most recent first)
-    return decisions.sort((a, b) =>
-      new Date(b.decidedAt).getTime() - new Date(a.decidedAt).getTime(),
+    return decisions.sort(
+      (a, b) => new Date(b.decidedAt).getTime() - new Date(a.decidedAt).getTime(),
     );
   }
 

@@ -212,10 +212,7 @@ describe("DecisionHistory", () => {
 
     it("filters by ventureId", async () => {
       await history.record(makeConsensus(), { ventureId: "v-1" });
-      await history.record(
-        makeConsensus({ id: "c-2" }),
-        { ventureId: "v-2" },
-      );
+      await history.record(makeConsensus({ id: "c-2" }), { ventureId: "v-2" });
 
       const results = await history.query({ ventureId: "v-1" });
       expect(results).toHaveLength(1);

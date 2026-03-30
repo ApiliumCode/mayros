@@ -258,10 +258,10 @@ export class CortexSidecar {
     if (!(await this.ensurePortAvailable())) {
       this.releaseLock();
       // If ensurePortAvailable detected an external Cortex, status is "running" — don't overwrite
-      if (this._status !== "running") {
+      if ((this._status as string) !== "running") {
         this._status = "failed";
       }
-      return this._status === "running";
+      return (this._status as string) === "running";
     }
 
     const args = ["--host", this.config.host, "--port", String(this.config.port), "--db", dbPath];

@@ -131,156 +131,164 @@ CORTEX="$RESOURCES/bin/aingle-cortex"
 MAYROS_DIR="$HOME/.mayros"
 CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
 LOG="$MAYROS_DIR/install.log"
-SETUP_SCRIPT="$MAYROS_DIR/.mayros-setup.sh"
 
 export PATH="$RESOURCES/bin:$RESOURCES/node/bin:$PATH"
 mkdir -p "$MAYROS_DIR/bin"
 
-# If first launch, open a visible Terminal window so user sees progress
-if [[ ! -f "$CLI" ]]; then
-  # Create the setup script that Terminal.app will run
-  cat > "$SETUP_SCRIPT" <<SETUP
-#!/usr/bin/env bash
-clear
-echo ""
-echo "  ====================================="
-echo "     Mayros — First Launch Setup"
-echo "  ====================================="
-echo ""
-
-# Step 1: Install CLI
-echo "  [1/6] Installing Mayros CLI..."
-echo "         This may take 1-2 minutes."
-echo ""
-"$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit 2>&1 | tail -5
-if [[ ! -f "$CLI" ]]; then
-  echo ""
-  echo "  ERROR: Installation failed."
-  echo "  Check your internet connection and try again."
-  echo ""
-  read -p "  Press Enter to close..."
+# ── Helpers ──
+# Use Mayros.app's bundle identifier so macOS shows its icon in notifications.
+_notify() {
+  osascript -e "tell application id \"com.apilium.mayros\" to display notification \"$1\" with title \"Mayros\"" 2>/dev/null \
+    || osascript -e "display notification \"$1\" with title \"Mayros\"" 2>/dev/null
+}
+_fail() {
+  osascript -e "display dialog \"$1\" with title \"Mayros\" buttons {\"OK\"} default button \"OK\" with icon stop" 2>/dev/null
   exit 1
-fi
-echo "  ✓ Mayros CLI installed"
-echo ""
+}
+_log() { echo "$1" >> "$LOG"; }
 
-# Step 2: Setup PATH
-echo "  [2/6] Configuring terminal PATH..."
-SHELL_PROFILE=""
-[[ -f "\$HOME/.zshrc" ]] && SHELL_PROFILE="\$HOME/.zshrc"
-[[ -z "\$SHELL_PROFILE" && -f "\$HOME/.bash_profile" ]] && SHELL_PROFILE="\$HOME/.bash_profile"
-[[ -z "\$SHELL_PROFILE" && -f "\$HOME/.bashrc" ]] && SHELL_PROFILE="\$HOME/.bashrc"
-if [[ -n "\$SHELL_PROFILE" ]] && ! grep -q '.mayros/bin' "\$SHELL_PROFILE" 2>/dev/null; then
-  printf '\n# Mayros CLI\nexport PATH="\$HOME/.mayros/bin:\$PATH"\n' >> "\$SHELL_PROFILE"
-fi
-echo "  ✓ PATH configured"
-echo ""
+# ── First-time setup ──
+# The actual work runs HERE in bash (no zsh/oh-my-zsh/fish dependency).
+# A Terminal window opens as a read-only observer showing progress via
+# tail -f on the log. If Terminal fails to open, setup still completes.
+if [[ ! -f "$CLI" ]]; then
 
-# Step 3: Copy Cortex
-echo "  [3/6] Setting up AIngle Cortex..."
-if [[ ! -f "$MAYROS_DIR/bin/aingle-cortex" ]]; then
-  cp "$CORTEX" "$MAYROS_DIR/bin/aingle-cortex"
-  chmod +x "$MAYROS_DIR/bin/aingle-cortex"
-fi
-echo "  ✓ Cortex ready"
-echo ""
+  # Prepare log
+  echo "[$(date -Iseconds)] First-launch setup starting" > "$LOG"
 
-# Step 4: Create CLI wrapper
-echo "  [4/6] Creating CLI wrapper..."
-cat > "$MAYROS_DIR/bin/mayros" <<'WRAP'
+  _notify "Installing Mayros CLI... (1-2 minutes)"
+
+  # ── Step 1: Install CLI ──
+  _log "  [1/6] Installing Mayros CLI..."
+  _log "         This may take 1-2 minutes."
+  _log ""
+  # Prefer bundled tarball (includes all local changes); fall back to npm registry
+  LOCAL_TGZ="$RESOURCES/mayros-local.tgz"
+  if [[ -f "$LOCAL_TGZ" ]]; then
+    "$NPM" install -g "$LOCAL_TGZ" --prefix "$MAYROS_DIR" --force --no-fund --no-audit >> "$LOG" 2>&1
+  fi
+  if [[ ! -f "$CLI" ]]; then
+    "$NPM" install -g @apilium/mayros@latest --prefix "$MAYROS_DIR" --force --no-fund --no-audit >> "$LOG" 2>&1
+  fi
+  if [[ ! -f "$CLI" ]]; then
+    _log ""
+    _log "  ERROR: Installation failed."
+    _log "  Check your internet connection and try again."
+    _fail "Mayros installation failed. Check ~/.mayros/install.log for details."
+  fi
+  _log "  Done."
+  _log ""
+
+  # ── Step 2: Setup PATH ──
+  _log "  [2/6] Configuring terminal PATH..."
+  SHELL_PROFILE=""
+  [[ -f "$HOME/.zshrc" ]] && SHELL_PROFILE="$HOME/.zshrc"
+  [[ -z "$SHELL_PROFILE" && -f "$HOME/.bash_profile" ]] && SHELL_PROFILE="$HOME/.bash_profile"
+  [[ -z "$SHELL_PROFILE" && -f "$HOME/.bashrc" ]] && SHELL_PROFILE="$HOME/.bashrc"
+  if [[ -n "$SHELL_PROFILE" ]] && ! grep -q '.mayros/bin' "$SHELL_PROFILE" 2>/dev/null; then
+    printf '\n# Mayros CLI\nexport PATH="$HOME/.mayros/bin:$PATH"\n' >> "$SHELL_PROFILE"
+  fi
+  _log "  Done."
+  _log ""
+
+  # ── Step 3: Copy Cortex binary ──
+  _log "  [3/6] Setting up AIngle Cortex..."
+  if [[ ! -f "$MAYROS_DIR/bin/aingle-cortex" ]]; then
+    cp "$CORTEX" "$MAYROS_DIR/bin/aingle-cortex"
+    chmod +x "$MAYROS_DIR/bin/aingle-cortex"
+  fi
+  _log "  Done."
+  _log ""
+
+  # ── Step 4: Create CLI wrapper ──
+  _log "  [4/6] Creating CLI wrapper..."
+  cat > "$MAYROS_DIR/bin/mayros" <<'WRAP'
 #!/usr/bin/env bash
-MAYROS_DIR="\$HOME/.mayros"
-NODE="\$MAYROS_DIR/node/bin/node"
-[[ ! -f "\$NODE" ]] && NODE="/Applications/Mayros.app/Contents/Resources/node/bin/node"
-CLI="\$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
-[[ ! -f "\$CLI" ]] && CLI="\$MAYROS_DIR/node_modules/@apilium/mayros/dist/index.js"
-if [[ ! -f "\$CLI" ]]; then
+MAYROS_DIR="$HOME/.mayros"
+NODE="$MAYROS_DIR/node/bin/node"
+[[ ! -f "$NODE" ]] && NODE="/Applications/Mayros.app/Contents/Resources/node/bin/node"
+CLI="$MAYROS_DIR/lib/node_modules/@apilium/mayros/dist/index.js"
+[[ ! -f "$CLI" ]] && CLI="$MAYROS_DIR/node_modules/@apilium/mayros/dist/index.js"
+if [[ ! -f "$CLI" ]]; then
   echo "Mayros not installed. Open Mayros.app or: npm install -g @apilium/mayros"
   exit 1
 fi
-exec "\$NODE" "\$CLI" "\$@"
+exec "$NODE" "$CLI" "$@"
 WRAP
-chmod +x "$MAYROS_DIR/bin/mayros"
-
-# Link node for terminal use
-if [[ ! -d "$MAYROS_DIR/node" ]]; then
-  if [[ -d "/Applications/Mayros.app/Contents/Resources/node" ]]; then
-    ln -sf "/Applications/Mayros.app/Contents/Resources/node" "$MAYROS_DIR/node"
-  else
-    cp -R "$RESOURCES/node" "$MAYROS_DIR/node"
+  chmod +x "$MAYROS_DIR/bin/mayros"
+  if [[ ! -d "$MAYROS_DIR/node" ]]; then
+    if [[ -d "/Applications/Mayros.app/Contents/Resources/node" ]]; then
+      ln -sf "/Applications/Mayros.app/Contents/Resources/node" "$MAYROS_DIR/node"
+    else
+      cp -R "$RESOURCES/node" "$MAYROS_DIR/node"
+    fi
   fi
-fi
-echo "  ✓ CLI wrapper created"
-echo ""
+  _log "  Done."
+  _log ""
 
-# Step 5: Configure gateway (skip onboard so portal wizard shows)
-echo "  [5/6] Running initial configuration..."
-# Minimal config: gateway.mode=local + auth.mode=none (portal wizard configures auth later)
-CONFIG_FILE="$MAYROS_DIR/mayros.json"
-if [[ -f "\$CONFIG_FILE" ]]; then
+  # ── Step 5: Write config + bootstrap workspace ──
+  _log "  [5/6] Running initial configuration..."
+  CONFIG_FILE="$MAYROS_DIR/mayros.json"
   "$NODE" -e "
     const fs = require('fs');
-    const f = '\$CONFIG_FILE';
-    const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+    const f = '$CONFIG_FILE';
+    let c = {};
+    try { c = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
     if (!c.gateway) c.gateway = {};
     if (!c.gateway.mode) c.gateway.mode = 'local';
     if (!c.gateway.auth) c.gateway.auth = {};
-    if (!c.gateway.auth.mode) c.gateway.auth.mode = 'none';
-    fs.writeFileSync(f, JSON.stringify(c, null, 2));
-  " 2>/dev/null || true
-else
-  echo '{\"gateway\":{\"mode\":\"local\",\"auth\":{\"mode\":\"none\"}}}' > "\$CONFIG_FILE"
-fi
-echo "  ✓ Configuration complete"
-echo ""
+    c.gateway.auth.mode = 'none';
+    fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n');
+  " >> "$LOG" 2>&1 || echo '{"gateway":{"mode":"local","auth":{"mode":"none"}}}' > "$CONFIG_FILE"
 
-# Step 6: Start services
-echo "  [6/6] Starting services..."
-if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
-  "$MAYROS_DIR/bin/aingle-cortex" --port 19090 >> "$LOG" 2>&1 &
-fi
-echo -n "         Waiting for Cortex."
-for i in \$(seq 1 20); do
-  curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1 && break
-  echo -n "."
-  sleep 1
-done
-echo " ✓"
+  # Bootstrap workspace with templates so the agent can start
+  WORKSPACE="$MAYROS_DIR/workspace"
+  TEMPLATES="$MAYROS_DIR/lib/node_modules/@apilium/mayros/docs/reference/templates"
+  if [[ -d "$TEMPLATES" ]]; then
+    mkdir -p "$WORKSPACE"
+    for tmpl in AGENTS.md MAYROS.md TOOLS.md IDENTITY.md USER.md HOPE.md BOOTSTRAP.md; do
+      [[ -f "$TEMPLATES/$tmpl" ]] && [[ ! -f "$WORKSPACE/$tmpl" ]] && cp "$TEMPLATES/$tmpl" "$WORKSPACE/$tmpl"
+    done
+    [[ ! -f "$WORKSPACE/MEMORY.md" ]] && echo "# Memory" > "$WORKSPACE/MEMORY.md"
+  fi
+  _log "  Done."
+  _log ""
 
-if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
-  "$NODE" "$CLI" gateway install 2>/dev/null || true
-  "$NODE" "$CLI" gateway start 2>/dev/null &
-fi
-echo -n "         Waiting for Gateway."
-for i in \$(seq 1 30); do
-  curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
-  echo -n "."
-  sleep 1
-done
-echo " ✓"
+  # ── Step 6: Start services ──
+  _log "  [6/6] Starting services..."
 
-echo ""
-echo "  ====================================="
-echo "     Mayros is ready!"
-echo "     Opening dashboard..."
-echo "  ====================================="
-echo ""
-echo "  You can now use 'mayros' from any"
-echo "  terminal (open a new tab first)."
-echo ""
-echo "  Try: mayros code"
-echo ""
+  if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
+    "$MAYROS_DIR/bin/aingle-cortex" --port 19090 >> "$LOG" 2>&1 &
+  fi
+  _log "         Waiting for Cortex..."
+  for i in $(seq 1 20); do
+    curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  _log "         Cortex ready."
 
-# Open portal
-open "http://127.0.0.1:18789"
+  if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
+    "$NODE" "$CLI" gateway install >> "$LOG" 2>&1 || true
+    "$NODE" "$CLI" gateway start >> "$LOG" 2>&1 &
+  fi
+  _log "         Waiting for Gateway..."
+  for i in $(seq 1 30); do
+    curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  _log "         Gateway ready."
+  _log ""
+  _log "  ====================================="
+  _log "     Mayros is ready!"
+  _log "  ====================================="
+  _log ""
+  _log "  You can now use 'mayros' from any"
+  _log "  terminal (open a new tab first)."
+  _log ""
+  _log "  Try: mayros code"
+  _log ""
 
-sleep 3
-rm -f "$SETUP_SCRIPT"
-SETUP
-  chmod +x "$SETUP_SCRIPT"
-
-  # Open Terminal.app with the setup script (user sees everything)
-  open -a Terminal "$SETUP_SCRIPT"
+  open "http://127.0.0.1:18789"
   exit 0
 fi
 
@@ -288,25 +296,32 @@ fi
 
 # Start Cortex if not running
 if ! pgrep -f "aingle-cortex" >/dev/null 2>&1; then
-  "$MAYROS_DIR/bin/aingle-cortex" --port 19090 &>/dev/null &
-  for i in $(seq 1 15); do
-    curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1 && break
-    sleep 1
-  done
+  "$MAYROS_DIR/bin/aingle-cortex" --port 19090 >>"$LOG" 2>&1 &
 fi
+# Always wait for Cortex to be healthy
+for i in $(seq 1 15); do
+  curl -s --max-time 2 "http://127.0.0.1:19090/health" >/dev/null 2>&1 && break
+  sleep 1
+done
 
 # Start Gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
-  "$NODE" "$CLI" gateway install 2>/dev/null || true
-  "$NODE" "$CLI" gateway start 2>/dev/null &
-  for i in $(seq 1 20); do
-    curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1 && break
-    sleep 1
-  done
+  "$NODE" "$CLI" gateway install >>"$LOG" 2>&1 || true
+  "$NODE" "$CLI" gateway start >>"$LOG" 2>&1 &
 fi
+# Wait for Gateway to be healthy, then open portal
+GATEWAY_OK=false
+for i in $(seq 1 30); do
+  if curl -s --max-time 2 "http://127.0.0.1:18789/health" >/dev/null 2>&1; then
+    GATEWAY_OK=true
+    break
+  fi
+  sleep 1
+done
 
-# Open the portal
-exec "$NODE" "$CLI" dashboard
+if [[ "$GATEWAY_OK" == "true" ]]; then
+  open "http://127.0.0.1:18789"
+fi
 LAUNCHER
 chmod +x "$APP_DIR/Contents/MacOS/mayros-launcher"
 
@@ -331,18 +346,22 @@ rm -f "$DMG_PATH"
 
 echo "==> Creating DMG..."
 if command -v create-dmg &>/dev/null; then
-  create-dmg \
-    --volname "Mayros ${MAYROS_VERSION}" \
-    --volicon "$ASSETS_DIR/mayros.icns" \
-    --window-pos 200 120 \
-    --window-size 600 400 \
-    --icon-size 100 \
-    --icon "Mayros.app" 150 200 \
-    --app-drop-link 450 200 \
-    --hide-extension "Mayros.app" \
-    --no-internet-enable \
-    "$DMG_PATH" \
-    "$APP_DIR"
+  DMG_BG="$ASSETS_DIR/dmg-background.png"
+  DMG_ARGS=(
+    --volname "Mayros ${MAYROS_VERSION}"
+    --volicon "$ASSETS_DIR/mayros.icns"
+    --window-pos 200 120
+    --window-size 660 400
+    --icon-size 120
+    --icon "Mayros.app" 175 230
+    --app-drop-link 485 230
+    --hide-extension "Mayros.app"
+    --no-internet-enable
+  )
+  if [[ -f "$DMG_BG" ]]; then
+    DMG_ARGS+=(--background "$DMG_BG")
+  fi
+  create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_DIR"
 else
   echo "  -> create-dmg not found, using hdiutil fallback"
   TEMP_DMG="$BUILD_DIR/temp.dmg"

@@ -15,6 +15,9 @@ function makeConfig(overrides: Partial<TokenBudgetConfig> = {}): TokenBudgetConf
     enforcement: "soft",
     gracePeriodCalls: 3,
     sessionLimitUsd: 1.0,
+    responseCache: false,
+    responseCacheMaxEntries: 0,
+    responseCacheTtlMs: 0,
     ...overrides,
   };
 }

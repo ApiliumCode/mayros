@@ -64,17 +64,27 @@ const BUNDLED_TEMPLATES: DojoTemplate[] = [
   {
     id: "security-audit",
     name: "Security Audit Squad",
-    description: "Three-agent squad for comprehensive security auditing: scanner finds vulnerabilities, reviewer triages severity, fixer implements patches.",
+    description:
+      "Three-agent squad for comprehensive security auditing: scanner finds vulnerabilities, reviewer triages severity, fixer implements patches.",
     version: "1.0.0",
     agents: [
       { agentId: "scanner", role: "Vulnerability Scanner", pulseInterval: "4h" },
-      { agentId: "reviewer", role: "Security Reviewer", escalatesTo: "scanner", pulseInterval: "2h" },
+      {
+        agentId: "reviewer",
+        role: "Security Reviewer",
+        escalatesTo: "scanner",
+        pulseInterval: "2h",
+      },
       { agentId: "fixer", role: "Patch Author", escalatesTo: "reviewer", pulseInterval: "1h" },
     ],
     directives: [
       { title: "Maintain secure codebase", level: "strategic" },
       { title: "Identify and classify vulnerabilities", level: "objective", parentIndex: 0 },
-      { title: "Remediate critical and high severity findings", level: "objective", parentIndex: 0 },
+      {
+        title: "Remediate critical and high severity findings",
+        level: "objective",
+        parentIndex: 0,
+      },
       { title: "Run OWASP Top 10 scan", level: "task", parentIndex: 1 },
       { title: "Review dependency audit results", level: "task", parentIndex: 1 },
       { title: "Patch critical vulnerabilities", level: "task", parentIndex: 2 },
@@ -84,7 +94,8 @@ const BUNDLED_TEMPLATES: DojoTemplate[] = [
   {
     id: "content-pipeline",
     name: "Content Pipeline",
-    description: "Writer-editor-publisher pipeline for content creation with review gates and quality checks.",
+    description:
+      "Writer-editor-publisher pipeline for content creation with review gates and quality checks.",
     version: "1.0.0",
     agents: [
       { agentId: "writer", role: "Content Writer", pulseInterval: "6h" },
@@ -104,12 +115,23 @@ const BUNDLED_TEMPLATES: DojoTemplate[] = [
   {
     id: "devops-squad",
     name: "DevOps Squad",
-    description: "Deploy-monitor-respond cycle for infrastructure operations with automated alerting and incident response.",
+    description:
+      "Deploy-monitor-respond cycle for infrastructure operations with automated alerting and incident response.",
     version: "1.0.0",
     agents: [
       { agentId: "deployer", role: "Release Engineer", pulseInterval: "1h" },
-      { agentId: "monitor", role: "Observability Agent", escalatesTo: "deployer", pulseInterval: "30m" },
-      { agentId: "responder", role: "Incident Responder", escalatesTo: "monitor", pulseInterval: "15m" },
+      {
+        agentId: "monitor",
+        role: "Observability Agent",
+        escalatesTo: "deployer",
+        pulseInterval: "30m",
+      },
+      {
+        agentId: "responder",
+        role: "Incident Responder",
+        escalatesTo: "monitor",
+        pulseInterval: "15m",
+      },
     ],
     directives: [
       { title: "Maintain reliable infrastructure", level: "strategic" },
@@ -189,7 +211,10 @@ export class DojoService {
    * Uses the existing HubClient from skill-hub extension — same client
    * used by `mayros hub search`. No duplicate marketplace.
    */
-  async searchHub(query?: string, hubUrl?: string): Promise<Array<{ slug: string; name: string; description: string; version: string }>> {
+  async searchHub(
+    query?: string,
+    hubUrl?: string,
+  ): Promise<Array<{ slug: string; name: string; description: string; version: string }>> {
     const hub = await this.resolveHubClient(hubUrl);
     if (!hub) return [];
 
@@ -210,9 +235,14 @@ export class DojoService {
    * Download and install a template from the Skill Hub (hub.apilium.com).
    * Fetches the template archive, parses as DojoTemplate JSON, and installs.
    */
-  async installFromHub(slug: string, ventureName: string, hubUrl?: string): Promise<DojoInstallResult> {
+  async installFromHub(
+    slug: string,
+    ventureName: string,
+    hubUrl?: string,
+  ): Promise<DojoInstallResult> {
     const hub = await this.resolveHubClient(hubUrl);
-    if (!hub) throw new Error("Skill Hub extension not available. Install the skill-hub plugin first.");
+    if (!hub)
+      throw new Error("Skill Hub extension not available. Install the skill-hub plugin first.");
 
     const archive = await hub.download(slug);
 
@@ -231,7 +261,9 @@ export class DojoService {
       throw new Error(`Template "${slug}" has too many agents (${template.agents.length}, max 20)`);
     }
     if (template.directives.length > 50) {
-      throw new Error(`Template "${slug}" has too many directives (${template.directives.length}, max 50)`);
+      throw new Error(
+        `Template "${slug}" has too many directives (${template.directives.length}, max 50)`,
+      );
     }
     // Validate agent IDs are alphanumeric
     for (const agent of template.agents) {
@@ -247,7 +279,15 @@ export class DojoService {
    * Resolve HubClient from skill-hub extension.
    * Uses hub.apilium.com as default (same as `mayros hub` commands).
    */
-  private async resolveHubClient(hubUrl?: string): Promise<{ search: (q: string, opts?: { category?: string; limit?: number }) => Promise<{ skills: Array<{ slug: string; name: string; description: string; version: string }> }>; download: (slug: string, version?: string) => Promise<Buffer> } | null> {
+  private async resolveHubClient(hubUrl?: string): Promise<{
+    search: (
+      q: string,
+      opts?: { category?: string; limit?: number },
+    ) => Promise<{
+      skills: Array<{ slug: string; name: string; description: string; version: string }>;
+    }>;
+    download: (slug: string, version?: string) => Promise<Buffer>;
+  } | null> {
     try {
       const { HubClient } = await import("../skill-hub/hub-client.js");
       return new HubClient(hubUrl ?? "https://hub.apilium.com");
@@ -257,7 +297,10 @@ export class DojoService {
   }
 
   /** Internal: install a parsed DojoTemplate. Shared by install() and installFromHub(). */
-  private async installTemplate(template: DojoTemplate, ventureName: string): Promise<DojoInstallResult> {
+  private async installTemplate(
+    template: DojoTemplate,
+    ventureName: string,
+  ): Promise<DojoInstallResult> {
     const venture = await this.ventureManager.create({
       name: ventureName,
       directive: template.directives[0]?.title ?? template.description,

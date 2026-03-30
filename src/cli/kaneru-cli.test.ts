@@ -163,7 +163,26 @@ describe("kaneru subcommands", () => {
     const program = makeProgram();
     const kaneru = getKaneru(program);
     const names = kaneru.commands.map((c) => c.name()).sort();
-    expect(names).toEqual(["comment", "consensus", "dashboard", "decisions", "delegate", "discover", "dojo", "fuel", "fuse", "learn", "mission", "peers", "project", "pulse", "route", "squad", "sync", "venture"]);
+    expect(names).toEqual([
+      "comment",
+      "consensus",
+      "dashboard",
+      "decisions",
+      "delegate",
+      "discover",
+      "dojo",
+      "fuel",
+      "fuse",
+      "learn",
+      "mission",
+      "peers",
+      "project",
+      "pulse",
+      "route",
+      "squad",
+      "sync",
+      "venture",
+    ]);
   });
 });
 
@@ -177,9 +196,9 @@ describe("createFacade import error", () => {
 
     // createFacade is called outside the try/catch in each action handler,
     // so the error propagates up through Commander's parseAsync.
-    await expect(
-      program.parseAsync(["kaneru", "dashboard"], { from: "user" }),
-    ).rejects.toThrow("Failed to load Kaneru module");
+    await expect(program.parseAsync(["kaneru", "dashboard"], { from: "user" })).rejects.toThrow(
+      "Failed to load Kaneru module",
+    );
   });
 });
 
@@ -218,9 +237,7 @@ describe("handleError", () => {
 
     await freshProgram.parseAsync(["kaneru", "dashboard"], { from: "user" });
 
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Cortex is not running"),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Cortex is not running"));
     expect(process.exitCode).toBe(1);
   });
 
@@ -252,9 +269,7 @@ describe("handleError", () => {
 
     await freshProgram.parseAsync(["kaneru", "dashboard"], { from: "user" });
 
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Cortex error (404): not found"),
-    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Cortex error (404): not found"));
     expect(process.exitCode).toBe(1);
   });
 

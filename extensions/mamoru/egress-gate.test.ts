@@ -155,7 +155,10 @@ describe("MamoruGate", () => {
     expect(recheck.allowed).toBe(true);
 
     // Different method should not auto-approve via session
-    const diffMethod = gate.checkEgress("api.example.com", 443, { method: "DELETE", path: "/users" });
+    const diffMethod = gate.checkEgress("api.example.com", 443, {
+      method: "DELETE",
+      path: "/users",
+    });
     expect(diffMethod.allowed).toBe(false);
   });
 });

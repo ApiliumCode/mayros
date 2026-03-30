@@ -84,17 +84,14 @@ export async function executeCommand(
       const missions = ((result.missions as Array<Record<string, unknown>>) ?? []).slice(0, 5);
       state.result =
         missions.length > 0
-          ? missions
-              .map((m) => `${m.identifier} [${m.priority}] ${m.title}`)
-              .join("\n")
+          ? missions.map((m) => `${m.identifier} [${m.priority}] ${m.title}`).join("\n")
           : "No missions found.";
     } else if (lower.includes("squad") || lower.includes("agent")) {
       const result = (await client.request("kaneru.dashboard", {})) as Record<string, unknown>;
       const data = result.stats as Record<string, unknown> | undefined;
       state.result = `${data?.activeSquads ?? 0} active squads, Q-table: ${data?.qTableSize ?? 0} entries, \u03B5=${(Number(data?.epsilon ?? 0) * 100).toFixed(1)}%`;
     } else if (lower.includes("decision")) {
-      state.result =
-        "Use 'mayros kaneru decisions list' for full decision history.";
+      state.result = "Use 'mayros kaneru decisions list' for full decision history.";
     } else {
       state.result = `Command received: "${query}"\nUse the CLI for full capabilities: mayros kaneru --help`;
     }

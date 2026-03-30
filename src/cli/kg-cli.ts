@@ -20,6 +20,7 @@ import { ProjectMemory } from "../../extensions/memory-semantic/project-memory.j
 import { codePredicate } from "../../extensions/code-indexer/rdf-mapper.js";
 import { getIndexStats } from "../../extensions/code-indexer/incremental.js";
 import { resolveCortexClient, resolveNamespace } from "./shared/cortex-resolution.js";
+import type { CortexClient } from "../../extensions/shared/cortex-client.js";
 
 // ============================================================================
 // Registration

@@ -46,22 +46,14 @@ const PRESETS: Record<string, EgressRule[]> = {
     { host: "api.github.com", port: 443, protocol: "https" },
     { host: "github.com", port: 443, protocol: "https" },
   ],
-  npm: [
-    { host: "registry.npmjs.org", port: 443, protocol: "https", methods: ["GET"] },
-  ],
+  npm: [{ host: "registry.npmjs.org", port: 443, protocol: "https", methods: ["GET"] }],
   pypi: [
     { host: "pypi.org", port: 443, protocol: "https", methods: ["GET"] },
     { host: "files.pythonhosted.org", port: 443, protocol: "https", methods: ["GET"] },
   ],
-  anthropic: [
-    { host: "api.anthropic.com", port: 443, protocol: "https" },
-  ],
-  openai: [
-    { host: "api.openai.com", port: 443, protocol: "https" },
-  ],
-  google: [
-    { host: "generativelanguage.googleapis.com", port: 443, protocol: "https" },
-  ],
+  anthropic: [{ host: "api.anthropic.com", port: 443, protocol: "https" }],
+  openai: [{ host: "api.openai.com", port: 443, protocol: "https" }],
+  google: [{ host: "generativelanguage.googleapis.com", port: 443, protocol: "https" }],
   huggingface: [
     { host: "huggingface.co", port: 443, protocol: "https" },
     { host: "cdn-lfs.huggingface.co", port: 443, protocol: "https" },
@@ -74,15 +66,9 @@ const PRESETS: Record<string, EgressRule[]> = {
     { host: "discord.com", port: 443, protocol: "https" },
     { host: "discordapp.com", port: 443, protocol: "https" },
   ],
-  telegram: [
-    { host: "api.telegram.org", port: 443, protocol: "https" },
-  ],
-  cortex: [
-    { host: "127.0.0.1", port: 19090, protocol: "http" },
-  ],
-  hub: [
-    { host: "hub.apilium.com", port: 443, protocol: "https" },
-  ],
+  telegram: [{ host: "api.telegram.org", port: 443, protocol: "https" }],
+  cortex: [{ host: "127.0.0.1", port: 19090, protocol: "http" }],
+  hub: [{ host: "hub.apilium.com", port: 443, protocol: "https" }],
 };
 
 const PRESET_DESCRIPTIONS: Record<string, string> = {
@@ -293,9 +279,7 @@ export class MamoruGate {
    * Add an explicit egress rule.
    */
   addRule(rule: EgressRule): void {
-    const exists = this.policy.rules.some(
-      (r) => r.host === rule.host && r.port === rule.port,
-    );
+    const exists = this.policy.rules.some((r) => r.host === rule.host && r.port === rule.port);
     if (!exists) {
       this.policy.rules.push({ ...rule });
     }
@@ -305,9 +289,7 @@ export class MamoruGate {
    * Remove an egress rule by host and port.
    */
   removeRule(host: string, port: number): void {
-    this.policy.rules = this.policy.rules.filter(
-      (r) => !(r.host === host && r.port === port),
-    );
+    this.policy.rules = this.policy.rules.filter((r) => !(r.host === host && r.port === port));
   }
 
   /**
@@ -345,7 +327,8 @@ export class MamoruGate {
     if (isPrivateIP(hostname)) {
       // Allow explicit cortex preset
       if (hostname === "127.0.0.1" && parsed.port === "19090") {
-        const hasCortex = this.policy.presets.includes("cortex") ||
+        const hasCortex =
+          this.policy.presets.includes("cortex") ||
           this.policy.rules.some((r) => r.host === "127.0.0.1" && r.port === 19090);
         if (hasCortex) {
           return { safe: true };
@@ -429,19 +412,19 @@ function isPrivateIP(ip: string): boolean {
   if (v4Parts.length === 4) {
     const first = parseInt(v4Parts[0]!, 10);
     const second = parseInt(v4Parts[1]!, 10);
-    if (first === 127) return true;                                // 127.0.0.0/8
-    if (first === 10) return true;                                 // 10.0.0.0/8
+    if (first === 127) return true; // 127.0.0.0/8
+    if (first === 10) return true; // 10.0.0.0/8
     if (first === 172 && second >= 16 && second <= 31) return true; // 172.16.0.0/12
-    if (first === 192 && second === 168) return true;              // 192.168.0.0/16
-    if (first === 169 && second === 254) return true;              // 169.254.0.0/16 (link-local + metadata)
-    if (first === 0) return true;                                  // 0.0.0.0/8
+    if (first === 192 && second === 168) return true; // 192.168.0.0/16
+    if (first === 169 && second === 254) return true; // 169.254.0.0/16 (link-local + metadata)
+    if (first === 0) return true; // 0.0.0.0/8
   }
 
   // IPv6 checks
   const lowerIp = clean.toLowerCase();
   if (lowerIp === "::1" || lowerIp === "0:0:0:0:0:0:0:1") return true;
   if (lowerIp.startsWith("fd") || lowerIp.startsWith("fc")) return true; // fd00::/8, fc00::/7
-  if (lowerIp.startsWith("fe80")) return true;                          // link-local
+  if (lowerIp.startsWith("fe80")) return true; // link-local
   if (lowerIp === "::") return true;
 
   // localhost alias

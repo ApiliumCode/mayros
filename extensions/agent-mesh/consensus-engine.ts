@@ -365,5 +365,4 @@ export class ConsensusEngine {
 
     return fallback;
   }
-
 }
