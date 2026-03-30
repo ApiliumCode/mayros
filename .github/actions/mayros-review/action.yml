@@ -22,7 +22,8 @@ inputs:
     required: true
   anthropic-api-key:
     description: "Anthropic API key for LLM calls"
-    required: true
+    required: false
+    default: ""
   max-diff-lines:
     description: "Maximum diff lines to include in the review prompt (0 = unlimited)"
     required: false
