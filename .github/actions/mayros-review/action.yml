@@ -65,8 +65,8 @@ runs:
           exit 1
         fi
 
-        echo "Installing mayros@${MAYROS_VERSION}..."
-        if npm install -g "mayros@${MAYROS_VERSION}"; then
+        echo "Installing @apilium/mayros@${MAYROS_VERSION}..."
+        if npm install -g "@apilium/mayros@${MAYROS_VERSION}"; then
           echo "installed=global" >> "$GITHUB_OUTPUT"
           echo "Mayros installed globally"
           mayros --version || true
@@ -155,9 +155,16 @@ runs:
 
         PROMPT_CONTENT=$(cat /tmp/review-prompt.txt)
 
+        # Determine the mayros command to use (global install or npx fallback)
+        if command -v mayros &>/dev/null; then
+          MAYROS_CMD="mayros"
+        else
+          MAYROS_CMD="npx -y @apilium/mayros@${{ inputs.mayros-version }}"
+        fi
+
         # Run review with proper argument separation
         set +e
-        REVIEW=$(npx mayros -p "$PROMPT_CONTENT" --model "$INPUT_MODEL" 2>/tmp/mayros-stderr.txt)
+        REVIEW=$($MAYROS_CMD -p "$PROMPT_CONTENT" --model "$INPUT_MODEL" 2>/tmp/mayros-stderr.txt)
         EXIT_CODE=$?
         set -e
 

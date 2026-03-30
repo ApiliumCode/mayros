@@ -318,6 +318,8 @@ jobs:
     needs: [docs-scope, changed-scope, check]
     if: needs.docs-scope.outputs.docs_only != 'true' && (github.event_name == 'push' || needs.changed-scope.outputs.run_android == 'true')
     runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE_FILE != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -331,34 +333,34 @@ jobs:
             requires_signing: true
     steps:
       - name: Checkout
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Skip (no signing secrets)
-        if: matrix.requires_signing && secrets.KEYSTORE_FILE == ''
+        if: matrix.requires_signing && env.HAS_KEYSTORE != 'true'
         run: echo "Skipping ${{ matrix.task }} — KEYSTORE_FILE secret not configured"
 
       - name: Setup Java
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
       - name: Setup Android SDK
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: false
 
       - name: Setup Gradle
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install Android SDK packages
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         run: |
           yes | sdkmanager --licenses >/dev/null
           sdkmanager --install \
@@ -367,12 +369,12 @@ jobs:
             "build-tools;36.0.0"
 
       - name: Decode keystore
-        if: matrix.requires_signing && secrets.KEYSTORE_FILE != ''
+        if: matrix.requires_signing && env.HAS_KEYSTORE == 'true'
         working-directory: apps/android/app
         run: echo "${{ secrets.KEYSTORE_FILE }}" | base64 -d > release.keystore
 
       - name: Run Android ${{ matrix.task }}
-        if: "!matrix.requires_signing || secrets.KEYSTORE_FILE != ''"
+        if: "!matrix.requires_signing || env.HAS_KEYSTORE == 'true'"
         working-directory: apps/android
         run: ${{ matrix.command }}
         env:
