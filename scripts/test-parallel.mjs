@@ -182,7 +182,7 @@ const maxWorkersForRun = (name) => {
     return resolvedOverride;
   }
   if (isCI && !isMacOS) {
-    return null;
+    return 2;
   }
   if (isCI && isMacOS) {
     return 1;
