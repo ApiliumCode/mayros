@@ -408,12 +408,10 @@ describe("transport CORS", () => {
     const { McpHttpTransport } = await import("./transport-http.js");
 
     // Create a minimal dispatcher mock (cast to satisfy TS)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dispatcher = {
       handleMessage: vi.fn().mockResolvedValue('{"jsonrpc":"2.0","result":{}}'),
-    } as Parameters<typeof McpHttpTransport.prototype.start>[0] extends void
-      ? never
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        any;
+    } as any;
 
     // Use a high random port to avoid conflicts
     const port = 19500 + Math.floor(Math.random() * 1000);

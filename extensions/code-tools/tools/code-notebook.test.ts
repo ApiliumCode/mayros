@@ -64,13 +64,13 @@ describe("code_notebook", () => {
       const cell = SAMPLE_NOTEBOOK.cells[1];
       const source = cell.source.join("");
       expect(source).toContain("print");
-      const output = (cell.outputs[0] as { text: string[] }).text.join("");
+      const output = (cell.outputs![0] as { text: string[] }).text.join("");
       expect(output).toContain("hello");
     });
 
     it("formats execute_result output", () => {
       const cell = SAMPLE_NOTEBOOK.cells[2];
-      const data = (cell.outputs[0] as { data: Record<string, string[]> }).data;
+      const data = (cell.outputs![0] as { data: Record<string, string[]> }).data;
       expect(data["text/plain"][0]).toBe("2");
     });
 

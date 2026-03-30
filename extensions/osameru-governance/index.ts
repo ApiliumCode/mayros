@@ -41,7 +41,9 @@ const osameruPlugin = {
       : null;
 
     let policyBundle: PolicyBundle | null = null;
-    const workDir = api.config?.workspaceDir ?? process.cwd();
+    const workDir =
+      ((api.config as Record<string, unknown> | undefined)?.workspaceDir as string | undefined) ??
+      process.cwd();
 
     // Compile policies on session_start
     api.on("session_start", async () => {
@@ -136,9 +138,10 @@ const osameruPlugin = {
     // Tool: governance_status
     api.registerTool({
       name: "governance_status",
+      label: "Governance Status",
       description: "Show governance policy status, rules count, and trust tier summary",
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: async (_toolCallId: string) => {
         const rules = policyBundle?.rules.length ?? 0;
         const trusts = trustMgr?.getAllRecords() ?? [];
         return {
@@ -161,6 +164,7 @@ const osameruPlugin = {
               ),
             },
           ],
+          details: undefined,
         };
       },
     });
@@ -168,6 +172,7 @@ const osameruPlugin = {
     // Tool: governance_audit_query
     api.registerTool({
       name: "governance_audit_query",
+      label: "Governance Audit Query",
       description: "Query the governance audit trail",
       parameters: Type.Object({
         event: Type.Optional(Type.String({ description: "Filter by event type" })),
@@ -177,12 +182,15 @@ const osameruPlugin = {
         ),
         limit: Type.Optional(Type.Number({ description: "Max entries to return" })),
       }),
-      execute: async (params: {
-        event?: string;
-        actor?: string;
-        decision?: string;
-        limit?: number;
-      }) => {
+      execute: async (
+        _toolCallId: string,
+        params: {
+          event?: string;
+          actor?: string;
+          decision?: string;
+          limit?: number;
+        },
+      ) => {
         const entries = await auditTrail.query(params);
         return {
           content: [
@@ -191,6 +199,7 @@ const osameruPlugin = {
               text: JSON.stringify(entries, null, 2),
             },
           ],
+          details: undefined,
         };
       },
     });
@@ -198,9 +207,10 @@ const osameruPlugin = {
     // Tool: governance_audit_verify
     api.registerTool({
       name: "governance_audit_verify",
+      label: "Governance Audit Verify",
       description: "Verify the integrity of the governance audit trail HMAC chain",
       parameters: Type.Object({}),
-      execute: async () => {
+      execute: async (_toolCallId: string) => {
         const result = await auditTrail.verify();
         return {
           content: [
@@ -209,6 +219,7 @@ const osameruPlugin = {
               text: JSON.stringify(result, null, 2),
             },
           ],
+          details: undefined,
         };
       },
     });

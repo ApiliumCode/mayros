@@ -37,6 +37,7 @@ const browserAutomationPlugin = {
 
     api.registerTool({
       name: "browser_navigate",
+      label: "Browser Navigate",
       description: "Navigate browser to a URL and return page info",
       parameters: {
         type: "object" as const,
@@ -45,13 +46,16 @@ const browserAutomationPlugin = {
         },
         required: ["url"],
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
         try {
           const result = await client.navigate(args.url as string);
-          return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(result) }],
+            details: undefined,
+          };
         } finally {
           await client.disconnect();
         }
@@ -64,12 +68,13 @@ const browserAutomationPlugin = {
 
     api.registerTool({
       name: "browser_screenshot",
+      label: "Browser Screenshot",
       description: "Take a screenshot of the current browser page",
       parameters: {
         type: "object" as const,
         properties: {},
       },
-      execute: async () => {
+      execute: async (_toolCallId: string) => {
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
@@ -78,12 +83,11 @@ const browserAutomationPlugin = {
           return {
             content: [
               {
-                type: "image" as const,
-                mimeType: `image/${result.format}`,
-                bytes: result.data.length,
+                type: "text" as const,
+                text: `Screenshot: ${result.width}x${result.height} (${result.format}, ${result.data.length} bytes)`,
               },
-              { type: "text" as const, text: `Screenshot: ${result.width}x${result.height}` },
             ],
+            details: undefined,
           };
         } finally {
           await client.disconnect();
@@ -97,6 +101,7 @@ const browserAutomationPlugin = {
 
     api.registerTool({
       name: "browser_click",
+      label: "Browser Click",
       description: "Click an element by CSS selector",
       parameters: {
         type: "object" as const,
@@ -105,13 +110,16 @@ const browserAutomationPlugin = {
         },
         required: ["selector"],
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
         try {
           await client.click(args.selector as string);
-          return { content: [{ type: "text" as const, text: `Clicked: ${args.selector}` }] };
+          return {
+            content: [{ type: "text" as const, text: `Clicked: ${args.selector}` }],
+            details: undefined,
+          };
         } finally {
           await client.disconnect();
         }
@@ -124,6 +132,7 @@ const browserAutomationPlugin = {
 
     api.registerTool({
       name: "browser_evaluate",
+      label: "Browser Evaluate",
       description: "Run JavaScript in the browser page and return result",
       parameters: {
         type: "object" as const,
@@ -132,13 +141,16 @@ const browserAutomationPlugin = {
         },
         required: ["expression"],
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
         try {
           const result = await client.evaluate(args.expression as string);
-          return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(result) }],
+            details: undefined,
+          };
         } finally {
           await client.disconnect();
         }

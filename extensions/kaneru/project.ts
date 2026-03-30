@@ -196,7 +196,7 @@ export class ProjectManager {
     if (patch.name !== undefined) updates.push(["name", sanitizeTripleValue(patch.name)]);
     if (patch.owner !== undefined) updates.push(["owner", sanitizeTripleValue(patch.owner ?? "")]);
     if (patch.status !== undefined) updates.push(["status", patch.status]);
-    if (patch.targetDate !== undefined) updates.push(["targetDate", patch.targetDate]);
+    if (patch.targetDate !== undefined) updates.push(["targetDate", patch.targetDate ?? ""]);
     if (patch.category !== undefined)
       updates.push(["category", sanitizeTripleValue(patch.category)]);
     if (patch.description !== undefined)

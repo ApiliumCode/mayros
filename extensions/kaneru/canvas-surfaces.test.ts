@@ -152,7 +152,7 @@ const POPULATED_DATA: CanvasVentureData = {
       agentId: "agent-1",
       role: "lead",
       escalatesTo: null,
-      children: [{ agentId: "agent-2", role: "worker", escalatesTo: "agent-1", children: [] }],
+      children: [{ agentId: "agent-2", role: "worker" }],
     },
   ],
   stats: { totalVentures: 2, activeMissions: 1, totalFuelSpent: 4700 },

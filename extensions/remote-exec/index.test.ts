@@ -50,8 +50,8 @@ import {
   ENV_NAME_PATTERN,
   RESERVED_ALIAS_NAMES,
   type PendingRequest,
-  type ExecResult,
 } from "./confirmation-ux.js";
+import type { ExecResult } from "./exec-service.js";
 import { SessionManager } from "./session-manager.js";
 import { maskSensitiveOutput } from "../../src/security/output-masking.js";
 import { AuditTrail } from "../osameru-governance/audit-trail.js";

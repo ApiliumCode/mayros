@@ -46,7 +46,8 @@ describe("Kaneru MCP Tools", () => {
     return tool;
   }
 
-  function text(result: { content: Array<{ type: string; text: string }> }): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function text(result: any): string {
     return result.content[0]!.text;
   }
 

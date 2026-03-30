@@ -261,7 +261,7 @@ const bashSandboxPlugin = {
         }
 
         // 7. Container sandbox execution
-        if (cfg.container.enabled && cfg.mode !== "off") {
+        if (cfg.container.enabled && (cfg.mode as string) !== "off") {
           const containerCfg = cfg.container;
           const workdir = typeof params.cwd === "string" ? params.cwd : process.cwd();
 
@@ -318,7 +318,7 @@ const bashSandboxPlugin = {
         }
 
         // 8. Network sandbox evaluation
-        if (cfg.network.enabled && cfg.mode !== "off") {
+        if (cfg.network.enabled && (cfg.mode as string) !== "off") {
           const netResult = await networkSandbox.evaluate(command);
           if (!netResult.allowed) {
             auditLog.add({

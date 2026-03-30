@@ -13,6 +13,7 @@
  * Configuration: mayros.json → plugins.mcp-server
  */
 
+// @ts-expect-error — dist/index.js has no declaration file; types resolved via source paths
 import type { MayrosPluginApi, MayrosPluginToolContext } from "@apilium/mayros";
 import { mcpServerConfigSchema, type McpServerConfig } from "./config.js";
 import { McpServer, type McpServerOptions } from "./server.js";
@@ -141,7 +142,7 @@ const mcpServerPlugin = {
 
     // ── Register CLI ────────────────────────────────────────────────
 
-    api.registerCli(({ program }) => {
+    api.registerCli(({ program }: { program: any }) => {
       const serve = program
         .command("serve")
         .description("Start MCP server to expose Mayros tools, resources, and prompts");
@@ -302,7 +303,7 @@ const mcpServerPlugin = {
 
     // ── Register gateway method (MCP Dashboard) ────────────────────
 
-    api.registerGatewayMethod("mcp.dashboard", async ({ respond }) => {
+    api.registerGatewayMethod("mcp.dashboard", async ({ respond }: { respond: any }) => {
       // Cortex health check with 3s timeout — always runs
       let cortexHealth: { status: "online" | "offline"; latencyMs: number };
       try {
@@ -414,7 +415,7 @@ const mcpServerPlugin = {
 
           resourceSources.listGraphSubjects = async () => {
             try {
-              const res = await client.listSubjects({ prefix: ns, limit: 200 });
+              const res = await client.listSubjects({ predicate: ns, limit: 200 });
               return res.subjects;
             } catch {
               return [];

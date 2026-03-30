@@ -15,6 +15,7 @@ import { NamespaceManager } from "./namespace-manager.js";
 import { KnowledgeFusion } from "./knowledge-fusion.js";
 import { TeamManager } from "./team-manager.js";
 import { AgentMailbox } from "./agent-mailbox.js";
+import type { MailMessageType } from "./agent-mailbox.js";
 import { BackgroundTracker } from "./background-tracker.js";
 import { WorkflowOrchestrator } from "./workflow-orchestrator.js";
 import { TaskRouter } from "./task-router.js";
@@ -48,7 +49,8 @@ import { VentureManager } from "../kaneru/venture.js";
 import { ChainManager } from "../kaneru/chain.js";
 import { DirectiveManager } from "../kaneru/directives.js";
 import { randomUUID } from "node:crypto";
-import type { MergeStrategy, ConsensusStrategy } from "./mesh-protocol.js";
+import type { MergeStrategy } from "./mesh-protocol.js";
+import type { ConsensusStrategy } from "./consensus-engine.js";
 
 // ============================================================================
 // Types
@@ -289,7 +291,7 @@ export class KaneruFacade {
       from,
       to,
       content,
-      type: (type ?? "info") as "task" | "result" | "info" | "error",
+      type: (type ?? "info") as MailMessageType,
     });
   }
 

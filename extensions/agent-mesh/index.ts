@@ -2222,7 +2222,7 @@ const agentMeshPlugin = {
       for (const [name, handler] of Object.entries(methods)) {
         api.registerGatewayMethod(name, async ({ params, respond }) => {
           try {
-            const result = await handler(params ?? {});
+            const result = await handler((params ?? {}) as any);
             respond(true, result);
           } catch (err) {
             respond(false, { error: err instanceof Error ? err.message : String(err) });
