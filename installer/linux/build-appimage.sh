@@ -203,7 +203,8 @@ done
 # Start gateway if not running
 if ! pgrep -f "mayros gateway" >/dev/null 2>&1; then
   echo "Starting Mayros Gateway..."
-  "$NODE" "$CLI" gateway start --background 2>/dev/null &
+  "$NODE" "$CLI" gateway install 2>/dev/null || true
+  "$NODE" "$CLI" gateway start 2>/dev/null &
 fi
 
 # If launched without args (e.g., from desktop), open portal

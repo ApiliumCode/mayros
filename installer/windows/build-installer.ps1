@@ -154,6 +154,7 @@ timeout /t 1 /nobreak >nul
 goto cortexwait
 :startgateway
 echo Starting Gateway...
+"%MAYROS_DIR%\mayros.cmd" gateway install 2>nul
 start "" "%MAYROS_DIR%\mayros.cmd" gateway start
 echo Waiting for gateway to be ready...
 set TRIES=0
