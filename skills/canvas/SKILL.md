@@ -1,49 +1,17 @@
-# Canvas Skill
+---
+name: canvas
+description: "Display HTML content on connected Mayros nodes (Mac, iOS, Android) via the canvas tool. Use when presenting games, visualizations, dashboards, or interactive HTML demos on remote nodes. Actions: present, hide, navigate, eval, snapshot. Requires canvasHost enabled in mayros.json."
+---
 
-Display HTML content on connected Mayros nodes (Mac app, iOS, Android).
+# Canvas
 
-## Overview
+Display HTML content on connected Mayros nodes (Mac app, iOS, Android) via the canvas tool.
 
-The canvas tool lets you present web content on any connected node's canvas view. Great for:
+## When to Use
 
-- Displaying games, visualizations, dashboards
-- Showing generated HTML content
-- Interactive demos
+Use when the user wants to present web content (games, visualizations, dashboards, interactive demos) on a connected Mayros node's canvas view.
 
-## How It Works
-
-### Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
-│  Canvas Host    │────▶│   Node Bridge    │────▶│  Node App   │
-│  (HTTP Server)  │     │  (TCP Server)    │     │ (Mac/iOS/   │
-│  Port 18793     │     │  Port 18790      │     │  Android)   │
-└─────────────────┘     └──────────────────┘     └─────────────┘
-```
-
-1. **Canvas Host Server**: Serves static HTML/CSS/JS files from `canvasHost.root` directory
-2. **Node Bridge**: Communicates canvas URLs to connected nodes
-3. **Node Apps**: Render the content in a WebView
-
-### Tailscale Integration
-
-The canvas host server binds based on `gateway.bind` setting:
-
-| Bind Mode  | Server Binds To     | Canvas URL Uses            |
-| ---------- | ------------------- | -------------------------- |
-| `loopback` | 127.0.0.1           | localhost (local only)     |
-| `lan`      | LAN interface       | LAN IP address             |
-| `tailnet`  | Tailscale interface | Tailscale hostname         |
-| `auto`     | Best available      | Tailscale > LAN > loopback |
-
-**Key insight:** The `canvasHostHostForBridge` is derived from `bridgeHost`. When bound to Tailscale, nodes receive URLs like:
-
-```
-http://<tailscale-hostname>:18793/__mayros__/canvas/<file>.html
-```
-
-This is why localhost URLs don't work - the node receives the Tailscale hostname from the bridge!
+**Not for:** non-HTML content, direct file transfers, or streaming media.
 
 ## Actions
 
@@ -54,34 +22,6 @@ This is why localhost URLs don't work - the node receives the Tailscale hostname
 | `navigate` | Navigate to a new URL                |
 | `eval`     | Execute JavaScript in the canvas     |
 | `snapshot` | Capture screenshot of canvas         |
-
-## Configuration
-
-In `~/.mayros/mayros.json`:
-
-```json
-{
-  "canvasHost": {
-    "enabled": true,
-    "port": 18793,
-    "root": "/Users/you/mayros/canvas",
-    "liveReload": true
-  },
-  "gateway": {
-    "bind": "auto"
-  }
-}
-```
-
-### Live Reload
-
-When `liveReload: true` (default), the canvas host:
-
-- Watches the root directory for changes (via chokidar)
-- Injects a WebSocket client into HTML files
-- Automatically reloads connected canvases when files change
-
-Great for development!
 
 ## Workflow
 
@@ -101,20 +41,20 @@ cat > ~/mayros/canvas/my-game.html << 'HTML'
 HTML
 ```
 
-### 2. Find your canvas host URL
+### 2. Determine canvas host URL
 
-Check how your gateway is bound:
+Check gateway bind mode:
 
 ```bash
 cat ~/.mayros/mayros.json | jq '.gateway.bind'
 ```
 
-Then construct the URL:
+Construct URL based on bind mode:
 
 - **loopback**: `http://127.0.0.1:18793/__mayros__/canvas/<file>.html`
 - **lan/tailnet/auto**: `http://<hostname>:18793/__mayros__/canvas/<file>.html`
 
-Find your Tailscale hostname:
+Find Tailscale hostname (if using tailnet/auto):
 
 ```bash
 tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//'
@@ -134,10 +74,10 @@ Look for Mac/iOS/Android nodes with canvas capability.
 canvas action:present node:<node-id> target:<full-url>
 ```
 
-**Example:**
+Example:
 
 ```
-canvas action:present node:mac-63599bc4-b54d-4392-9048-b97abd58343a target:http://peters-mac-studio-1.sheep-coho.ts.net:18793/__mayros__/canvas/snake.html
+canvas action:present node:mac-63599bc4 target:http://my-host.ts.net:18793/__mayros__/canvas/snake.html
 ```
 
 ### 5. Navigate, snapshot, or hide
@@ -148,51 +88,29 @@ canvas action:snapshot node:<node-id>
 canvas action:hide node:<node-id>
 ```
 
-## Debugging
+## Configuration
 
-### White screen / content not loading
+In `~/.mayros/mayros.json`:
 
-**Cause:** URL mismatch between server bind and node expectation.
-
-**Debug steps:**
-
-1. Check server bind: `cat ~/.mayros/mayros.json | jq '.gateway.bind'`
-2. Check what port canvas is on: `lsof -i :18793`
-3. Test URL directly: `curl http://<hostname>:18793/__mayros__/canvas/<file>.html`
-
-**Solution:** Use the full hostname matching your bind mode, not localhost.
-
-### "node required" error
-
-Always specify `node:<node-id>` parameter.
-
-### "node not connected" error
-
-Node is offline. Use `mayros nodes list` to find online nodes.
-
-### Content not updating
-
-If live reload isn't working:
-
-1. Check `liveReload: true` in config
-2. Ensure file is in the canvas root directory
-3. Check for watcher errors in logs
-
-## URL Path Structure
-
-The canvas host serves from `/__mayros__/canvas/` prefix:
-
-```
-http://<host>:18793/__mayros__/canvas/index.html  → ~/mayros/canvas/index.html
-http://<host>:18793/__mayros__/canvas/games/snake.html → ~/mayros/canvas/games/snake.html
+```json
+{
+  "canvasHost": {
+    "enabled": true,
+    "port": 18793,
+    "root": "/Users/you/mayros/canvas",
+    "liveReload": true
+  },
+  "gateway": {
+    "bind": "auto"
+  }
+}
 ```
 
-The `/__mayros__/canvas/` prefix is defined by `CANVAS_HOST_PATH` constant.
+When `liveReload: true` (default), the canvas host watches the root directory and auto-reloads connected canvases on file changes.
 
-## Tips
+## Troubleshooting
 
-- Keep HTML self-contained (inline CSS/JS) for best results
-- Use the default index.html as a test page (has bridge diagnostics)
-- The canvas persists until you `hide` it or navigate away
-- Live reload makes development fast - just save and it updates!
-- A2UI JSON push is WIP - use HTML files for now
+- **White screen**: URL mismatch — use the full hostname matching your bind mode, not `localhost`. Debug: `curl http://<hostname>:18793/__mayros__/canvas/<file>.html`
+- **"node required" error**: Always specify `node:<node-id>` parameter.
+- **"node not connected"**: Node is offline. Run `mayros nodes list` to find online nodes.
+- **Content not updating**: Verify `liveReload: true` in config and that the file is in the canvas root directory.

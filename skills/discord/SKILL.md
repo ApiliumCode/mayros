@@ -1,8 +1,15 @@
 ---
 name: discord
-description: "Discord ops via the message tool (channel=discord)."
-metadata: { "mayros": { "emoji": "🎮", "requires": { "config": ["channels.discord.token"] } } }
-allowed-tools: ["message"]
+description: "Discord operations via the message tool (channel=discord). Use when sending, reading, editing, or deleting Discord messages, creating polls, managing threads, searching messages, reacting, or pinning. Actions: send, read, edit, delete, react, poll, pin, thread-create, search, set-presence. Requires channels.discord.token configured."
+metadata:
+  {
+    "mayros":
+      {
+        "emoji": "🎮",
+        "requires": { "config": ["channels.discord.token"] },
+      },
+  }
+allowed-tools: "message"
 ---
 
 # Discord (Via `message`)
