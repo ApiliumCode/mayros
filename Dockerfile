@@ -1,4 +1,4 @@
-FROM node:25-bookworm@sha256:f0dfc4847f46d231e44948ded37521492439fd4ac19a6ef2597b9c79fe7a03a0
+FROM node:25-bookworm@sha256:bcc74cb249480aa783f629ca82645dc3fe3edb1c3f0919fa4d046363163b876a
 
 # Install Bun (required for build scripts)
 RUN curl -fsSL https://bun.sh/install | bash
