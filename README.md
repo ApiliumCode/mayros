@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/apiliumcode-mayros-badge.png)](https://mseep.ai/app/apiliumcode-mayros)
+
 # ⚡🛡️ Mayros
 
 <p align="center">
