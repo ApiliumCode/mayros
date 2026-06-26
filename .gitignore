@@ -129,11 +129,14 @@ USER.md
 .agents
 .agent/
 
-# Claude Code project instructions (local only)
+# Claude Code project instructions, config, skills/superpowers (local only)
 CLAUDE.md
 **/CLAUDE.md
-
-.claude/RULES.md
+.claude/
+**/.claude/
+# superpowers / skills docs (never committed)
+**/superpowers/
+**/skills/superpowers/
 
 docs/evolution/
 docs/experiments/
