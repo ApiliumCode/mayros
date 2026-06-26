@@ -17,7 +17,12 @@ describe("resolveSkillsPromptForRun", () => {
         description: "Demo",
         filePath: "/app/skills/demo-skill/SKILL.md",
         baseDir: "/app/skills/demo-skill",
-        source: "mayros-bundled",
+        sourceInfo: {
+          path: "/app/skills/demo-skill/SKILL.md",
+          source: "mayros-bundled",
+          scope: "project",
+          origin: "top-level",
+        },
         disableModelInvocation: false,
       },
       frontmatter: {},

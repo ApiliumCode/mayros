@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
-import type { AgentMessage, AgentTool } from "@mariozechner/pi-agent-core";
-import type { SessionManager } from "@mariozechner/pi-coding-agent";
-import type { TSchema } from "@sinclair/typebox";
+import type { AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { TSchema } from "@earendil-works/pi-ai";
 import type { MayrosConfig } from "../../config/config.js";
 import { registerUnhandledRejectionHandler } from "../../infra/unhandled-rejections.js";
 import {

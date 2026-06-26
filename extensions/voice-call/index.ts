@@ -349,7 +349,15 @@ const voiceCallPlugin = {
       label: "Voice Call",
       description: "Make phone calls and have voice conversations via the voice-call plugin.",
       parameters: VoiceCallToolSchema,
-      async execute(_toolCallId, params) {
+      async execute(_toolCallId, rawParams) {
+        const params = rawParams as {
+          action?: string;
+          message?: string;
+          to?: string;
+          mode?: string;
+          callId?: string;
+          sid?: string;
+        };
         const json = (payload: unknown) => ({
           content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
           details: payload,

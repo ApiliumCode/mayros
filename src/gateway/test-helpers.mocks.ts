@@ -243,20 +243,25 @@ vi.mock("../agents/pi-model-discovery.js", async () => {
     "../agents/pi-model-discovery.js",
   );
 
-  class MockModelRegistry extends actual.ModelRegistry {
-    override getAll(): ReturnType<typeof actual.ModelRegistry.prototype.getAll> {
+  // ModelRegistry now has a private constructor and cannot be subclassed.
+  // Patch the instance returned by discoverModels to intercept getAll().
+  const mockedDiscoverModels = ((authStorage, agentDir) => {
+    const registry = actual.discoverModels(authStorage, agentDir);
+    const originalGetAll = registry.getAll.bind(registry);
+    registry.getAll = () => {
       if (!piSdkMock.enabled) {
-        return super.getAll();
+        return originalGetAll();
       }
       piSdkMock.discoverCalls += 1;
       // Cast to expected type for testing purposes
-      return piSdkMock.models as ReturnType<typeof actual.ModelRegistry.prototype.getAll>;
-    }
-  }
+      return piSdkMock.models as ReturnType<typeof originalGetAll>;
+    };
+    return registry;
+  }) as typeof actual.discoverModels;
 
   return {
     ...actual,
-    ModelRegistry: MockModelRegistry,
+    discoverModels: mockedDiscoverModels,
   };
 });
 

@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { toToolDefinitions } from "../pi-tool-definition-adapter.js";
 
 // We always pass tools via `customTools` so our policy filtering, sandbox integration,
@@ -6,7 +6,7 @@ import { toToolDefinitions } from "../pi-tool-definition-adapter.js";
 type AnyAgentTool = AgentTool;
 
 export function splitSdkTools(options: { tools: AnyAgentTool[]; sandboxEnabled: boolean }): {
-  builtInTools: AnyAgentTool[];
+  builtInTools: string[];
   customTools: ReturnType<typeof toToolDefinitions>;
 } {
   const { tools } = options;

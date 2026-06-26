@@ -1,4 +1,4 @@
-import { Editor, Key, matchesKey } from "@mariozechner/pi-tui";
+import { Editor, Key, matchesKey } from "@earendil-works/pi-tui";
 import type { ClipboardImage } from "../clipboard-image.js";
 import type { TuiKeybindingResolver } from "../keybinding-resolver.js";
 import type { VimHandler } from "../vim-handler.js";

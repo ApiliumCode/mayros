@@ -1,4 +1,4 @@
-import type { Model } from "@mariozechner/pi-ai/dist/types.js";
+import type { Model } from "@earendil-works/pi-ai";
 import { expect } from "vitest";
 
 export const asRecord = (value: unknown): Record<string, unknown> => {

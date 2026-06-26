@@ -1,10 +1,11 @@
 import {
-  type EditorKeybindingsConfig,
-  EditorKeybindingsManager,
+  type KeybindingsConfig,
+  KeybindingsManager,
   type KeyId,
   matchesKey,
-  setEditorKeybindings,
-} from "@mariozechner/pi-tui";
+  setKeybindings,
+  TUI_KEYBINDINGS,
+} from "@earendil-works/pi-tui";
 
 export type TuiAction =
   | "selectAgent"
@@ -58,8 +59,8 @@ export class TuiKeybindingResolver {
 
 export function applyKeybindingsFromConfig(
   config?: Record<string, string | string[]>,
-): EditorKeybindingsManager {
-  const editorConfig: EditorKeybindingsConfig = {};
+): KeybindingsManager {
+  const editorConfig: KeybindingsConfig = {};
   if (config) {
     for (const [action, keys] of Object.entries(config)) {
       if (action in DEFAULT_TUI_KEYBINDINGS) {
@@ -70,8 +71,8 @@ export function applyKeybindingsFromConfig(
         : (keys as KeyId);
     }
   }
-  const manager = new EditorKeybindingsManager(editorConfig);
-  setEditorKeybindings(manager);
+  const manager = new KeybindingsManager(TUI_KEYBINDINGS, editorConfig);
+  setKeybindings(manager);
   return manager;
 }
 

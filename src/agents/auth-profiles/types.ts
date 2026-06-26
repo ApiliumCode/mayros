@@ -1,4 +1,4 @@
-import type { OAuthCredentials } from "@mariozechner/pi-ai";
+import type { OAuthCredentials } from "@earendil-works/pi-ai";
 import type { MayrosConfig } from "../../config/config.js";
 
 export type ApiKeyCredential = {

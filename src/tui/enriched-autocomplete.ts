@@ -1,4 +1,8 @@
-import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
+import type {
+  AutocompleteItem,
+  AutocompleteProvider,
+  AutocompleteSuggestions,
+} from "@earendil-works/pi-tui";
 
 type CachedEntry = {
   items: AutocompleteItem[];
@@ -27,12 +31,13 @@ export class EnrichedAutocompleteProvider implements AutocompleteProvider {
     this.ttlMs = opts?.ttlMs ?? 30_000;
   }
 
-  getSuggestions(
+  async getSuggestions(
     lines: string[],
     cursorLine: number,
     cursorCol: number,
-  ): { items: AutocompleteItem[]; prefix: string } | null {
-    const baseSuggestions = this.base.getSuggestions(lines, cursorLine, cursorCol);
+    options: { signal: AbortSignal; force?: boolean },
+  ): Promise<AutocompleteSuggestions | null> {
+    const baseSuggestions = await this.base.getSuggestions(lines, cursorLine, cursorCol, options);
     if (!this.queryFn || !baseSuggestions) {
       return baseSuggestions;
     }

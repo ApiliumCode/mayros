@@ -36,7 +36,12 @@ describe("skills-cli (e2e)", () => {
         skill: {
           name: "peekaboo",
           description: "Capture UI screenshots",
-          source: "mayros-bundled",
+          sourceInfo: {
+            path: path.join(baseDir, "SKILL.md"),
+            source: "mayros-bundled",
+            scope: "project",
+            origin: "top-level",
+          },
           filePath: path.join(baseDir, "SKILL.md"),
           baseDir,
         } as SkillEntry["skill"],

@@ -1,5 +1,6 @@
 import path from "node:path";
-import { type Api, type Context, complete, type Model } from "@mariozechner/pi-ai";
+import type { Api, Context, Model } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
 import { Type } from "@sinclair/typebox";
 import type { MayrosConfig } from "../../config/config.js";
 import { resolveUserPath } from "../../utils.js";
