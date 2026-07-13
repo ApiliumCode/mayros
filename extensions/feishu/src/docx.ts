@@ -93,11 +93,16 @@ async function convertMarkdown(client: Lark.Client, markdown: string) {
   };
 }
 
-function sortBlocksByFirstLevel(blocks: any[], firstLevelIds: string[]): any[] {
+/** Minimal structural shape of a Feishu/Lark document block used for sorting. */
+type FeishuBlock = { block_id?: string; [key: string]: unknown };
+
+function sortBlocksByFirstLevel(blocks: FeishuBlock[], firstLevelIds: string[]): FeishuBlock[] {
   if (!firstLevelIds || firstLevelIds.length === 0) return blocks;
-  const sorted = firstLevelIds.map((id) => blocks.find((b) => b.block_id === id)).filter(Boolean);
+  const sorted = firstLevelIds
+    .map((id) => blocks.find((b) => b.block_id === id))
+    .filter((b): b is FeishuBlock => Boolean(b));
   const sortedIds = new Set(firstLevelIds);
-  const remaining = blocks.filter((b) => !sortedIds.has(b.block_id));
+  const remaining = blocks.filter((b) => !sortedIds.has(b.block_id ?? ""));
   return [...sorted, ...remaining];
 }
 

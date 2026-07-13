@@ -86,7 +86,7 @@ type SenderNameResult = {
 async function resolveFeishuSenderName(params: {
   account: ResolvedFeishuAccount;
   senderOpenId: string;
-  log: (...args: any[]) => void;
+  log: (...args: unknown[]) => void;
 }): Promise<SenderNameResult> {
   const { account, senderOpenId, log } = params;
   if (!account.configured) return {};
@@ -100,10 +100,19 @@ async function resolveFeishuSenderName(params: {
     const client = createFeishuClient(account);
 
     // contact/v3/users/:user_id?user_id_type=open_id
-    const res: any = await client.contact.user.get({
+    // The Feishu SDK returns an untyped response envelope; narrow the fields
+    // we actually read instead of widening the whole value to `any`.
+    type FeishuUser = {
+      name?: string;
+      display_name?: string;
+      nickname?: string;
+      en_name?: string;
+    };
+    type FeishuUserResponse = { data?: { user?: FeishuUser } };
+    const res = (await client.contact.user.get({
       path: { user_id: senderOpenId },
       params: { user_id_type: "open_id" },
-    });
+    })) as FeishuUserResponse;
 
     const name: string | undefined =
       res?.data?.user?.name ||

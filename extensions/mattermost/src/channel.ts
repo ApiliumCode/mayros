@@ -67,23 +67,23 @@ const mattermostMessageActions: ChannelMessageActionAdapter = {
     }
 
     const postIdRaw =
-      typeof (params as any)?.messageId === "string"
-        ? (params as any).messageId
-        : typeof (params as any)?.postId === "string"
-          ? (params as any).postId
+      typeof params.messageId === "string"
+        ? params.messageId
+        : typeof params.postId === "string"
+          ? params.postId
           : "";
     const postId = postIdRaw.trim();
     if (!postId) {
       throw new Error("Mattermost react requires messageId (post id)");
     }
 
-    const emojiRaw = typeof (params as any)?.emoji === "string" ? (params as any).emoji : "";
+    const emojiRaw = typeof params.emoji === "string" ? params.emoji : "";
     const emojiName = emojiRaw.trim().replace(/^:+|:+$/g, "");
     if (!emojiName) {
       throw new Error("Mattermost react requires emoji");
     }
 
-    const remove = (params as any)?.remove === true;
+    const remove = params.remove === true;
     if (remove) {
       const result = await removeMattermostReaction({
         cfg,

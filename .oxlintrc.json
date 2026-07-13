@@ -26,6 +26,7 @@
         "**/*.test.ts",
         "**/*.e2e.test.ts",
         "**/*.live.test.ts",
+        "**/*.test-helpers.ts",
         "**/test-helpers/**",
         "**/test-utils/**"
       ],

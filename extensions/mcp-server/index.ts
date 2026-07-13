@@ -15,6 +15,7 @@
 
 // @ts-expect-error — dist/index.js has no declaration file; types resolved via source paths
 import type { MayrosPluginApi, MayrosPluginToolContext } from "@apilium/mayros";
+import type { Command } from "commander";
 import { mcpServerConfigSchema, type McpServerConfig } from "./config.js";
 import { McpServer, type McpServerOptions } from "./server.js";
 import type { AdaptableTool } from "./tool-adapter.js";
@@ -142,7 +143,7 @@ const mcpServerPlugin = {
 
     // ── Register CLI ────────────────────────────────────────────────
 
-    api.registerCli(({ program }: { program: any }) => {
+    api.registerCli(({ program }: { program: Command }) => {
       const serve = program
         .command("serve")
         .description("Start MCP server to expose Mayros tools, resources, and prompts");
@@ -303,45 +304,49 @@ const mcpServerPlugin = {
 
     // ── Register gateway method (MCP Dashboard) ────────────────────
 
-    api.registerGatewayMethod("mcp.dashboard", async ({ respond }: { respond: any }) => {
-      // Cortex health check with 3s timeout — always runs
-      let cortexHealth: { status: "online" | "offline"; latencyMs: number };
-      try {
-        const cortexPort = cfg.cortex?.port ?? 19090;
-        const cortexUrl = `http://127.0.0.1:${cortexPort}/api/v1/health`;
-        const start = Date.now();
-        const cortexRes = await fetch(cortexUrl, {
-          signal: AbortSignal.timeout(3000),
-        });
-        const latencyMs = Date.now() - start;
-        cortexHealth = {
-          status: cortexRes.ok ? "online" : "offline",
-          latencyMs,
-        };
-      } catch {
-        cortexHealth = { status: "offline", latencyMs: 0 };
-      }
+    type DashboardRespond = (ok: boolean, payload?: unknown) => void;
+    api.registerGatewayMethod(
+      "mcp.dashboard",
+      async ({ respond }: { respond: DashboardRespond }) => {
+        // Cortex health check with 3s timeout — always runs
+        let cortexHealth: { status: "online" | "offline"; latencyMs: number };
+        try {
+          const cortexPort = cfg.cortex?.port ?? 19090;
+          const cortexUrl = `http://127.0.0.1:${cortexPort}/api/v1/health`;
+          const start = Date.now();
+          const cortexRes = await fetch(cortexUrl, {
+            signal: AbortSignal.timeout(3000),
+          });
+          const latencyMs = Date.now() - start;
+          cortexHealth = {
+            status: cortexRes.ok ? "online" : "offline",
+            latencyMs,
+          };
+        } catch {
+          cortexHealth = { status: "offline", latencyMs: 0 };
+        }
 
-      if (!server) {
-        respond(true, {
-          status: {
-            running: false,
-            transport: cfg.transport ?? "http",
-            toolCount: 0,
-            initialized: false,
-            uptimeMs: 0,
-            sseSessionCount: 0,
-          },
-          metrics: null,
-          cortexHealth,
-        });
-        return;
-      }
+        if (!server) {
+          respond(true, {
+            status: {
+              running: false,
+              transport: cfg.transport ?? "http",
+              toolCount: 0,
+              initialized: false,
+              uptimeMs: 0,
+              sseSessionCount: 0,
+            },
+            metrics: null,
+            cortexHealth,
+          });
+          return;
+        }
 
-      const status = server.status();
-      const metrics = server.getMetrics();
-      respond(true, { status, metrics, cortexHealth });
-    });
+        const status = server.status();
+        const metrics = server.getMetrics();
+        respond(true, { status, metrics, cortexHealth });
+      },
+    );
 
     // ── Register service lifecycle ──────────────────────────────────
 
