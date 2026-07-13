@@ -24,6 +24,7 @@ import { formatContextVisualization } from "./context-visualizer.js";
 import { renderDiff, renderDiffStats } from "./diff-renderer.js";
 import { compactMessages } from "./compact-handler.js";
 import { SessionManager, formatSessionLine } from "./session-manager.js";
+import { theme } from "./theme/theme.js";
 import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
 import type { OutputStyle } from "./output-styles.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
@@ -679,7 +680,13 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(
             `${stats.files} file(s) changed, +${stats.additions} -${stats.deletions}`,
           );
-          for (const line of renderDiff(raw)) {
+          for (const line of renderDiff(raw, {
+            add: theme.success,
+            del: theme.error,
+            header: (t) => theme.bold(t),
+            hunk: theme.accent,
+            context: theme.dim,
+          })) {
             chatLog.addSystem(line);
           }
         } catch (err) {

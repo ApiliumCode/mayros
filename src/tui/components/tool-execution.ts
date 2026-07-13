@@ -133,9 +133,18 @@ export class ToolExecutionComponent extends Container {
     const isDiff = DIFF_TOOLS.has(this.toolName) && raw && !this.isPartial;
 
     if (isDiff) {
-      const colored = renderDiff(raw);
+      const colored = renderDiff(raw, {
+        add: theme.success,
+        del: theme.error,
+        header: (t) => theme.bold(t),
+        hunk: theme.accent,
+        context: theme.dim,
+      });
       const stats = parseDiffStats(raw);
-      const statsLine = formatDiffStatsLine(stats);
+      const statsLine = formatDiffStatsLine(stats, {
+        add: theme.success,
+        del: theme.error,
+      });
       const maxLines = this.expanded ? Infinity : DIFF_PREVIEW_LINES;
       const display =
         colored.length > maxLines
