@@ -565,7 +565,11 @@ describe("security: path traversal protection (CWE-22)", () => {
       expect(resolve(obj, files, rootConfigPath)).toEqual({ root: true });
     });
 
-    it("allows include files when the config root path is a symlink", async () => {
+    // Creating symlinks on Windows requires Developer Mode or admin rights
+    // (EPERM otherwise), so skip this case there. CI runs on Linux where
+    // unprivileged symlink creation works.
+    const itSymlink = process.platform === "win32" ? it.skip : it;
+    itSymlink("allows include files when the config root path is a symlink", async () => {
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mayros-includes-symlink-"));
       try {
         const realRoot = path.join(tempRoot, "real");
