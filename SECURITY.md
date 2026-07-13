@@ -123,6 +123,56 @@ docker run --read-only --cap-drop=ALL \
   mayros/mayros:latest
 ```
 
+## Dependency Supply Chain
+
+Mayros treats its dependency tree as part of its trust boundary. A malicious or
+broken transitive package reaches users the moment it enters the lockfile, so the
+project enforces the following controls in `package.json`:
+
+### Release age floor
+
+`pnpm.minimumReleaseAge: 2880` (48 hours) gates every resolution. A package
+published less than 48 hours ago is not eligible for install, which buffers
+against compromised or yanked releases that get quarantined shortly after
+publish.
+
+### Forced security overrides
+
+The `pnpm.overrides` map forces specific versions of transitive dependencies
+known to carry security regressions. Each override exists because a transitive
+in the tree resolved to a vulnerable version and the override is the most
+durable way to pin the patched floor without waiting for upstreams to bump.
+
+When adding or changing an override, record why in the commit message: the CVE
+or GHSA it addresses (or the regression it prevents). Overrides without a
+recorded rationale are rejected in review.
+
+### Patched dependencies
+
+Any dependency declared in `pnpm.patchedDependencies` must use an exact version
+(no `^` or `~`). This is a hard rule: a range on a patched package lets a future
+resolve drift past the patch, silently reverting the fix.
+
+### Lockfile discipline
+
+The npm/pnpm lockfile pins the full transitive tree by content hash. Treat the
+lockfile as a reviewed artifact, not an auto-generated one:
+
+- A change to `pnpm-lock.yaml` without a corresponding dependency change in
+  `package.json` is suspicious and must be explained in the commit.
+- Dependabot/Renovate PRs that bump a transitive without a recorded CVE/fix are
+  held until the change is understood.
+- `pnpm install --frozen-lockfile` is the canonical install command in CI;
+  `pnpm install` (which can mutate the lockfile) is reserved for local
+  dependency changes that are committed alongside a `deps:` commit.
+
+### Native build scripts
+
+`pnpm.onlyBuiltDependencies` enumerates the packages allowed to run native
+build scripts (node-gyp, prebuilt binaries). Packages not in this list cannot
+execute install scripts, which limits the blast radius of a compromised native
+dependency.
+
 ## Security Scanning
 
 This project uses `detect-secrets` for automated secret detection in CI/CD.
