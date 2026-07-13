@@ -57,6 +57,48 @@ Mayros security guidance assumes:
 - Anyone who can modify `~/.mayros` state/config (including `mayros.json`) is effectively a trusted operator.
 - A single Gateway shared by mutually untrusted people is **not a recommended setup**. Use separate gateways (or at minimum separate OS users/hosts) per trust boundary.
 
+## Trust Model
+
+The single load-bearing security boundary in Mayros is **operating-system level
+isolation**. Everything else is a heuristic or a convenience, not a containment
+boundary.
+
+This distinction matters because it is easy to over-trust in-process defenses.
+The rule below governs how each layer should be treated:
+
+### What is and is not a boundary
+
+- **Real boundaries** — mechanisms the OS or kernel enforces against a
+  malicious process running inside them:
+  - Separate OS users, containers, VMs, namespaces, seccomp, Landlock.
+  - A sandboxed Docker container with `--cap-drop=ALL --read-only`.
+  - A separate host entirely (the strongest option).
+- **In-process defenses** — useful, but **not containment**. A sufficiently
+  resourced attacker who has code execution inside the process can bypass them:
+  - The approval gate and interactive permission prompts.
+  - Output redaction and secret masking (`src/security/output-masking.ts`).
+  - The static skill scanner and bash command blocklist.
+  - Rate limiters, query/write caps, and the enrichment timeout.
+  - The WASM skill sandbox (it narrows the attack surface of untrusted skill
+    code, but the host process can still be reached via bugs in the runtime).
+
+Treat the in-process defenses as **defense in depth and attack-surface
+reduction**, never as the thing that stops a determined adversary. The thing
+that stops a determined adversary is running the untrusted workload under a
+real OS boundary.
+
+### Practical implications
+
+- For fully untrusted skills, plugins, or tool output, run the Gateway (or the
+  session) inside a container or separate OS user. Do not rely on the approval
+  gate alone.
+- The default loopback-only bind is a real boundary against remote network
+  attackers; keep it unless you have a replacement boundary (Tailscale, SSH
+  tunnel, firewall).
+- When reviewing a security finding, classify it by which boundary it crosses.
+  A bug that lets a plugin read another plugin's memory is contained by the OS
+  user; a bug that lets a remotely-reached endpoint execute code is not.
+
 ## Plugin Trust Boundary
 
 Plugins/extensions are loaded **in-process** with the Gateway and are treated as trusted code.
