@@ -79,6 +79,16 @@
 - Aim to keep files under ~700 LOC; guideline only (not a hard guardrail). Split/refactor when it improves clarity or testability.
 - Naming: use **Mayros** for product/app/docs headings; use `mayros` for CLI command, package/binary, paths, and config keys.
 
+## Prompt Cache Discipline
+
+Per-conversation prompt caching is sacred. A long-lived session reuses a cached prefix on every turn; anything that mutates past context, swaps toolsets, or rebuilds the system prompt with volatile content invalidates that cache and multiplies token cost. The project enforces caching via the `cacheRetention` stream option (handled by the provider layer), and the cost of an invalidation is real and silent.
+
+- The system prompt is rebuilt on every run. Its content must be **stable across runs that have no reason to change it**. Do not add volatile data (timestamps that tick every second, random IDs, unordered maps) to the system prompt or to context files that feed it. The `Runtime:` line is the sanctioned place for run-scoped info and is designed to change only when the operator changes model, channel, or thinking level.
+- Slash commands that mutate prompt-relevant state (`/model`, `/think`, `/reasoning`, `/elevated`, `/fast`, `/new`) are expected to invalidate the cache on the **next** turn by design. That is the only acceptable invalidation. A change that invalidates the cache mid-turn, or on every turn regardless of whether the operator touched anything, is a bug.
+- When adding context to the prompt (new sections, hook output, injected memory), prefer **append-only** structure. Reordering existing sections or inserting in the middle invalidates everything after the insertion point.
+- Hooks (`before_prompt_build`, `before_agent_start`) that override `systemPrompt` or `prependContext` must be deterministic for a given input. A hook that returns different text on consecutive calls with the same inputs breaks the cache and is a high-priority bug.
+- The `diagnostics.cacheTrace` subsystem records a SHA-256 of the system prompt and messages at each pipeline stage. When investigating cache regressions, compare `systemDigest` across consecutive turns of a session where nothing should have changed — a drift there is the signature of a cache-breaking change.
+
 ## Release Channels (Naming)
 
 - stable: tagged releases only (e.g. `vYYYY.M.D`), npm dist-tag `latest`.

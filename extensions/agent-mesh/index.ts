@@ -2222,7 +2222,12 @@ const agentMeshPlugin = {
       for (const [name, handler] of Object.entries(methods)) {
         api.registerGatewayMethod(name, async ({ params, respond }) => {
           try {
-            const result = await handler((params ?? {}) as any);
+            // Handlers in the Mamoru gateway map are heterogeneous (each
+            // declares its own params shape). The runtime contract is that
+            // params arrive validated by the gateway dispatcher, so we forward
+            // the resolved object typed as the handler's first parameter.
+            const fn = handler as (input: Record<string, unknown>) => Promise<unknown>;
+            const result = await fn((params ?? {}) as Record<string, unknown>);
             respond(true, result);
           } catch (err) {
             respond(false, { error: err instanceof Error ? err.message : String(err) });
@@ -2277,21 +2282,28 @@ const agentMeshPlugin = {
           const nodeFsP = await import("node:fs/promises");
           const home = process.env.HOME ?? "";
 
-          // Update mayros.json with model + ollama auth profile
+          // Update mayros.json with model + ollama auth profile. The config is
+          // read from disk and mutated, so we model the shape we touch rather
+          // than widening to Record<string, any>.
+          type MayrosJsonFile = {
+            agents?: { defaults?: { model?: { primary?: string; [k: string]: unknown } } };
+            auth?: { profiles?: Record<string, unknown> };
+            [k: string]: unknown;
+          };
           const configPath = nodePath.join(home, ".mayros", "mayros.json");
-          let cfg: Record<string, any> = {};
+          let cfg: MayrosJsonFile = {};
           try {
-            cfg = JSON.parse(await nodeFsP.readFile(configPath, "utf8"));
+            cfg = JSON.parse(await nodeFsP.readFile(configPath, "utf8")) as MayrosJsonFile;
           } catch {
             /* new */
           }
-          if (!cfg.agents) cfg.agents = {};
-          if (!cfg.agents.defaults) cfg.agents.defaults = {};
-          if (!cfg.agents.defaults.model) cfg.agents.defaults.model = {};
+          cfg.agents ??= {};
+          cfg.agents.defaults ??= {};
+          cfg.agents.defaults.model ??= {};
           cfg.agents.defaults.model.primary = p.model;
           if (p.provider === "local" && p.model.startsWith("ollama/")) {
-            if (!cfg.auth) cfg.auth = {};
-            if (!cfg.auth.profiles) cfg.auth.profiles = {};
+            cfg.auth ??= {};
+            cfg.auth.profiles ??= {};
             cfg.auth.profiles["ollama"] = { provider: "ollama", mode: "api_key" };
           }
           await nodeFsP.writeFile(configPath, JSON.stringify(cfg, null, 2) + "\n");
@@ -2301,13 +2313,18 @@ const agentMeshPlugin = {
             const agentDir = nodePath.join(home, ".mayros", "agents", "main", "agent");
             await nodeFsP.mkdir(agentDir, { recursive: true });
             const storePath = nodePath.join(agentDir, "auth-profiles.json");
-            let store: Record<string, any> = { version: 2, profiles: {} };
+            type AuthProfileStore = {
+              version?: number;
+              profiles?: Record<string, unknown>;
+              [k: string]: unknown;
+            };
+            let store: AuthProfileStore = { version: 2, profiles: {} };
             try {
-              store = JSON.parse(await nodeFsP.readFile(storePath, "utf8"));
+              store = JSON.parse(await nodeFsP.readFile(storePath, "utf8")) as AuthProfileStore;
             } catch {
               /* new */
             }
-            if (!store.profiles) store.profiles = {};
+            store.profiles ??= {};
             store.profiles["ollama"] = { provider: "ollama", type: "api_key", key: "ollama-local" };
             await nodeFsP.writeFile(storePath, JSON.stringify(store, null, 2));
           }

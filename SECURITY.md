@@ -57,6 +57,48 @@ Mayros security guidance assumes:
 - Anyone who can modify `~/.mayros` state/config (including `mayros.json`) is effectively a trusted operator.
 - A single Gateway shared by mutually untrusted people is **not a recommended setup**. Use separate gateways (or at minimum separate OS users/hosts) per trust boundary.
 
+## Trust Model
+
+The single load-bearing security boundary in Mayros is **operating-system level
+isolation**. Everything else is a heuristic or a convenience, not a containment
+boundary.
+
+This distinction matters because it is easy to over-trust in-process defenses.
+The rule below governs how each layer should be treated:
+
+### What is and is not a boundary
+
+- **Real boundaries** — mechanisms the OS or kernel enforces against a
+  malicious process running inside them:
+  - Separate OS users, containers, VMs, namespaces, seccomp, Landlock.
+  - A sandboxed Docker container with `--cap-drop=ALL --read-only`.
+  - A separate host entirely (the strongest option).
+- **In-process defenses** — useful, but **not containment**. A sufficiently
+  resourced attacker who has code execution inside the process can bypass them:
+  - The approval gate and interactive permission prompts.
+  - Output redaction and secret masking (`src/security/output-masking.ts`).
+  - The static skill scanner and bash command blocklist.
+  - Rate limiters, query/write caps, and the enrichment timeout.
+  - The WASM skill sandbox (it narrows the attack surface of untrusted skill
+    code, but the host process can still be reached via bugs in the runtime).
+
+Treat the in-process defenses as **defense in depth and attack-surface
+reduction**, never as the thing that stops a determined adversary. The thing
+that stops a determined adversary is running the untrusted workload under a
+real OS boundary.
+
+### Practical implications
+
+- For fully untrusted skills, plugins, or tool output, run the Gateway (or the
+  session) inside a container or separate OS user. Do not rely on the approval
+  gate alone.
+- The default loopback-only bind is a real boundary against remote network
+  attackers; keep it unless you have a replacement boundary (Tailscale, SSH
+  tunnel, firewall).
+- When reviewing a security finding, classify it by which boundary it crosses.
+  A bug that lets a plugin read another plugin's memory is contained by the OS
+  user; a bug that lets a remotely-reached endpoint execute code is not.
+
 ## Plugin Trust Boundary
 
 Plugins/extensions are loaded **in-process** with the Gateway and are treated as trusted code.
@@ -122,6 +164,56 @@ docker run --read-only --cap-drop=ALL \
   -v mayros-data:/app/data \
   mayros/mayros:latest
 ```
+
+## Dependency Supply Chain
+
+Mayros treats its dependency tree as part of its trust boundary. A malicious or
+broken transitive package reaches users the moment it enters the lockfile, so the
+project enforces the following controls in `package.json`:
+
+### Release age floor
+
+`pnpm.minimumReleaseAge: 2880` (48 hours) gates every resolution. A package
+published less than 48 hours ago is not eligible for install, which buffers
+against compromised or yanked releases that get quarantined shortly after
+publish.
+
+### Forced security overrides
+
+The `pnpm.overrides` map forces specific versions of transitive dependencies
+known to carry security regressions. Each override exists because a transitive
+in the tree resolved to a vulnerable version and the override is the most
+durable way to pin the patched floor without waiting for upstreams to bump.
+
+When adding or changing an override, record why in the commit message: the CVE
+or GHSA it addresses (or the regression it prevents). Overrides without a
+recorded rationale are rejected in review.
+
+### Patched dependencies
+
+Any dependency declared in `pnpm.patchedDependencies` must use an exact version
+(no `^` or `~`). This is a hard rule: a range on a patched package lets a future
+resolve drift past the patch, silently reverting the fix.
+
+### Lockfile discipline
+
+The npm/pnpm lockfile pins the full transitive tree by content hash. Treat the
+lockfile as a reviewed artifact, not an auto-generated one:
+
+- A change to `pnpm-lock.yaml` without a corresponding dependency change in
+  `package.json` is suspicious and must be explained in the commit.
+- Dependabot/Renovate PRs that bump a transitive without a recorded CVE/fix are
+  held until the change is understood.
+- `pnpm install --frozen-lockfile` is the canonical install command in CI;
+  `pnpm install` (which can mutate the lockfile) is reserved for local
+  dependency changes that are committed alongside a `deps:` commit.
+
+### Native build scripts
+
+`pnpm.onlyBuiltDependencies` enumerates the packages allowed to run native
+build scripts (node-gyp, prebuilt binaries). Packages not in this list cannot
+execute install scripts, which limits the blast radius of a compromised native
+dependency.
 
 ## Security Scanning
 

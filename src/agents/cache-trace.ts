@@ -15,6 +15,7 @@ export type CacheTraceStage =
   | "prompt:before"
   | "prompt:images"
   | "stream:context"
+  | "cache:system-drift"
   | "session:after";
 
 export type CacheTraceEvent = {
@@ -38,6 +39,8 @@ export type CacheTraceEvent = {
   messageFingerprints?: string[];
   messagesDigest?: string;
   systemDigest?: string;
+  /** Previous system digest for the same session, when a drift is detected. */
+  previousSystemDigest?: string;
   note?: string;
   error?: string;
 };
@@ -73,6 +76,14 @@ type CacheTraceConfig = {
 type CacheTraceWriter = QueuedFileWriter;
 
 const writers = new Map<string, CacheTraceWriter>();
+
+/**
+ * Last system digest seen per session key, so we can detect when the system
+ * prompt drifts between consecutive turns of the same session. A drift with no
+ * operator-triggered change (model, thinking, channel) is the signature of a
+ * cache-breaking bug. Keyed by sessionKey (or sessionId as fallback).
+ */
+const lastSystemDigestBySession = new Map<string, string>();
 
 function resolveCacheTraceConfig(params: CacheTraceInit): CacheTraceConfig {
   const env = params.env ?? process.env;
@@ -222,6 +233,9 @@ export function createCacheTrace(params: CacheTraceInit): CacheTrace | null {
     if (payload.error) {
       event.error = payload.error;
     }
+    if (payload.previousSystemDigest !== undefined) {
+      event.previousSystemDigest = payload.previousSystemDigest;
+    }
 
     const line = safeJsonStringify(event);
     if (!line) {
@@ -232,16 +246,37 @@ export function createCacheTrace(params: CacheTraceInit): CacheTrace | null {
 
   const wrapStreamFn: CacheTrace["wrapStreamFn"] = (streamFn) => {
     const wrapped: StreamFn = (model, context, options) => {
+      const system = (context as { system?: unknown }).system;
+      const messages = (context as { messages?: AgentMessage[] }).messages ?? [];
       recordStage("stream:context", {
         model: {
           id: model?.id,
           provider: model?.provider,
           api: model?.api,
         },
-        system: (context as { system?: unknown }).system,
-        messages: (context as { messages?: AgentMessage[] }).messages ?? [],
+        system,
+        messages,
         options: (options ?? {}) as Record<string, unknown>,
       });
+
+      // Detect system-prompt drift across turns of the same session. A
+      // different digest with no operator-triggered change (model/thinking)
+      // is the signature of a cache-breaking bug, per the Prompt Cache
+      // Discipline policy in AGENTS.md.
+      if (system !== undefined && params.sessionKey) {
+        const currentDigest = digest(system);
+        const previous = lastSystemDigestBySession.get(params.sessionKey);
+        if (previous !== undefined && previous !== currentDigest) {
+          recordStage("cache:system-drift", {
+            system,
+            systemDigest: currentDigest,
+            previousSystemDigest: previous,
+            note: "system prompt changed between turns without a session restart; investigate if no operator change triggered this",
+          });
+        }
+        lastSystemDigestBySession.set(params.sessionKey, currentDigest);
+      }
+
       return streamFn(model, context, options);
     };
     return wrapped;

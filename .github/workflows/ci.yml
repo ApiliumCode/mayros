@@ -106,6 +106,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          # Full history so the lockfile policy check can read commit messages.
+          fetch-depth: 0
           submodules: false
 
       - name: Setup Node environment
@@ -113,6 +115,10 @@ jobs:
 
       - name: Check types, lint, and format
         run: pnpm check
+
+      - name: Enforce lockfile change policy
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-lockfile-policy.mjs --base "origin/${{ github.base_ref }}" --head "${{ github.event.pull_request.head.sha }}"
 
   build-artifacts:
     needs: [docs-scope, changed-scope, check]
