@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "warn"
+  },
+  "rules": {
+    "no-explicit-any": "warn",
+    "typescript/no-floating-promises": "warn",
+    "typescript/no-misused-promises": "warn",
+    "typescript/await-thenable": "warn",
+    "typescript/no-base-to-string": "warn",
+    "typescript/restrict-template-expressions": "warn",
+    "typescript/no-misused-spread": "warn",
+    "typescript/no-this-alias": "warn",
+    "no-unused-vars": "warn",
+    "no-unassigned-vars": "warn",
+    "no-dupe-keys": "warn",
+    "no-unused-expressions": "warn",
+    "no-misleading-character-class": "warn",
+    "no-control-regex": "warn",
+    "no-new-array": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.e2e.test.ts",
+        "**/*.live.test.ts",
+        "**/test-helpers/**",
+        "**/test-utils/**"
+      ],
+      "rules": {
+        "typescript/no-floating-promises": "off",
+        "typescript/no-misused-promises": "off",
+        "typescript/unbound-method": "off",
+        "no-explicit-any": "off",
+        "typescript/no-base-to-string": "off",
+        "typescript/restrict-template-expressions": "off"
+      }
+    }
+  ]
+}
