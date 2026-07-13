@@ -26,6 +26,7 @@ import { ChatLog } from "./components/chat-log.js";
 import { CustomEditor } from "./components/custom-editor.js";
 import { WelcomeScreen } from "./components/welcome-screen.js";
 import { GatewayChatClient } from "./gateway-chat.js";
+import { enableKeyboardProtocol } from "./term-capabilities.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
@@ -1039,10 +1040,17 @@ export async function runTui(opts: TuiOptions) {
   updateHeader();
   setConnectionStatus("connecting");
   updateFooter();
+  // Enable extended keyboard protocols (kitty / modifyOtherKeys) so modifier
+  // combinations like Shift+Enter survive in capable terminals. The handle
+  // restores the terminal on exit.
+  const keyboardProtocol = enableKeyboardProtocol();
   tui.start();
   client.start();
   await new Promise<void>((resolve) => {
-    const finish = () => resolve();
+    const finish = () => {
+      keyboardProtocol.disable();
+      resolve();
+    };
     process.once("exit", finish);
     process.once("SIGINT", finish);
     process.once("SIGTERM", finish);
