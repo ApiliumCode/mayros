@@ -27,6 +27,7 @@ import { CustomEditor } from "./components/custom-editor.js";
 import { WelcomeScreen } from "./components/welcome-screen.js";
 import { GatewayChatClient } from "./gateway-chat.js";
 import { enableKeyboardProtocol } from "./term-capabilities.js";
+import { detectTerminalColorScheme } from "./term-capabilities.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
@@ -41,11 +42,13 @@ import { createSessionActions } from "./tui-session-actions.js";
 import type {
   AgentSummary,
   PendingImage,
+  SectionState,
   SessionInfo,
   SessionScope,
   TuiOptions,
   TuiStateAccess,
 } from "./tui-types.js";
+import { nextSectionState } from "./tui-types.js";
 import { buildWaitingStatusMessage, defaultWaitingPhrases } from "./tui-waiting.js";
 
 export { resolveFinalAssistantText } from "./tui-formatters.js";
@@ -280,7 +283,10 @@ export async function runTui(opts: TuiOptions) {
   }
 
   const configTheme = config.ui?.theme;
-  if (configTheme && THEME_PRESETS.includes(configTheme as ThemePreset)) {
+  // "auto" (or unset) defers to terminal color-scheme detection after the TUI
+  // instance is created; until then the default "dark" preset is in place.
+  const themeIsAuto = !configTheme || configTheme === "auto";
+  if (!themeIsAuto && THEME_PRESETS.includes(configTheme as ThemePreset)) {
     setThemePreset(configTheme as ThemePreset);
   }
   const keybindingsConfig = config.ui?.keybindings;
@@ -302,6 +308,8 @@ export async function runTui(opts: TuiOptions) {
   let wasDisconnected = false;
   let toolsExpanded = false;
   let showThinking = false;
+  let toolSectionState: SectionState = "collapsed";
+  let thinkingSectionState: SectionState = "collapsed";
   let pairingHintShown = false;
   let gatewayDownHintShown = false;
   let outputStyle: string | undefined;
@@ -421,6 +429,18 @@ export async function runTui(opts: TuiOptions) {
     set showThinking(value) {
       showThinking = value;
     },
+    get toolSectionState() {
+      return toolSectionState;
+    },
+    set toolSectionState(value) {
+      toolSectionState = value;
+    },
+    get thinkingSectionState() {
+      return thinkingSectionState;
+    },
+    set thinkingSectionState(value) {
+      thinkingSectionState = value;
+    },
     get connectionStatus() {
       return connectionStatus;
     },
@@ -518,6 +538,13 @@ export async function runTui(opts: TuiOptions) {
   });
 
   const tui = new TUI(new ProcessTerminal());
+  // Auto-detect the terminal's dark/light preference before the first render.
+  // Queries run concurrently with a short timeout, so an unresponsive terminal
+  // falls back to the default "dark" preset without blocking startup.
+  if (themeIsAuto) {
+    const detected = await detectTerminalColorScheme(tui);
+    setThemePreset(detected);
+  }
   const dedupeBackspace = createBackspaceDeduper();
   tui.addInputListener((data) => {
     const next = dedupeBackspace(data);
@@ -937,9 +964,10 @@ export async function runTui(opts: TuiOptions) {
     process.exit(0);
   };
   editor.onCtrlO = () => {
-    toolsExpanded = !toolsExpanded;
-    chatLog.setToolsExpanded(toolsExpanded);
-    setActivityStatus(toolsExpanded ? "tools expanded" : "tools collapsed");
+    toolSectionState = nextSectionState(toolSectionState);
+    toolsExpanded = toolSectionState === "expanded";
+    chatLog.setToolSectionState(toolSectionState);
+    setActivityStatus(`tools: ${toolSectionState}`);
     tui.requestRender();
   };
   editor.onCtrlL = () => {
@@ -952,7 +980,12 @@ export async function runTui(opts: TuiOptions) {
     void openSessionSelector();
   };
   editor.onCtrlT = () => {
-    showThinking = !showThinking;
+    thinkingSectionState = nextSectionState(thinkingSectionState);
+    // Thinking text is baked into the assistant message at compose time, so
+    // toggling requires reloading history. "hidden" suppresses thinking;
+    // "collapsed" and "expanded" both show it (a truncated mode would require
+    // restructuring the composer — deferred to a follow-up).
+    showThinking = thinkingSectionState !== "hidden";
     void loadHistory();
   };
   editor.onShiftTab = () => {

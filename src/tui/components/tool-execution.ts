@@ -64,7 +64,7 @@ export class ToolExecutionComponent extends Container {
   private toolName: string;
   private args: unknown;
   private result?: ToolResult;
-  private expanded = false;
+  private sectionState: import("../tui-types.js").SectionState = "collapsed";
   private isError = false;
   private isPartial = true;
 
@@ -92,8 +92,18 @@ export class ToolExecutionComponent extends Container {
   }
 
   setExpanded(expanded: boolean) {
-    this.expanded = expanded;
+    this.sectionState = expanded ? "expanded" : "collapsed";
     this.refresh();
+  }
+
+  setSectionState(state: import("../tui-types.js").SectionState) {
+    this.sectionState = state;
+    this.refresh();
+  }
+
+  /** When hidden, the component renders only the header line. */
+  get isHidden(): boolean {
+    return this.sectionState === "hidden";
   }
 
   setResult(result: ToolResult | undefined, opts?: { isError?: boolean }) {
@@ -132,6 +142,14 @@ export class ToolExecutionComponent extends Container {
     const raw = extractText(this.result);
     const isDiff = DIFF_TOOLS.has(this.toolName) && raw && !this.isPartial;
 
+    // Hidden: only the header line, no output body.
+    if (this.sectionState === "hidden") {
+      this.output.setText("");
+      return;
+    }
+
+    const isExpanded = this.sectionState === "expanded";
+
     if (isDiff) {
       const colored = renderDiff(raw, {
         add: theme.success,
@@ -145,7 +163,7 @@ export class ToolExecutionComponent extends Container {
         add: theme.success,
         del: theme.error,
       });
-      const maxLines = this.expanded ? Infinity : DIFF_PREVIEW_LINES;
+      const maxLines = isExpanded ? Infinity : DIFF_PREVIEW_LINES;
       const display =
         colored.length > maxLines
           ? [...colored.slice(0, maxLines), "…", statsLine]
@@ -157,7 +175,7 @@ export class ToolExecutionComponent extends Container {
         : this.isPartial
           ? "…"
           : "";
-      if (!this.expanded && text) {
+      if (!isExpanded && text) {
         const lines = text.split("\n");
         const preview =
           lines.length > PREVIEW_LINES ? `${lines.slice(0, PREVIEW_LINES).join("\n")}\n…` : text;

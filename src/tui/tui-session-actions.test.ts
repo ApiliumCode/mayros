@@ -39,6 +39,8 @@ describe("tui session actions", () => {
       autoMessageSent: false,
       toolsExpanded: false,
       showThinking: false,
+      toolSectionState: "collapsed",
+      thinkingSectionState: "collapsed",
       pendingImages: new Map(),
       connectionStatus: "connected",
       activityStatus: "idle",

@@ -1,3 +1,21 @@
+/**
+ * Per-section detail visibility. Replaces the previous binary expanded/not
+ * with a three-state model:
+ *   - "hidden": the section renders only a header line (or nothing).
+ *   - "collapsed": a bounded preview (tool output: first N lines).
+ *   - "expanded": full content.
+ */
+export type SectionState = "hidden" | "collapsed" | "expanded";
+
+export type SectionKey = "thinking" | "tools";
+
+export const SECTION_CYCLE: SectionState[] = ["hidden", "collapsed", "expanded"];
+
+export function nextSectionState(current: SectionState): SectionState {
+  const idx = SECTION_CYCLE.indexOf(current);
+  return SECTION_CYCLE[(idx + 1) % SECTION_CYCLE.length];
+}
+
 export type TuiOptions = {
   url?: string;
   token?: string;
@@ -109,6 +127,9 @@ export type TuiStateAccess = {
   autoMessageSent: boolean;
   toolsExpanded: boolean;
   showThinking: boolean;
+  /** Per-section detail visibility (the source of truth; toolsExpanded/showThinking are shims). */
+  toolSectionState: SectionState;
+  thinkingSectionState: SectionState;
   connectionStatus: string;
   activityStatus: string;
   statusTimeout: ReturnType<typeof setTimeout> | null;
