@@ -137,7 +137,7 @@ export class WelcomeScreen implements Component {
       ["/help", "all commands"],
       ["/agents", "switch agents"],
       ["Ctrl+V", "paste images"],
-      ["Esc", "abort run"],
+      ["Ctrl+C", "abort run / exit"],
     ];
 
     const sessionHeader = bold(accent("Session"));
