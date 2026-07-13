@@ -904,6 +904,15 @@ export async function runTui(opts: TuiOptions) {
   };
   editor.onCtrlC = () => {
     const now = Date.now();
+    // Tri-state, in priority order:
+    //   1. an active run → abort it
+    //   2. non-empty input → clear it
+    //   3. double Ctrl+C within 1s → exit
+    // Escape remains a secondary abort path.
+    if (activeChatRunId) {
+      void abortActive();
+      return;
+    }
     if (editor.getText().trim().length > 0) {
       editor.setText("");
       setActivityStatus("cleared input");
