@@ -62,7 +62,7 @@ describe("SessionManager", () => {
     const client = createMockClient();
     const mgr = new SessionManager({ client: client as never, currentAgentId: "default" });
     await mgr.renameSession("s-abc", "New Name");
-    expect(client.patchSession).toHaveBeenCalledWith({ key: "s-abc", displayName: "New Name" });
+    expect(client.patchSession).toHaveBeenCalledWith({ key: "s-abc", label: "New Name" });
   });
 
   it("deletes a session via reset", async () => {

@@ -13,6 +13,29 @@ export type DiffStats = {
   deletions: number;
 };
 
+/**
+ * Color functions for diff rendering, each taking text and returning it styled.
+ * Matches the shape of the TUI theme color functions so the active palette can
+ * be passed straight through, keeping diff colors consistent with the theme
+ * (correct under light and high-contrast presets).
+ */
+export type DiffColors = {
+  add: (text: string) => string;
+  del: (text: string) => string;
+  header: (text: string) => string;
+  hunk: (text: string) => string;
+  context: (text: string) => string;
+};
+
+/** Default (terminal-default) colors used when no theme is supplied. */
+const DEFAULT_DIFF_COLORS: DiffColors = {
+  add: (t) => chalk.green(t),
+  del: (t) => chalk.red(t),
+  header: (t) => chalk.bold(chalk.white(t)),
+  hunk: (t) => chalk.cyan(t),
+  context: (t) => chalk.dim(t),
+};
+
 export function parseDiffLines(raw: string): DiffLine[] {
   const lines: DiffLine[] = [];
   for (const text of raw.split("\n")) {
@@ -36,20 +59,21 @@ export function parseDiffLines(raw: string): DiffLine[] {
   return lines;
 }
 
-export function renderDiff(raw: string): string[] {
+export function renderDiff(raw: string, colors?: Partial<DiffColors>): string[] {
+  const c = { ...DEFAULT_DIFF_COLORS, ...colors };
   const parsed = parseDiffLines(raw);
   return parsed.map((line) => {
     switch (line.type) {
       case "add":
-        return chalk.green(line.text);
+        return c.add(line.text);
       case "del":
-        return chalk.red(line.text);
+        return c.del(line.text);
       case "header":
-        return chalk.bold(chalk.white(line.text));
+        return c.header(line.text);
       case "hunk":
-        return chalk.cyan(line.text);
+        return c.hunk(line.text);
       default:
-        return chalk.dim(line.text);
+        return c.context(line.text);
     }
   });
 }
@@ -80,10 +104,15 @@ export function renderDiffStats(raw: string): DiffStats {
  * Format a single-line summary of diff stats with colors.
  * Example: "+5 -3 (2 files)"
  */
-export function formatDiffStatsLine(stats: DiffStats): string {
+export function formatDiffStatsLine(
+  stats: DiffStats,
+  colors?: { add?: (text: string) => string; del?: (text: string) => string },
+): string {
+  const add = colors?.add ?? ((t: string) => chalk.green(t));
+  const del = colors?.del ?? ((t: string) => chalk.red(t));
   const parts: string[] = [];
-  if (stats.additions > 0) parts.push(chalk.green(`+${stats.additions}`));
-  if (stats.deletions > 0) parts.push(chalk.red(`-${stats.deletions}`));
+  if (stats.additions > 0) parts.push(add(`+${stats.additions}`));
+  if (stats.deletions > 0) parts.push(del(`-${stats.deletions}`));
   const fileLabel = stats.files === 1 ? "1 file" : `${stats.files} files`;
   return parts.length > 0 ? `${parts.join(" ")} (${fileLabel})` : `(${fileLabel})`;
 }

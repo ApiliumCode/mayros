@@ -2,6 +2,7 @@ import process from "node:process";
 import readline from "node:readline";
 import { randomUUID } from "node:crypto";
 import { GatewayChatClient, resolveGatewayConnection, type GatewayEvent } from "./gateway-chat.js";
+import { handleSharedCommand } from "./shared-commands.js";
 import { TuiStreamAssembler } from "./tui-stream-assembler.js";
 import { A11yRenderer } from "./a11y-renderer.js";
 import type { TuiOptions } from "./tui-types.js";
@@ -22,7 +23,7 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
     password: connection.password,
   });
 
-  const sessionKey = opts.session ?? "main";
+  let sessionKey = opts.session ?? "main";
   const assembler = new TuiStreamAssembler();
   const showThinking = opts.thinking === "on" || opts.thinking === "verbose";
 
@@ -95,6 +96,15 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
     }
   };
 
+  // Declare the readline interface before wiring client disconnect handling,
+  // so a disconnect between client.start() and the readline creation cannot
+  // reference `rl` in its temporal dead zone.
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: "> ",
+  });
+
   client.onDisconnected = (reason: string) => {
     renderer.emit({ type: "system", text: `Disconnected: ${reason}` });
     rl.close();
@@ -125,15 +135,9 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
     });
   }
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: "> ",
-  });
-
   rl.prompt();
 
-  rl.on("line", (line) => {
+  rl.on("line", async (line) => {
     const text = line.trim();
     if (!text) {
       rl.prompt();
@@ -145,6 +149,36 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
       rl.close();
       client.stop();
       return;
+    }
+
+    // Route slash commands through the shared command core so the accessible
+    // TUI reaches feature parity with the graphical TUI for the commands that
+    // do not require a visual picker (abort, reset, compact, status, etc.).
+    if (text.startsWith("/")) {
+      const [name, ...rest] = text.slice(1).split(/\s+/);
+      if (name) {
+        const sink = {
+          info: (msg: string) => renderer.emit({ type: "system", text: msg }),
+          error: (msg: string) => renderer.emit({ type: "system", text: msg }),
+        };
+        const handled = await handleSharedCommand(
+          {
+            client,
+            sessionKey,
+            getActiveRunId: () => currentRunId,
+            onSessionChanged: (key) => {
+              sessionKey = key;
+            },
+          },
+          name.toLowerCase(),
+          rest.join(" ").trim(),
+          sink,
+        );
+        if (handled.handled) {
+          rl.prompt();
+          return;
+        }
+      }
     }
 
     const runId = randomUUID();
