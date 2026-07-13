@@ -1,10 +1,10 @@
-import type { StreamFn } from "@mariozechner/pi-agent-core";
-import type { Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import { applyExtraParamsToAgent } from "./extra-params.js";
 
 // Mock streamSimple for testing
-vi.mock("@mariozechner/pi-ai", () => ({
+vi.mock("@earendil-works/pi-ai", () => ({
   streamSimple: vi.fn(() => ({
     push: vi.fn(),
     result: vi.fn(),
@@ -22,7 +22,7 @@ type ToolStreamCase = {
 function runToolStreamCase(params: ToolStreamCase) {
   const payload: Record<string, unknown> = { model: params.model.id, messages: [] };
   const baseStreamFn: StreamFn = (_model, _context, options) => {
-    options?.onPayload?.(payload);
+    options?.onPayload?.(payload, _model);
     return {} as ReturnType<StreamFn>;
   };
   const agent = { streamFn: baseStreamFn };

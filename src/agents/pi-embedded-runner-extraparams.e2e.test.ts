@@ -1,5 +1,5 @@
-import type { StreamFn } from "@mariozechner/pi-agent-core";
-import type { Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { applyExtraParamsToAgent, resolveExtraParams } from "./pi-embedded-runner.js";
 
@@ -99,7 +99,7 @@ describe("applyExtraParamsToAgent", () => {
   }) {
     const payload = { store: false };
     const baseStreamFn: StreamFn = (_model, _context, options) => {
-      options?.onPayload?.(payload);
+      options?.onPayload?.(payload, _model);
       return {} as ReturnType<StreamFn>;
     };
     const agent = { streamFn: baseStreamFn };
@@ -295,7 +295,7 @@ describe("applyExtraParamsToAgent", () => {
   it("does not force store=true for Codex responses (Codex requires store=false)", () => {
     const payload = { store: false };
     const baseStreamFn: StreamFn = (_model, _context, options) => {
-      options?.onPayload?.(payload);
+      options?.onPayload?.(payload, _model);
       return {} as ReturnType<StreamFn>;
     };
     const agent = { streamFn: baseStreamFn };

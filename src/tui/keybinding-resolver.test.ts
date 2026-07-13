@@ -6,16 +6,17 @@ const piTuiMocks = vi.hoisted(() => {
     config?: Record<string, unknown>,
   ) {
     this._config = config;
-  }) as unknown as typeof import("@mariozechner/pi-tui").EditorKeybindingsManager &
+  }) as unknown as typeof import("@earendil-works/pi-tui").KeybindingsManager &
     ReturnType<typeof vi.fn>;
   return {
     matchesKey: vi.fn((_data: string, _key: string) => false),
-    setEditorKeybindings: vi.fn(),
-    EditorKeybindingsManager: MockManager,
+    setKeybindings: vi.fn(),
+    KeybindingsManager: MockManager,
+    TUI_KEYBINDINGS: {} as Record<string, unknown>,
   };
 });
 
-vi.mock("@mariozechner/pi-tui", () => ({
+vi.mock("@earendil-works/pi-tui", () => ({
   ...piTuiMocks,
   Key: { ctrl: (k: string) => `ctrl+${k}`, shift: (k: string) => `shift+${k}` },
 }));
@@ -73,18 +74,22 @@ describe("DEFAULT_TUI_KEYBINDINGS", () => {
 });
 
 describe("applyKeybindingsFromConfig", () => {
-  it("creates and sets an EditorKeybindingsManager", () => {
-    piTuiMocks.setEditorKeybindings.mockClear();
-    piTuiMocks.EditorKeybindingsManager.mockClear();
+  it("creates and sets an KeybindingsManager", () => {
+    piTuiMocks.setKeybindings.mockClear();
+    piTuiMocks.KeybindingsManager.mockClear();
     applyKeybindingsFromConfig({ cursorUp: "ctrl+k" });
-    expect(piTuiMocks.EditorKeybindingsManager).toHaveBeenCalledWith({ cursorUp: "ctrl+k" });
-    expect(piTuiMocks.setEditorKeybindings).toHaveBeenCalled();
+    expect(piTuiMocks.KeybindingsManager).toHaveBeenCalledWith(piTuiMocks.TUI_KEYBINDINGS, {
+      cursorUp: "ctrl+k",
+    });
+    expect(piTuiMocks.setKeybindings).toHaveBeenCalled();
   });
 
   it("filters out TUI-specific actions from editor config", () => {
-    piTuiMocks.EditorKeybindingsManager.mockClear();
+    piTuiMocks.KeybindingsManager.mockClear();
     applyKeybindingsFromConfig({ selectAgent: "ctrl+a", cursorDown: "ctrl+j" });
-    expect(piTuiMocks.EditorKeybindingsManager).toHaveBeenCalledWith({ cursorDown: "ctrl+j" });
+    expect(piTuiMocks.KeybindingsManager).toHaveBeenCalledWith(piTuiMocks.TUI_KEYBINDINGS, {
+      cursorDown: "ctrl+j",
+    });
   });
 });
 

@@ -1,5 +1,5 @@
-import type { Model } from "@mariozechner/pi-ai";
-import { getModel, streamSimple } from "@mariozechner/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
+import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
 import { describe, expect, it } from "vitest";
 import type { MayrosConfig } from "../config/config.js";
 import { isTruthyEnvValue } from "../infra/env.js";

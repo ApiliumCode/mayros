@@ -49,7 +49,7 @@ function normalizeAllowlist(input: unknown): string[] | undefined {
 const BUNDLED_SOURCES = new Set(["mayros-bundled"]);
 
 function isBundledSkill(entry: SkillEntry): boolean {
-  return BUNDLED_SOURCES.has(entry.skill.source);
+  return BUNDLED_SOURCES.has(entry.skill.sourceInfo.source);
 }
 
 export function resolveBundledAllowlist(config?: MayrosConfig): string[] | undefined {

@@ -182,15 +182,13 @@ const osameruPlugin = {
         ),
         limit: Type.Optional(Type.Number({ description: "Max entries to return" })),
       }),
-      execute: async (
-        _toolCallId: string,
-        params: {
+      execute: async (_toolCallId: string, rawParams: unknown) => {
+        const params = rawParams as {
           event?: string;
           actor?: string;
           decision?: string;
           limit?: number;
-        },
-      ) => {
+        };
         const entries = await auditTrail.query(params);
         return {
           content: [

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Component, TUI } from "@mariozechner/pi-tui";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 import {
   listThinkingLevelLabels,
   normalizeUsageDisplay,

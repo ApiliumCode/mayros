@@ -1,9 +1,5 @@
-import {
-  getOAuthApiKey,
-  getOAuthProviders,
-  type OAuthCredentials,
-  type OAuthProvider,
-} from "@mariozechner/pi-ai";
+import type { OAuthCredentials, OAuthProvider } from "@earendil-works/pi-ai";
+import { getOAuthApiKey, getOAuthProviders } from "@earendil-works/pi-ai/oauth";
 import type { MayrosConfig } from "../../config/config.js";
 import { withFileLock } from "../../infra/file-lock.js";
 import { refreshQwenPortalCredentials } from "../../providers/qwen-portal-oauth.js";

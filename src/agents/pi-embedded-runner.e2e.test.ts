@@ -6,8 +6,9 @@ import "./test-helpers/fast-coding-tools.js";
 import type { MayrosConfig } from "../config/config.js";
 import { ensureMayrosModelsJson } from "./models-config.js";
 
-vi.mock("@mariozechner/pi-ai", async () => {
-  const actual = await vi.importActual<typeof import("@mariozechner/pi-ai")>("@mariozechner/pi-ai");
+vi.mock("@earendil-works/pi-ai", async () => {
+  const actual =
+    await vi.importActual<typeof import("@earendil-works/pi-ai")>("@earendil-works/pi-ai");
 
   const buildAssistantMessage = (model: { api: string; provider: string; id: string }) => ({
     role: "assistant" as const,
@@ -152,7 +153,7 @@ const testSessionKey = "agent:test:embedded";
 const immediateEnqueue = async <T>(task: () => Promise<T>) => task();
 
 const runWithOrphanedSingleUserMessage = async (text: string) => {
-  const { SessionManager } = await import("@mariozechner/pi-coding-agent");
+  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
   const sessionFile = nextSessionFile();
   const sessionManager = SessionManager.open(sessionFile);
   sessionManager.appendMessage({
@@ -418,7 +419,7 @@ describe("runEmbeddedPiAgent", () => {
     "appends new user + assistant after existing transcript entries",
     { timeout: 90_000 },
     async () => {
-      const { SessionManager } = await import("@mariozechner/pi-coding-agent");
+      const { SessionManager } = await import("@earendil-works/pi-coding-agent");
       const sessionFile = nextSessionFile();
 
       const sessionManager = SessionManager.open(sessionFile);

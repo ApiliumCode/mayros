@@ -1,4 +1,4 @@
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { MayrosConfig } from "../../config/config.js";
 import { createDiscordActionGate } from "../../discord/accounts.js";
 import { readStringParam } from "./common.js";

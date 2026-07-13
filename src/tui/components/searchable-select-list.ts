@@ -1,13 +1,13 @@
 import {
   type Component,
-  getEditorKeybindings,
+  getKeybindings,
   Input,
   isKeyRelease,
   matchesKey,
   type SelectItem,
   type SelectListTheme,
   truncateToWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { stripAnsi, visibleWidth } from "../../terminal/ansi.js";
 import { findWordBoundaryIndex, fuzzyFilterLower } from "./fuzzy-filter.js";
 
@@ -362,8 +362,8 @@ export class SearchableSelectList implements Component {
       return;
     }
 
-    const kb = getEditorKeybindings();
-    if (kb.matches(keyData, "selectCancel")) {
+    const kb = getKeybindings();
+    if (kb.matches(keyData, "tui.select.cancel")) {
       if (this.onCancel) {
         this.onCancel();
       }
