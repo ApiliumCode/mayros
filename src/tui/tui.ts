@@ -27,6 +27,7 @@ import { CustomEditor } from "./components/custom-editor.js";
 import { WelcomeScreen } from "./components/welcome-screen.js";
 import { GatewayChatClient } from "./gateway-chat.js";
 import { enableKeyboardProtocol } from "./term-capabilities.js";
+import { detectTerminalColorScheme } from "./term-capabilities.js";
 import type { ThemePreset } from "./theme/palettes.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
@@ -280,7 +281,10 @@ export async function runTui(opts: TuiOptions) {
   }
 
   const configTheme = config.ui?.theme;
-  if (configTheme && THEME_PRESETS.includes(configTheme as ThemePreset)) {
+  // "auto" (or unset) defers to terminal color-scheme detection after the TUI
+  // instance is created; until then the default "dark" preset is in place.
+  const themeIsAuto = !configTheme || configTheme === "auto";
+  if (!themeIsAuto && THEME_PRESETS.includes(configTheme as ThemePreset)) {
     setThemePreset(configTheme as ThemePreset);
   }
   const keybindingsConfig = config.ui?.keybindings;
@@ -518,6 +522,13 @@ export async function runTui(opts: TuiOptions) {
   });
 
   const tui = new TUI(new ProcessTerminal());
+  // Auto-detect the terminal's dark/light preference before the first render.
+  // Queries run concurrently with a short timeout, so an unresponsive terminal
+  // falls back to the default "dark" preset without blocking startup.
+  if (themeIsAuto) {
+    const detected = await detectTerminalColorScheme(tui);
+    setThemePreset(detected);
+  }
   const dedupeBackspace = createBackspaceDeduper();
   tui.addInputListener((data) => {
     const next = dedupeBackspace(data);

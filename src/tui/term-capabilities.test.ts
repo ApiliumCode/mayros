@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { detectKeyboardProtocol, enableKeyboardProtocol } from "./term-capabilities.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  detectKeyboardProtocol,
+  detectTerminalColorScheme,
+  enableKeyboardProtocol,
+  relativeLuminance,
+  type TerminalColorQuerier,
+} from "./term-capabilities.js";
 
 describe("detectKeyboardProtocol", () => {
   it("returns kitty for kitty/WezTerm/ghostty terminals", () => {
@@ -82,5 +88,62 @@ describe("enableKeyboardProtocol", () => {
       if (original === undefined) delete process.env.TERM_PROGRAM;
       else process.env.TERM_PROGRAM = original;
     }
+  });
+});
+
+describe("relativeLuminance", () => {
+  it("returns ~0 for black", () => {
+    expect(relativeLuminance({ r: 0, g: 0, b: 0 })).toBeCloseTo(0, 1);
+  });
+
+  it("returns ~1 for white", () => {
+    expect(relativeLuminance({ r: 255, g: 255, b: 255 })).toBeCloseTo(1, 1);
+  });
+
+  it("weights green more than red and blue (Rec. 709)", () => {
+    const lum = relativeLuminance({ r: 0, g: 255, b: 0 });
+    expect(lum).toBeGreaterThan(0.7);
+  });
+
+  it("classifies a dark navy background as dark (< 0.5)", () => {
+    expect(relativeLuminance({ r: 30, g: 30, b: 40 })).toBeLessThan(0.5);
+  });
+});
+
+describe("detectTerminalColorScheme", () => {
+  function makeQuerier(
+    scheme: "dark" | "light" | undefined,
+    bg: { r: number; g: number; b: number } | undefined,
+  ): TerminalColorQuerier {
+    return {
+      queryTerminalColorScheme: vi.fn().mockResolvedValue(scheme),
+      queryTerminalBackgroundColor: vi.fn().mockResolvedValue(bg),
+    };
+  }
+
+  it("returns the DSR scheme when available (dark)", async () => {
+    const tui = makeQuerier("dark", undefined);
+    expect(await detectTerminalColorScheme(tui)).toBe("dark");
+  });
+
+  it("returns the DSR scheme when available (light)", async () => {
+    const tui = makeQuerier("light", undefined);
+    expect(await detectTerminalColorScheme(tui)).toBe("light");
+  });
+
+  it("falls back to OSC 11 luminance when DSR is unsupported", async () => {
+    // DSR returns undefined; bright background → light
+    const tui = makeQuerier(undefined, { r: 250, g: 250, b: 250 });
+    expect(await detectTerminalColorScheme(tui)).toBe("light");
+  });
+
+  it("classifies a dark background via OSC 11", async () => {
+    const tui = makeQuerier(undefined, { r: 20, g: 20, b: 25 });
+    expect(await detectTerminalColorScheme(tui)).toBe("dark");
+  });
+
+  it("falls back to dark when neither query responds", async () => {
+    const tui = makeQuerier(undefined, undefined);
+    expect(await detectTerminalColorScheme(tui)).toBe("dark");
   });
 });

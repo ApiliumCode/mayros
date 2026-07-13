@@ -17,6 +17,14 @@
 
 import process from "node:process";
 
+/** Minimal surface of the TUI instance needed for terminal color queries. */
+export type TerminalColorQuerier = {
+  queryTerminalColorScheme(opts: { timeoutMs: number }): Promise<"dark" | "light" | undefined>;
+  queryTerminalBackgroundColor(opts: {
+    timeoutMs: number;
+  }): Promise<{ r: number; g: number; b: number } | undefined>;
+};
+
 /** Terminal identifiers that reliably support an extended keyboard protocol. */
 const EXTENDED_KEY_TERMINALS = new Set([
   "iTerm.app",
@@ -119,4 +127,42 @@ export function enableKeyboardProtocol(
       }
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Terminal color-scheme detection (dark/light auto-theme)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the relative luminance of an RGB color using the Rec. 709 weighting.
+ * Values >= 0.5 are considered "light" backgrounds.
+ */
+export function relativeLuminance(rgb: { r: number; g: number; b: number }): number {
+  return (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+}
+
+/**
+ * Detect whether the terminal has a dark or light background, using the best
+ * available signal. Returns "dark" when no signal is available (the prior
+ * default).
+ *
+ * Query ladder, fastest signal wins:
+ *   1. DSR color-scheme (`CSI ? 996 n`) — terminals reply with a direct
+ *      dark/light answer. Cleanest signal when supported.
+ *   2. OSC 11 background color — parse the RGB reply and compute luminance.
+ *   3. Fallback to "dark".
+ *
+ * Both queries are run concurrently and each has a 150 ms timeout, so an
+ * unresponsive terminal adds at most ~150 ms to startup before falling back.
+ */
+export async function detectTerminalColorScheme(
+  tui: TerminalColorQuerier,
+): Promise<"dark" | "light"> {
+  const [scheme, bg] = await Promise.all([
+    tui.queryTerminalColorScheme({ timeoutMs: 150 }),
+    tui.queryTerminalBackgroundColor({ timeoutMs: 150 }),
+  ]);
+  if (scheme === "dark" || scheme === "light") return scheme;
+  if (bg) return relativeLuminance(bg) >= 0.5 ? "light" : "dark";
+  return "dark";
 }
