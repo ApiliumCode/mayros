@@ -108,7 +108,11 @@ describe("file-mention", () => {
       expect(result.mediaAttachments).toHaveLength(0);
     });
 
-    it("follows symlinks to regular files", async () => {
+    // Creating symlinks on Windows requires Developer Mode or admin rights
+    // (EPERM otherwise), so skip this case there. CI runs on Linux where
+    // unprivileged symlink creation works.
+    const itSymlink = process.platform === "win32" ? it.skip : it;
+    itSymlink("follows symlinks to regular files", async () => {
       const realPath = path.join(tmpDir, "real.txt");
       const linkPath = path.join(tmpDir, "link.txt");
       await fs.writeFile(realPath, "linked content");
