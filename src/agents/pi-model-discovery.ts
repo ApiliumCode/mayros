@@ -1,7 +1,7 @@
 import path from "node:path";
-import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 
-export { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+export { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 
 function createAuthStorage(AuthStorageLike: unknown, path: string) {
   const withFactory = AuthStorageLike as { create?: (path: string) => unknown };
@@ -17,5 +17,5 @@ export function discoverAuthStorage(agentDir: string): AuthStorage {
 }
 
 export function discoverModels(authStorage: AuthStorage, agentDir: string): ModelRegistry {
-  return new ModelRegistry(authStorage, path.join(agentDir, "models.json"));
+  return ModelRegistry.create(authStorage, path.join(agentDir, "models.json"));
 }

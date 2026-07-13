@@ -88,15 +88,13 @@ const kakeruPlugin = {
         ),
         timeout: Type.Optional(Type.Number({ description: "Timeout in ms" })),
       }),
-      execute: async (
-        _toolCallId: string,
-        params: {
+      execute: async (_toolCallId: string, rawParams: unknown) => {
+        const params = rawParams as {
           platform: string;
           prompt: string;
           workDir?: string;
           timeout?: number;
-        },
-      ) => {
+        };
         const bridge = coordinator.getBridge(params.platform);
         if (!bridge) {
           return {
@@ -148,12 +146,10 @@ const kakeruPlugin = {
           }),
         ),
       }),
-      execute: async (
-        _toolCallId: string,
-        params: {
+      execute: async (_toolCallId: string, rawParams: unknown) => {
+        const params = rawParams as {
           tasks: Array<{ platform: string; prompt: string; filePaths?: string[] }>;
-        },
-      ) => {
+        };
         const workDir =
           ((api.config as Record<string, unknown> | undefined)?.workspaceDir as
             | string

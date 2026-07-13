@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MayrosConfig } from "../../config/config.js";
 import { extractAssistantText } from "../pi-embedded-utils.js";
 

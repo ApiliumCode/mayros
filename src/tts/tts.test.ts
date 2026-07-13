@@ -1,4 +1,5 @@
-import { completeSimple, type AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { getApiKeyForModel } from "../agents/model-auth.js";
 import { resolveModel } from "../agents/pi-embedded-runner/model.js";
@@ -6,8 +7,11 @@ import type { MayrosConfig } from "../config/config.js";
 import { withEnv } from "../test-utils/env.js";
 import * as tts from "./tts.js";
 
-vi.mock("@mariozechner/pi-ai", () => ({
+vi.mock("@earendil-works/pi-ai/compat", () => ({
   completeSimple: vi.fn(),
+}));
+
+vi.mock("@earendil-works/pi-ai/oauth", () => ({
   // Some auth helpers import oauth provider metadata at module load time.
   getOAuthProviders: () => [],
   getOAuthApiKey: vi.fn(async () => null),

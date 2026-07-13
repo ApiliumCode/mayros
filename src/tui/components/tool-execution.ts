@@ -1,4 +1,4 @@
-import { Box, Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+import { Box, Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { formatToolDetail, resolveToolDisplay } from "../../agents/tool-display.js";
 import { renderDiff, parseDiffStats, formatDiffStatsLine } from "../diff-renderer.js";
 import { linkifyFilePaths } from "../linkify-paths.js";

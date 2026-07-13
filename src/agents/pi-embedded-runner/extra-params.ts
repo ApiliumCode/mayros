@@ -1,6 +1,6 @@
-import type { StreamFn } from "@mariozechner/pi-agent-core";
-import type { SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamSimple } from "@mariozechner/pi-ai";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { ProviderHeaders, SimpleStreamOptions } from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MayrosConfig } from "../../config/config.js";
 import { log } from "./logger.js";
 
@@ -152,11 +152,11 @@ function createOpenAIResponsesStoreWrapper(baseStreamFn: StreamFn | undefined): 
     const originalOnPayload = options?.onPayload;
     return underlying(model, context, {
       ...options,
-      onPayload: (payload) => {
+      onPayload: (payload, payloadModel) => {
         if (payload && typeof payload === "object") {
           (payload as { store?: unknown }).store = true;
         }
-        originalOnPayload?.(payload);
+        return originalOnPayload?.(payload, payloadModel);
       },
     });
   };
@@ -210,9 +210,9 @@ function resolveAnthropicBetas(
 }
 
 function mergeAnthropicBetaHeader(
-  headers: Record<string, string> | undefined,
+  headers: ProviderHeaders | undefined,
   betas: string[],
-): Record<string, string> {
+): ProviderHeaders {
   const merged = { ...headers };
   const existingKey = Object.keys(merged).find((key) => key.toLowerCase() === "anthropic-beta");
   const existing = existingKey ? parseHeaderList(merged[existingKey]) : [];
@@ -302,12 +302,12 @@ function createZaiToolStreamWrapper(
     const originalOnPayload = options?.onPayload;
     return underlying(model, context, {
       ...options,
-      onPayload: (payload) => {
+      onPayload: (payload, payloadModel) => {
         if (payload && typeof payload === "object") {
           // Inject tool_stream: true for Z.AI API
           (payload as Record<string, unknown>).tool_stream = true;
         }
-        originalOnPayload?.(payload);
+        return originalOnPayload?.(payload, payloadModel);
       },
     });
   };

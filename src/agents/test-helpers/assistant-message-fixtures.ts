@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 const ZERO_USAGE: AssistantMessage["usage"] = {
   input: 0,

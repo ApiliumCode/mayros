@@ -15,7 +15,12 @@ describe("buildWorkspaceSkillStatus", () => {
       skill: {
         name: "os-scoped",
         description: "test",
-        source: "test",
+        sourceInfo: {
+          path: "/tmp/os-scoped",
+          source: "test",
+          scope: "project",
+          origin: "top-level",
+        },
         filePath: "/tmp/os-scoped",
         baseDir: "/tmp",
         disableModelInvocation: false,

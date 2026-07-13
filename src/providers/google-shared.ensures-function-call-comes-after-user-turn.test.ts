@@ -1,5 +1,5 @@
-import { convertMessages } from "@mariozechner/pi-ai/dist/providers/google-shared.js";
-import type { Context } from "@mariozechner/pi-ai/dist/types.js";
+import { convertMessages } from "@earendil-works/pi-ai/api/google-shared";
+import type { Context, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import {
   asRecord,
@@ -70,7 +70,7 @@ describe("google-shared convertTools", () => {
       ],
     } as unknown as Context;
 
-    const contents = convertMessages(model, context);
+    const contents = convertMessages(model as unknown as Model<"google-generative-ai">, context);
     const parts = contents.flatMap((content) => content.parts ?? []);
     const toolCallPart = parts.find(
       (part) => typeof part === "object" && part !== null && "functionCall" in part,

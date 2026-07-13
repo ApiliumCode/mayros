@@ -46,7 +46,8 @@ const browserAutomationPlugin = {
         },
         required: ["url"],
       },
-      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, rawArgs: unknown) => {
+        const args = rawArgs as Record<string, unknown>;
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
@@ -110,7 +111,8 @@ const browserAutomationPlugin = {
         },
         required: ["selector"],
       },
-      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, rawArgs: unknown) => {
+        const args = rawArgs as Record<string, unknown>;
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();
@@ -141,7 +143,8 @@ const browserAutomationPlugin = {
         },
         required: ["expression"],
       },
-      execute: async (_toolCallId: string, args: Record<string, unknown>) => {
+      execute: async (_toolCallId: string, rawArgs: unknown) => {
+        const args = rawArgs as Record<string, unknown>;
         const { BrowserClient } = await import("./browser-client.js");
         const client = new BrowserClient();
         await client.connect();

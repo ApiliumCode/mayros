@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import { EnrichedAutocompleteProvider, createEnrichedProvider } from "./enriched-autocomplete.js";
+
+const options = { signal: new AbortController().signal };
 
 function createMockBase(
   suggestions: { items: AutocompleteItem[]; prefix: string } | null = {
@@ -9,7 +11,7 @@ function createMockBase(
   },
 ): AutocompleteProvider {
   return {
-    getSuggestions: vi.fn(() => suggestions),
+    getSuggestions: vi.fn(async () => suggestions),
     applyCompletion: vi.fn((_lines, cursorLine, cursorCol, _item, _prefix) => ({
       lines: [],
       cursorLine,
@@ -19,26 +21,26 @@ function createMockBase(
 }
 
 describe("EnrichedAutocompleteProvider", () => {
-  it("delegates to base when no queryFn provided", () => {
+  it("delegates to base when no queryFn provided", async () => {
     const base = createMockBase();
     const provider = new EnrichedAutocompleteProvider(base);
-    const result = provider.getSuggestions(["@fi"], 0, 3);
+    const result = await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(result).toEqual({ items: [{ value: "file.ts", label: "file.ts" }], prefix: "@" });
   });
 
-  it("delegates to base when base returns null", () => {
+  it("delegates to base when base returns null", async () => {
     const base = createMockBase(null);
     const queryFn = vi.fn(async () => []);
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
-    const result = provider.getSuggestions(["@fi"], 0, 3);
+    const result = await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(result).toBeNull();
   });
 
-  it("fires async query on @ prefix", () => {
+  it("fires async query on @ prefix", async () => {
     const base = createMockBase();
     const queryFn = vi.fn(async () => [{ value: "sym:Foo", label: "Foo", description: "class" }]);
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
-    provider.getSuggestions(["@fi"], 0, 3);
+    await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(queryFn).toHaveBeenCalledWith("fi");
   });
 
@@ -49,14 +51,14 @@ describe("EnrichedAutocompleteProvider", () => {
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
 
     // First call triggers async fetch
-    provider.getSuggestions(["@fi"], 0, 3);
+    await provider.getSuggestions(["@fi"], 0, 3, options);
     // Wait for the query to resolve
     await vi.waitFor(() => expect(queryFn).toHaveBeenCalled());
     // Small delay to allow cache to be set
     await new Promise((r) => setTimeout(r, 10));
 
     // Second call should use cache
-    const result = provider.getSuggestions(["@fi"], 0, 3);
+    const result = await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(result?.items).toHaveLength(2);
     expect(result?.items[1]?.value).toBe("sym:Foo");
   });
@@ -72,21 +74,21 @@ describe("EnrichedAutocompleteProvider", () => {
     ]);
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
 
-    provider.getSuggestions(["@fi"], 0, 3);
+    await provider.getSuggestions(["@fi"], 0, 3, options);
     await new Promise((r) => setTimeout(r, 10));
 
-    const result = provider.getSuggestions(["@fi"], 0, 3);
+    const result = await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(result?.items).toHaveLength(2);
     const values = result?.items.map((i) => i.value);
     expect(values).toContain("file.ts");
     expect(values).toContain("other.ts");
   });
 
-  it("does not fire query when no @ prefix", () => {
+  it("does not fire query when no @ prefix", async () => {
     const base = createMockBase({ items: [], prefix: "/" });
     const queryFn = vi.fn(async () => []);
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
-    provider.getSuggestions(["hello"], 0, 5);
+    await provider.getSuggestions(["hello"], 0, 5, options);
     expect(queryFn).not.toHaveBeenCalled();
   });
 
@@ -96,7 +98,7 @@ describe("EnrichedAutocompleteProvider", () => {
       throw new Error("network error");
     });
     const provider = new EnrichedAutocompleteProvider(base, queryFn);
-    const result = provider.getSuggestions(["@fi"], 0, 3);
+    const result = await provider.getSuggestions(["@fi"], 0, 3, options);
     expect(result).not.toBeNull();
     // Wait for the rejected promise to settle
     await new Promise((r) => setTimeout(r, 10));
@@ -112,18 +114,18 @@ describe("EnrichedAutocompleteProvider", () => {
     const provider = new EnrichedAutocompleteProvider(base, queryFn, { maxCache: 2 });
 
     // Fill cache with 2 entries
-    provider.getSuggestions(["@a"], 0, 2);
+    await provider.getSuggestions(["@a"], 0, 2, options);
     await new Promise((r) => setTimeout(r, 10));
-    provider.getSuggestions(["@b"], 0, 2);
+    await provider.getSuggestions(["@b"], 0, 2, options);
     await new Promise((r) => setTimeout(r, 10));
 
     // This should evict "a"
-    provider.getSuggestions(["@c"], 0, 2);
+    await provider.getSuggestions(["@c"], 0, 2, options);
     await new Promise((r) => setTimeout(r, 10));
 
     // "a" should re-trigger query
     queryFn.mockClear();
-    provider.getSuggestions(["@a"], 0, 2);
+    await provider.getSuggestions(["@a"], 0, 2, options);
     expect(queryFn).toHaveBeenCalledWith("a");
   });
 
