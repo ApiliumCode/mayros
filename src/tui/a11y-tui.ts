@@ -95,6 +95,15 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
     }
   };
 
+  // Declare the readline interface before wiring client disconnect handling,
+  // so a disconnect between client.start() and the readline creation cannot
+  // reference `rl` in its temporal dead zone.
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: "> ",
+  });
+
   client.onDisconnected = (reason: string) => {
     renderer.emit({ type: "system", text: `Disconnected: ${reason}` });
     rl.close();
@@ -124,12 +133,6 @@ export async function runA11yTui(opts: TuiOptions): Promise<void> {
       runId,
     });
   }
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: "> ",
-  });
 
   rl.prompt();
 
