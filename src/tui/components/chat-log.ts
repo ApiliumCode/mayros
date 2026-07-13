@@ -1,5 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
+import type { SectionState } from "../tui-types.js";
 import { theme } from "../theme/theme.js";
 import { AssistantMessageComponent } from "./assistant-message.js";
 import { ToolExecutionComponent } from "./tool-execution.js";
@@ -205,6 +206,13 @@ export class ChatLog extends Container {
     this.toolsExpanded = expanded;
     for (const tool of this.toolById.values()) {
       tool.setExpanded(expanded);
+    }
+  }
+
+  setToolSectionState(state: SectionState) {
+    this.toolsExpanded = state === "expanded";
+    for (const tool of this.toolById.values()) {
+      tool.setSectionState(state);
     }
   }
 }

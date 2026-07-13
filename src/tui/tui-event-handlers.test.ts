@@ -40,6 +40,8 @@ describe("tui-event-handlers: handleAgentEvent", () => {
     autoMessageSent: false,
     toolsExpanded: false,
     showThinking: false,
+    toolSectionState: "collapsed",
+    thinkingSectionState: "collapsed",
     connectionStatus: "connected",
     activityStatus: "idle",
     statusTimeout: null,
