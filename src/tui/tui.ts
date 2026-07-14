@@ -1,7 +1,6 @@
 import {
   CombinedAutocompleteProvider,
   Container,
-  Loader,
   ProcessTerminal,
   Text,
   TUI,
@@ -9,7 +8,6 @@ import {
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { VERSION } from "../version.js";
 import { loadConfig } from "../config/config.js";
-import { isLoopbackHost } from "../gateway/net.js";
 import {
   normalizeAgentId,
   normalizeMainKey,
@@ -32,10 +30,12 @@ import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { MouseHandler, createMouseInputListener } from "./mouse-handler.js";
-import { formatTokens } from "./tui-formatters.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
 import { createOverlayHandlers } from "./tui-overlays.js";
 import { createSessionActions } from "./tui-session-actions.js";
+import { createStatusRenderer, type StatusRenderer } from "./tui-status-renderer.js";
+import { wireEditorKeyBindings } from "./tui-keybindings.js";
+import { wireConnectionHandlers } from "./tui-connection.js";
 import type {
   AgentSummary,
   PendingImage,
@@ -45,8 +45,6 @@ import type {
   TuiOptions,
   TuiStateAccess,
 } from "./tui-types.js";
-import { nextSectionState } from "./tui-types.js";
-import { buildWaitingStatusMessage, defaultWaitingPhrases } from "./tui-waiting.js";
 
 export { resolveFinalAssistantText } from "./tui-formatters.js";
 export type { TuiOptions } from "./tui-types.js";
@@ -63,9 +61,7 @@ import {
   shouldEnableWindowsGitBashPasteFallback,
   createSubmitBurstCoalescer,
   resolveTuiSessionKey,
-  resolveGatewayDisconnectState,
   createBackspaceDeduper,
-  tryInlinePairingApproval,
 } from "./tui-helpers.js";
 
 export async function runTui(opts: TuiOptions) {
@@ -109,14 +105,10 @@ export async function runTui(opts: TuiOptions) {
   let currentSessionId: string | null = null;
   let activeChatRunId: string | null = null;
   let historyLoaded = false;
-  let isConnected = false;
-  let wasDisconnected = false;
   let toolsExpanded = false;
   let showThinking = false;
   let toolSectionState: SectionState = "collapsed";
   let thinkingSectionState: SectionState = "collapsed";
-  let pairingHintShown = false;
-  let gatewayDownHintShown = false;
   let outputStyle: string | undefined;
   let permissionMode: "auto" | "ask" | "deny" = "auto";
   let fastMode = false;
@@ -135,12 +127,10 @@ export async function runTui(opts: TuiOptions) {
   let autoMessageSent = false;
   let sessionInfo: SessionInfo = {};
   let lastCtrlCAt = 0;
-  let activityStatus = "idle";
-  let connectionStatus = "connecting";
-  let statusTimeout: NodeJS.Timeout | null = null;
-  let statusTimer: NodeJS.Timeout | null = null;
-  let statusStartedAt: number | null = null;
-  let lastActivityStatus = activityStatus;
+  // Status display state (activity/connection labels + timers) is owned by the
+  // status renderer created below. The `state` object delegates these fields
+  // to the renderer via late-bound references.
+  let statusRenderer: StatusRenderer | null = null;
 
   const state: TuiStateAccess = {
     get agentDefaultId() {
@@ -210,10 +200,12 @@ export async function runTui(opts: TuiOptions) {
       initialSessionApplied = value;
     },
     get isConnected() {
-      return isConnected;
+      return statusRenderer?.isConnected ?? false;
     },
     set isConnected(value) {
-      isConnected = value;
+      if (statusRenderer) {
+        statusRenderer.isConnected = value;
+      }
     },
     get autoMessageSent() {
       return autoMessageSent;
@@ -246,22 +238,28 @@ export async function runTui(opts: TuiOptions) {
       thinkingSectionState = value;
     },
     get connectionStatus() {
-      return connectionStatus;
+      return statusRenderer?.connectionStatus ?? "connecting";
     },
     set connectionStatus(value) {
-      connectionStatus = value;
+      if (statusRenderer) {
+        statusRenderer.connectionStatus = value;
+      }
     },
     get activityStatus() {
-      return activityStatus;
+      return statusRenderer?.activityStatus ?? "idle";
     },
     set activityStatus(value) {
-      activityStatus = value;
+      if (statusRenderer) {
+        statusRenderer.activityStatus = value;
+      }
     },
     get statusTimeout() {
-      return statusTimeout;
+      return statusRenderer?.statusTimeout ?? null;
     },
     set statusTimeout(value) {
-      statusTimeout = value;
+      if (statusRenderer) {
+        statusRenderer.statusTimeout = value;
+      }
     },
     get lastCtrlCAt() {
       return lastCtrlCAt;
@@ -421,212 +419,30 @@ export async function runTui(opts: TuiOptions) {
 
   currentSessionKey = resolveSessionKey(initialSessionInput);
 
-  const updateHeader = () => {
-    const sessionLabel = formatSessionKey(currentSessionKey);
-    const agentLabel = formatAgentLabel(currentAgentId);
-    header.setText(
-      theme.header(
-        `mayros tui - ${client.connection.url} - agent ${agentLabel} - session ${sessionLabel}`,
-      ),
-    );
-  };
+  // Status renderer owns the connection/activity labels, busy/idle timers,
+  // and the waiting-status animation. Created here so it can capture the
+  // header/footer/statusContainer nodes; the `state` object above delegates
+  // activityStatus/connectionStatus/isConnected/statusTimeout to it.
+  statusRenderer = createStatusRenderer({
+    tui,
+    statusContainer,
+    header,
+    footer,
+    gatewayUrl: client.connection.url,
+    formatSessionKey,
+    formatAgentLabel,
+    getCurrentSessionKey: () => currentSessionKey,
+    getCurrentAgentId: () => currentAgentId,
+    getSessionInfo: () => sessionInfo,
+    getPermissionMode: () => permissionMode,
+    getFastMode: () => fastMode,
+  });
 
-  const busyStates = new Set(["sending", "waiting", "streaming", "running"]);
-  let statusText: Text | null = null;
-  let statusLoader: Loader | null = null;
-
-  const formatElapsed = (startMs: number) => {
-    const totalSeconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-    if (totalSeconds < 60) {
-      return `${totalSeconds}s`;
-    }
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}m ${seconds}s`;
-  };
-
-  const ensureStatusText = () => {
-    if (statusText) {
-      return;
-    }
-    statusContainer.clear();
-    statusLoader?.stop();
-    statusLoader = null;
-    statusText = new Text("", 1, 0);
-    statusContainer.addChild(statusText);
-  };
-
-  const ensureStatusLoader = () => {
-    if (statusLoader) {
-      return;
-    }
-    statusContainer.clear();
-    statusText = null;
-    statusLoader = new Loader(
-      tui,
-      (spinner) => theme.accent(spinner),
-      (text) => theme.bold(theme.accentSoft(text)),
-      "",
-    );
-    statusContainer.addChild(statusLoader);
-  };
-
-  let waitingTick = 0;
-  let waitingTimer: NodeJS.Timeout | null = null;
-  let waitingPhrase: string | null = null;
-
-  const updateBusyStatusMessage = () => {
-    if (!statusLoader || !statusStartedAt) {
-      return;
-    }
-    const elapsed = formatElapsed(statusStartedAt);
-
-    if (activityStatus === "waiting") {
-      waitingTick++;
-      statusLoader.setMessage(
-        buildWaitingStatusMessage({
-          theme,
-          tick: waitingTick,
-          elapsed,
-          connectionStatus,
-          phrases: waitingPhrase ? [waitingPhrase] : undefined,
-        }),
-      );
-      return;
-    }
-
-    statusLoader.setMessage(`${activityStatus} • ${elapsed} | ${connectionStatus}`);
-  };
-
-  const startStatusTimer = () => {
-    if (statusTimer) {
-      return;
-    }
-    statusTimer = setInterval(() => {
-      if (!busyStates.has(activityStatus)) {
-        return;
-      }
-      updateBusyStatusMessage();
-    }, 1000);
-  };
-
-  const stopStatusTimer = () => {
-    if (!statusTimer) {
-      return;
-    }
-    clearInterval(statusTimer);
-    statusTimer = null;
-  };
-
-  const startWaitingTimer = () => {
-    if (waitingTimer) {
-      return;
-    }
-
-    // Pick a phrase once per waiting session.
-    if (!waitingPhrase) {
-      const idx = Math.floor(Math.random() * defaultWaitingPhrases.length);
-      waitingPhrase = defaultWaitingPhrases[idx] ?? defaultWaitingPhrases[0] ?? "waiting";
-    }
-
-    waitingTick = 0;
-
-    waitingTimer = setInterval(() => {
-      if (activityStatus !== "waiting") {
-        return;
-      }
-      updateBusyStatusMessage();
-    }, 120);
-  };
-
-  const stopWaitingTimer = () => {
-    if (!waitingTimer) {
-      return;
-    }
-    clearInterval(waitingTimer);
-    waitingTimer = null;
-    waitingPhrase = null;
-  };
-
-  const renderStatus = () => {
-    const isBusy = busyStates.has(activityStatus);
-    if (isBusy) {
-      if (!statusStartedAt || lastActivityStatus !== activityStatus) {
-        statusStartedAt = Date.now();
-      }
-      ensureStatusLoader();
-      if (activityStatus === "waiting") {
-        stopStatusTimer();
-        startWaitingTimer();
-      } else {
-        stopWaitingTimer();
-        startStatusTimer();
-      }
-      updateBusyStatusMessage();
-    } else {
-      statusStartedAt = null;
-      stopStatusTimer();
-      stopWaitingTimer();
-      statusLoader?.stop();
-      statusLoader = null;
-      ensureStatusText();
-      const text = activityStatus ? `${connectionStatus} | ${activityStatus}` : connectionStatus;
-      statusText?.setText(theme.dim(text));
-    }
-    lastActivityStatus = activityStatus;
-  };
-
-  const setConnectionStatus = (text: string, ttlMs?: number) => {
-    connectionStatus = text;
-    renderStatus();
-    if (statusTimeout) {
-      clearTimeout(statusTimeout);
-    }
-    if (ttlMs && ttlMs > 0) {
-      statusTimeout = setTimeout(() => {
-        connectionStatus = isConnected ? "connected" : "disconnected";
-        renderStatus();
-      }, ttlMs);
-    }
-  };
-
-  const setActivityStatus = (text: string) => {
-    activityStatus = text;
-    renderStatus();
-  };
-
-  const updateFooter = () => {
-    const sessionKeyLabel = formatSessionKey(currentSessionKey);
-    const sessionLabel = sessionInfo.displayName
-      ? `${sessionKeyLabel} (${sessionInfo.displayName})`
-      : sessionKeyLabel;
-    const agentLabel = formatAgentLabel(currentAgentId);
-    const modelLabel = sessionInfo.model
-      ? sessionInfo.modelProvider
-        ? `${sessionInfo.modelProvider}/${sessionInfo.model}`
-        : sessionInfo.model
-      : "unknown";
-    const tokens = formatTokens(sessionInfo.totalTokens ?? null, sessionInfo.contextTokens ?? null);
-    const think = sessionInfo.thinkingLevel ?? "off";
-    const verbose = sessionInfo.verboseLevel ?? "off";
-    const reasoning = sessionInfo.reasoningLevel ?? "off";
-    const reasoningLabel =
-      reasoning === "on" ? "reasoning" : reasoning === "stream" ? "reasoning:stream" : null;
-    const permLabel = permissionMode !== "auto" ? `perm ${permissionMode}` : null;
-    const fastLabel = fastMode ? "FAST" : null;
-    const footerParts = [
-      `agent ${agentLabel}`,
-      `session ${sessionLabel}`,
-      modelLabel,
-      think !== "off" ? `think ${think}` : null,
-      verbose !== "off" ? `verbose ${verbose}` : null,
-      reasoningLabel,
-      tokens,
-      permLabel,
-      fastLabel,
-    ].filter(Boolean);
-    footer.setText(theme.dim(footerParts.join(" | ")));
-  };
+  const updateHeader = () => statusRenderer.updateHeader();
+  const updateFooter = () => statusRenderer.updateFooter();
+  const setConnectionStatus = (text: string, ttlMs?: number) =>
+    statusRenderer.setConnectionStatus(text, ttlMs);
+  const setActivityStatus = (text: string) => statusRenderer.setActivityStatus(text);
 
   const { openOverlay, closeOverlay } = createOverlayHandlers(tui, editor);
 
@@ -719,148 +535,40 @@ export async function runTui(opts: TuiOptions) {
     enabled: shouldEnableWindowsGitBashPasteFallback(),
   });
 
-  editor.onEscape = () => {
-    void abortActive();
-  };
-  editor.onCtrlC = () => {
-    const now = Date.now();
-    // Tri-state, in priority order:
-    //   1. an active run → abort it
-    //   2. non-empty input → clear it
-    //   3. double Ctrl+C within 1s → exit
-    // Escape remains a secondary abort path.
-    if (activeChatRunId) {
-      void abortActive();
-      return;
-    }
-    if (editor.getText().trim().length > 0) {
-      editor.setText("");
-      setActivityStatus("cleared input");
-      tui.requestRender();
-      return;
-    }
-    if (now - lastCtrlCAt < 1000) {
-      mouseHandler.disable();
-      client.stop();
-      tui.stop();
-      process.exit(0);
-    }
-    lastCtrlCAt = now;
-    setActivityStatus("press ctrl+c again to exit");
-    tui.requestRender();
-  };
-  editor.onCtrlD = () => {
-    mouseHandler.disable();
-    client.stop();
-    tui.stop();
-    process.exit(0);
-  };
-  editor.onCtrlO = () => {
-    toolSectionState = nextSectionState(toolSectionState);
-    toolsExpanded = toolSectionState === "expanded";
-    chatLog.setToolSectionState(toolSectionState);
-    setActivityStatus(`tools: ${toolSectionState}`);
-    tui.requestRender();
-  };
-  editor.onCtrlL = () => {
-    void openModelSelector();
-  };
-  editor.onCtrlG = () => {
-    void openAgentSelector();
-  };
-  editor.onCtrlP = () => {
-    void openSessionSelector();
-  };
-  editor.onCtrlT = () => {
-    thinkingSectionState = nextSectionState(thinkingSectionState);
-    // Thinking text is baked into the assistant message at compose time, so
-    // toggling requires reloading history. "hidden" suppresses thinking;
-    // "collapsed" and "expanded" both show it (a truncated mode would require
-    // restructuring the composer — deferred to a follow-up).
-    showThinking = thinkingSectionState !== "hidden";
-    void loadHistory();
-  };
-  editor.onShiftTab = () => {
-    const modes: Array<"auto" | "ask" | "deny"> = ["auto", "ask", "deny"];
-    const idx = modes.indexOf(permissionMode);
-    permissionMode = modes[(idx + 1) % modes.length] ?? "auto";
-    state.permissionMode = permissionMode;
-    setActivityStatus(`permission: ${permissionMode}`);
-    tui.requestRender();
-  };
+  wireEditorKeyBindings({
+    editor,
+    tui,
+    chatLog,
+    client,
+    state,
+    mouseHandler,
+    abortActive,
+    setActivityStatus,
+    loadHistory,
+    openModelSelector,
+    openAgentSelector,
+    openSessionSelector,
+  });
 
-  client.onEvent = (evt) => {
-    if (evt.event === "chat") {
-      handleChatEvent(evt.payload);
-    }
-    if (evt.event === "agent") {
-      handleAgentEvent(evt.payload);
-    }
-  };
-
-  client.onConnected = () => {
-    isConnected = true;
-    pairingHintShown = false;
-    gatewayDownHintShown = false;
-    const reconnected = wasDisconnected;
-    wasDisconnected = false;
-    setConnectionStatus("connected");
-    void (async () => {
-      await refreshAgents();
-      updateHeader();
-      if (opts.cleanStart && !reconnected) {
-        chatLog.clearAll();
-        chatLog.addWelcome(createWelcomeScreen());
-        historyLoaded = true;
-        await refreshSessionInfo();
-      } else {
-        await loadHistory();
-      }
-      setConnectionStatus(reconnected ? "gateway reconnected" : "gateway connected", 4000);
-      tui.requestRender();
-      if (!autoMessageSent && autoMessage) {
-        autoMessageSent = true;
-        await sendMessage(autoMessage);
-      }
-      updateFooter();
-      tui.requestRender();
-    })();
-  };
-
-  client.onDisconnected = (reason) => {
-    isConnected = false;
-    wasDisconnected = true;
-    historyLoaded = false;
-    const disconnectState = resolveGatewayDisconnectState(reason);
-    setConnectionStatus(disconnectState.connectionStatus, 5000);
-    setActivityStatus(disconnectState.activityStatus);
-    if (disconnectState.pairingHint && !pairingHintShown) {
-      pairingHintShown = true;
-      if (isLoopbackHost(new URL(client.connection.url).hostname)) {
-        void tryInlinePairingApproval().then((ok) => {
-          if (ok) {
-            chatLog.addSystem("Device paired. Reconnecting...");
-          } else {
-            chatLog.addSystem(disconnectState.pairingHint!);
-          }
-          tui.requestRender();
-        });
-      } else {
-        chatLog.addSystem(disconnectState.pairingHint);
-      }
-    }
-    if (disconnectState.gatewayDownHint && !gatewayDownHintShown) {
-      gatewayDownHintShown = true;
-      chatLog.addSystem(disconnectState.gatewayDownHint);
-    }
-    updateFooter();
-    tui.requestRender();
-  };
-
-  client.onGap = (info) => {
-    setConnectionStatus(`event gap: expected ${info.expected}, got ${info.received}`, 5000);
-    tui.requestRender();
-  };
+  wireConnectionHandlers({
+    client,
+    tui,
+    chatLog,
+    opts,
+    state,
+    autoMessage,
+    createWelcomeScreen,
+    refreshAgents,
+    refreshSessionInfo,
+    loadHistory,
+    sendMessage,
+    updateHeader,
+    updateFooter,
+    setConnectionStatus,
+    setActivityStatus,
+    handleChatEvent,
+    handleAgentEvent,
+  });
 
   updateHeader();
   setConnectionStatus("connecting");
