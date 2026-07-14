@@ -1,6 +1,6 @@
 {
   "name": "@apilium/akashi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Connect the user's Akashi second brain: query-first grounded retrieval with cited passages and signed provenance",
   "keywords": [
     "mayros",
