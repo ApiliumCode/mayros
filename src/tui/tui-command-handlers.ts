@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@earendil-works/pi-tui";
+import { copyToClipboard } from "../infra/clipboard.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 
 const logger = createSubsystemLogger("tui");
@@ -12,7 +13,7 @@ import { expandMarkdownCommand, findMarkdownCommand } from "../commands/markdown
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import { formatRelativeTimestamp } from "../infra/format-time/format-relative.ts";
 import { normalizeAgentId } from "../routing/session-key.js";
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { helpText, parseCommand } from "./commands.js";
 import { undo, listUndoEntries } from "./undo-manager.js";
@@ -888,14 +889,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           break;
         }
         try {
-          const proc = spawn(
-            process.platform === "darwin" ? "pbcopy" : "xclip",
-            process.platform === "darwin" ? [] : ["-selection", "clipboard"],
-            { stdio: ["pipe", "ignore", "ignore"] },
+          const ok = await copyToClipboard(lastText);
+          chatLog.addSystem(
+            ok ? "last response copied to clipboard" : "copy failed: no clipboard tool found",
           );
-          proc.stdin?.write(lastText);
-          proc.stdin?.end();
-          chatLog.addSystem("last response copied to clipboard");
         } catch (err) {
           chatLog.addSystem(`copy failed: ${String(err)}`);
         }
@@ -1238,14 +1235,14 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }
 
           const token = exportSession(payload);
-          // Copy to clipboard
+          // Copy to clipboard using the cross-platform clipboard helper
+          // (pbcopy / xclip / wl-copy / clip.exe / PowerShell fallback).
           try {
-            execSync(
-              `echo -n "${token}" | pbcopy 2>/dev/null || echo -n "${token}" | xclip -sel clipboard 2>/dev/null || echo -n "${token}" | xsel --clipboard 2>/dev/null`,
-              { encoding: "utf-8" },
-            );
+            const ok = await copyToClipboard(token);
             chatLog.addSystem(
-              `Session exported to clipboard (${token.length} chars, ${messages.length} messages). Share this token to import on another device.`,
+              ok
+                ? `Session exported to clipboard (${token.length} chars, ${messages.length} messages). Share this token to import on another device.`
+                : `Session token (no clipboard tool found):\n${token}`,
             );
           } catch {
             chatLog.addSystem(`Session token:\n${token}`);

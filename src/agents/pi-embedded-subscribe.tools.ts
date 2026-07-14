@@ -104,9 +104,10 @@ export function sanitizeToolResult(result: unknown): unknown {
     if (type === "image") {
       const data = typeof entry.data === "string" ? entry.data : undefined;
       const bytes = data ? data.length : undefined;
-      const cleaned = { ...entry };
-      delete cleaned.data;
-      return { ...cleaned, bytes, omitted: true };
+      // Retain `data` so the TUI can render images inline. The `omitted: true`
+      // flag tells the model layer to skip this block when building the prompt,
+      // so the base64 never inflates the token context.
+      return { ...entry, bytes, omitted: true };
     }
     return entry;
   });
