@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@earendil-works/pi-tui";
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const logger = createSubsystemLogger("tui");
 import {
   listThinkingLevelLabels,
   normalizeUsageDisplay,
@@ -813,7 +816,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
             applySessionInfoFromPatch(result);
           } catch (err) {
             // Best-effort — fast mode works locally even without gateway
-            process.stderr.write(`[fast-mode] failed to set thinking off: ${String(err)}\n`);
+            logger.warn("fast-mode: failed to set thinking off", { error: String(err) });
           }
           state.outputStyle = "standard";
           chatLog.addSystem("fast mode enabled (thinking: off, style: standard)");
@@ -828,9 +831,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
             applySessionInfoFromPatch(result);
           } catch (err) {
             // Best-effort — restore may fail if gateway is unreachable
-            process.stderr.write(
-              `[fast-mode] failed to restore thinking ${prevLevel}: ${String(err)}\n`,
-            );
+            logger.warn("fast-mode: failed to restore thinking", {
+              level: prevLevel,
+              error: String(err),
+            });
           }
           chatLog.addSystem(`fast mode disabled (thinking: ${prevLevel})`);
         }

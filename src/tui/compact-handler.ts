@@ -5,6 +5,10 @@
  * then creates a summary replacing the history.
  */
 
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const logger = createSubsystemLogger("tui");
+
 export type CompactOptions = {
   messages: Array<{ role: string; content: string }>;
   sessionKey: string;
@@ -184,9 +188,9 @@ export async function compactMessages(options: CompactOptions): Promise<CompactR
       await onKnowledgeExtracted(items);
     } catch (err) {
       // Best-effort: log but do not propagate so callers always get a result.
-      process.stderr.write(
-        `[compact-handler] onKnowledgeExtracted callback failed: ${String(err)}\n`,
-      );
+      logger.warn("compact-handler: onKnowledgeExtracted callback failed", {
+        error: String(err),
+      });
     }
   }
 
