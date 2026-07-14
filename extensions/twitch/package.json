@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-twitch",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "private": true,
   "description": "Mayros Twitch channel plugin",
   "type": "module",

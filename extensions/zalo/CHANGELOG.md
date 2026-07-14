@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+### Changes
+- Version alignment with core Mayros release numbers.
+
 ## 0.1.14
 
 ### Changes

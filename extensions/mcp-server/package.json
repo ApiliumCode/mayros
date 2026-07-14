@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "private": true,
   "description": "MCP server exposing Mayros tools, Cortex resources, and workflow prompts via Model Context Protocol",
   "type": "module",

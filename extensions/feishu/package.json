@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-feishu",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "description": "Mayros Feishu/Lark channel plugin (community maintained by @m1heng)",
   "license": "MIT",
   "type": "module",
@@ -22,10 +22,10 @@
     "channel": {
       "id": "feishu",
       "label": "Feishu",
-      "selectionLabel": "Feishu/Lark (\u98de\u4e66)",
+      "selectionLabel": "Feishu/Lark (飞书)",
       "docsPath": "/channels/feishu",
       "docsLabel": "feishu",
-      "blurb": "\u98de\u4e66/Lark enterprise messaging with doc/wiki/drive tools.",
+      "blurb": "飞书/Lark enterprise messaging with doc/wiki/drive tools.",
       "aliases": [
         "lark"
       ],
