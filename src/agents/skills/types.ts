@@ -27,6 +27,9 @@ export type SemanticSkillManifest = {
   queries: Array<{ predicate: string; scope: "agent" | "namespace" | "global" }>;
 };
 
+/** Lifecycle state for skill management by the curator. */
+export type SkillLifecycleState = "active" | "stale" | "archived";
+
 export type MayrosSkillMetadata = {
   always?: boolean;
   skillKey?: string;
@@ -43,6 +46,14 @@ export type MayrosSkillMetadata = {
   install?: SkillInstallSpec[];
   skillType?: "classic" | "semantic";
   semanticManifest?: SemanticSkillManifest;
+  /** Lifecycle state managed by the curator. Defaults to "active". */
+  state?: SkillLifecycleState;
+  /** Pinned skills are never auto-archived by the curator. */
+  pinned?: boolean;
+  /** ISO timestamp of creation (set by the curator or manually). */
+  created?: string;
+  /** ISO timestamp of last update. */
+  updated?: string;
 };
 
 export type SkillInvocationPolicy = {
