@@ -773,9 +773,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         }
         break;
       case "vim": {
-        const enabled = !state.vimEnabled;
-        state.vimEnabled = enabled;
-        chatLog.addSystem(`vim mode ${enabled ? "enabled" : "disabled"}`);
+        chatLog.addSystem("vim mode is not available in this build");
         break;
       }
       case "permission": {

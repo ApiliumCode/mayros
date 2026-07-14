@@ -81,7 +81,7 @@ Priorities are assigned as P0 (correctness or blocker), P1 (high-value polish), 
 
 ### P0 — Correctness and blockers
 
-1. **Verify the vim bridge is connected.** If the editor bridge is never set from the TUI side, every vim motion that relies on it silently no-ops. Confirm or fix before any further vim work.
+1. ~~**Verify the vim bridge is connected.**~~ **Resolved: vim mode has been disabled.** The bridge was never wired and the rendering dependency does not expose the cursor API needed to fix it cleanly. The `/vim` command now reports that the feature is unavailable, the dead handler and its tests have been removed, and the config flag is deprecated. Emacs/readline-style keybindings (Ctrl+A/E/W/U/K) remain available via the editor.
 2. **Accessibility TUI feature parity.** Either linearize the graphical renderer for screen readers or bring slash commands, session switching, and abort into the accessibility TUI. The current split excludes users from most functionality.
 
 ### P1 — High-value polish

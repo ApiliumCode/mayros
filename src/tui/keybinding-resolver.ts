@@ -12,8 +12,7 @@ export type TuiAction =
   | "selectModel"
   | "selectSession"
   | "toggleTools"
-  | "toggleThinking"
-  | "toggleVim";
+  | "toggleThinking";
 
 export const DEFAULT_TUI_KEYBINDINGS: Record<TuiAction, KeyId> = {
   selectAgent: "ctrl+g",
@@ -21,7 +20,6 @@ export const DEFAULT_TUI_KEYBINDINGS: Record<TuiAction, KeyId> = {
   selectSession: "ctrl+p",
   toggleTools: "ctrl+o",
   toggleThinking: "ctrl+t",
-  toggleVim: "ctrl+shift+v",
 };
 
 export class TuiKeybindingResolver {
