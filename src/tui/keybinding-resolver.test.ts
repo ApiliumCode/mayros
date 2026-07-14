@@ -56,9 +56,9 @@ describe("TuiKeybindingResolver", () => {
     expect(piTuiMocks.matchesKey).toHaveBeenCalledWith("\x07", "ctrl+g");
   });
 
-  it("returns false when action has no keys", () => {
+  it("returns false when the data does not match any action", () => {
     const resolver = new TuiKeybindingResolver();
-    expect(resolver.matches("\x00", "toggleVim")).toBe(false);
+    expect(resolver.matches("\x00", "toggleTools")).toBe(false);
   });
 });
 
@@ -69,7 +69,6 @@ describe("DEFAULT_TUI_KEYBINDINGS", () => {
     expect(DEFAULT_TUI_KEYBINDINGS).toHaveProperty("selectSession");
     expect(DEFAULT_TUI_KEYBINDINGS).toHaveProperty("toggleTools");
     expect(DEFAULT_TUI_KEYBINDINGS).toHaveProperty("toggleThinking");
-    expect(DEFAULT_TUI_KEYBINDINGS).toHaveProperty("toggleVim");
   });
 });
 

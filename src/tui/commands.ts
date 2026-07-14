@@ -148,7 +148,7 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     },
     {
       name: "vim",
-      description: "Toggle vim editing mode",
+      description: "Vim mode (unavailable)",
     },
     {
       name: "permission",

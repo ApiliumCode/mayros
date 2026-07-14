@@ -34,7 +34,6 @@ import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
 import { MouseHandler, createMouseInputListener } from "./mouse-handler.js";
-import { VimHandler } from "./vim-handler.js";
 import { formatTokens } from "./tui-formatters.js";
 import { createLocalShellRunner } from "./tui-local-shell.js";
 import { createOverlayHandlers } from "./tui-overlays.js";
@@ -316,8 +315,7 @@ export async function runTui(opts: TuiOptions) {
   let permissionMode: "auto" | "ask" | "deny" = "auto";
   let fastMode = false;
   let previousThinkingLevel: string | undefined;
-  let vimEnabled = config.ui?.vim ?? false;
-  const vimHandler = new VimHandler();
+  let vimEnabled = false;
   const mouseHandler = new MouseHandler({
     scrollLines: 3,
     scrollAcceleration: true,
@@ -476,12 +474,6 @@ export async function runTui(opts: TuiOptions) {
     },
     set vimEnabled(value) {
       vimEnabled = value ?? false;
-      if (vimEnabled) {
-        vimHandler.enable();
-      } else {
-        vimHandler.disable();
-      }
-      updateFooter();
     },
     get permissionMode() {
       return permissionMode;
@@ -560,14 +552,10 @@ export async function runTui(opts: TuiOptions) {
   const chatLog = new ChatLog();
   const editor = new CustomEditor(tui, editorTheme);
   editor.tuiResolver = tuiResolver;
-  editor.vimHandler = vimHandler;
   editor.captureClipboardImage = captureClipboardImage;
   editor.onImagePaste = (img) => {
     pendingImages.set(img.marker, { base64: img.base64, mimeType: img.mimeType });
   };
-  if (vimEnabled) {
-    vimHandler.enable();
-  }
 
   // Mouse scroll → ChatLog scroll + re-render
   mouseHandler.onScroll((direction, lines) => {
@@ -818,7 +806,6 @@ export async function runTui(opts: TuiOptions) {
     const reasoning = sessionInfo.reasoningLevel ?? "off";
     const reasoningLabel =
       reasoning === "on" ? "reasoning" : reasoning === "stream" ? "reasoning:stream" : null;
-    const vimLabel = vimEnabled ? vimHandler.getModeIndicator() : null;
     const permLabel = permissionMode !== "auto" ? `perm ${permissionMode}` : null;
     const fastLabel = fastMode ? "FAST" : null;
     const footerParts = [
@@ -829,7 +816,6 @@ export async function runTui(opts: TuiOptions) {
       verbose !== "off" ? `verbose ${verbose}` : null,
       reasoningLabel,
       tokens,
-      vimLabel,
       permLabel,
       fastLabel,
     ].filter(Boolean);

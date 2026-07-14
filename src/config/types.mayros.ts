@@ -70,7 +70,7 @@ export type MayrosConfig = {
     seamColor?: string;
     /** TUI color theme preset, or "auto" to detect from the terminal. */
     theme?: "auto" | "dark" | "light" | "high-contrast";
-    /** Enable vim editing mode in the TUI. */
+    /** Deprecated: vim mode is not available. Kept for config backward compat. */
     vim?: boolean;
     /** Custom keybindings for TUI actions. */
     keybindings?: Record<string, string | string[]>;

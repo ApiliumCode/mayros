@@ -156,7 +156,6 @@ mayros -p "refactor auth flow" # headless mode (non-interactive)
 
 - 🎨 3 themes (dark, light, high-contrast) — `/theme`
 - 📝 3 output styles (standard, explanatory, learning) — `/style`
-- ⌨️ Vim mode with motions, operators, undo — `/vim`
 - 📋 `Ctrl+V` image paste from clipboard
 - 📊 `/diff` inline diff viewer · `/context` token usage chart
 - 🗺️ `/plan` semantic plan mode (Cortex-backed)
@@ -165,15 +164,15 @@ mayros -p "refactor auth flow" # headless mode (non-interactive)
 
 **Slash commands (30+):**
 
-| Command          | Description       | Command          | Description          |
-| ---------------- | ----------------- | ---------------- | -------------------- |
-| `/help`          | List all commands | `/plan`          | Semantic plan mode   |
-| `/new`           | Reset session     | `/diff`          | Show pending changes |
-| `/compact`       | Compact context   | `/context`       | Token usage chart    |
-| `/think <level>` | Set thinking      | `/theme`         | Cycle themes         |
-| `/model <name>`  | Switch model      | `/vim`           | Toggle vim mode      |
-| `/permission`    | Permission mode   | `/copy`          | Copy last response   |
-| `/fast`          | Fast mode         | `/export [file]` | Export session       |
+| Command          | Description       | Command       | Description          |
+| ---------------- | ----------------- | ------------- | -------------------- |
+| `/help`          | List all commands | `/plan`       | Semantic plan mode   |
+| `/new`           | Reset session     | `/diff`       | Show pending changes |
+| `/compact`       | Compact context   | `/context`    | Token usage chart    |
+| `/think <level>` | Set thinking      | `/theme`      | Cycle themes         |
+| `/model <name>`  | Switch model      | `/permission` | Permission mode      |
+| `/fast`          | Fast mode         | `/copy`       | Copy last response   |
+| `/export [file]` | Export session    | `/context`    | Token usage chart    |
 
 **Markdown-driven extensibility:**
 

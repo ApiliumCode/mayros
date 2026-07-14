@@ -1,7 +1,6 @@
 import { Editor, Key, matchesKey } from "@earendil-works/pi-tui";
 import type { ClipboardImage } from "../clipboard-image.js";
 import type { TuiKeybindingResolver } from "../keybinding-resolver.js";
-import type { VimHandler } from "../vim-handler.js";
 
 const BRACKET_PASTE_START = "\x1b[200~";
 const BRACKET_PASTE_END = "\x1b[201~";
@@ -25,7 +24,6 @@ export class CustomEditor extends Editor {
   onAltEnter?: () => void;
   onImagePaste?: (image: ImagePasteEvent) => void;
   tuiResolver?: TuiKeybindingResolver;
-  vimHandler?: VimHandler;
 
   private imageCounter = 0;
   captureClipboardImage: (() => ClipboardImage | null) | null = null;
@@ -57,12 +55,6 @@ export class CustomEditor extends Editor {
       }
       // No image on clipboard — ignore the empty paste
       return;
-    }
-    // Vim mode intercept: if vim is in normal mode, consume keys there.
-    if (this.vimHandler?.isNormalMode()) {
-      if (this.vimHandler.handleKey(data)) {
-        return;
-      }
     }
     if (matchesKey(data, Key.alt("enter")) && this.onAltEnter) {
       this.onAltEnter();
@@ -118,10 +110,6 @@ export class CustomEditor extends Editor {
       return;
     }
     if (matchesKey(data, Key.escape) && !this.isShowingAutocomplete()) {
-      // In vim insert mode, Escape switches to normal mode
-      if (this.vimHandler && this.vimHandler.handleKey(data)) {
-        return;
-      }
       if (this.onEscape) {
         this.onEscape();
         return;
