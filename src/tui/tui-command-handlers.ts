@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Component, TUI } from "@earendil-works/pi-tui";
+import { createSubsystemLogger } from "../logging/subsystem.js";
+
+const logger = createSubsystemLogger("tui");
 import {
   listThinkingLevelLabels,
   normalizeUsageDisplay,
@@ -27,8 +30,8 @@ import { SessionManager, formatSessionLine } from "./session-manager.js";
 import { theme } from "./theme/theme.js";
 import { applyOutputStyle, isValidOutputStyle, OUTPUT_STYLE_NAMES } from "./output-styles.js";
 import type { OutputStyle } from "./output-styles.js";
-import { THEME_PRESETS } from "./theme/palettes.js";
-import type { ThemePreset } from "./theme/palettes.js";
+import { THEME_PRESETS, listCustomThemeNames } from "./theme/palettes.js";
+import type { BuiltinPreset } from "./theme/palettes.js";
 import { setThemePreset, getThemePreset } from "./theme/theme.js";
 import type { ChatLog } from "./components/chat-log.js";
 import {
@@ -735,7 +738,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           }));
           const themeSelector = createSelectList(themeItems, themeItems.length);
           themeSelector.onSelect = (item) => {
-            setThemePreset(item.value as ThemePreset);
+            setThemePreset(item.value);
             chatLog.addSystem(`theme set to ${item.value}`);
             closeOverlay();
             tui.requestRender();
@@ -748,11 +751,16 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           tui.requestRender();
           break;
         }
-        if (!THEME_PRESETS.includes(preset as ThemePreset)) {
-          chatLog.addSystem(`unknown theme. usage: /theme <${THEME_PRESETS.join("|")}>`);
+        if (
+          !THEME_PRESETS.includes(preset as BuiltinPreset) &&
+          !listCustomThemeNames().includes(preset)
+        ) {
+          chatLog.addSystem(
+            `unknown theme. usage: /theme <${THEME_PRESETS.join("|")}> or a custom theme name`,
+          );
           break;
         }
-        setThemePreset(preset as ThemePreset);
+        setThemePreset(preset);
         chatLog.addSystem(`theme set to ${preset}`);
         break;
       }
@@ -808,7 +816,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
             applySessionInfoFromPatch(result);
           } catch (err) {
             // Best-effort — fast mode works locally even without gateway
-            process.stderr.write(`[fast-mode] failed to set thinking off: ${String(err)}\n`);
+            logger.warn("fast-mode: failed to set thinking off", { error: String(err) });
           }
           state.outputStyle = "standard";
           chatLog.addSystem("fast mode enabled (thinking: off, style: standard)");
@@ -823,9 +831,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
             applySessionInfoFromPatch(result);
           } catch (err) {
             // Best-effort — restore may fail if gateway is unreachable
-            process.stderr.write(
-              `[fast-mode] failed to restore thinking ${prevLevel}: ${String(err)}\n`,
-            );
+            logger.warn("fast-mode: failed to restore thinking", {
+              level: prevLevel,
+              error: String(err),
+            });
           }
           chatLog.addSystem(`fast mode disabled (thinking: ${prevLevel})`);
         }

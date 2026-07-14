@@ -28,8 +28,9 @@ import { WelcomeScreen } from "./components/welcome-screen.js";
 import { GatewayChatClient } from "./gateway-chat.js";
 import { enableKeyboardProtocol } from "./term-capabilities.js";
 import { detectTerminalColorScheme } from "./term-capabilities.js";
-import type { ThemePreset } from "./theme/palettes.js";
+import type { BuiltinPreset } from "./theme/palettes.js";
 import { THEME_PRESETS } from "./theme/palettes.js";
+import { discoverCustomThemes } from "./theme/theme-loader.js";
 import { editorTheme, theme, setThemePreset } from "./theme/theme.js";
 import { createCommandHandlers } from "./tui-command-handlers.js";
 import { createEventHandlers } from "./tui-event-handlers.js";
@@ -281,12 +282,20 @@ export async function runTui(opts: TuiOptions) {
     return;
   }
 
+  // Discover custom themes from ~/.mayros/themes/*.json before resolving the
+  // config theme, so a custom theme name in config.ui.theme works on startup.
+  await discoverCustomThemes();
+
   const configTheme = config.ui?.theme;
   // "auto" (or unset) defers to terminal color-scheme detection after the TUI
   // instance is created; until then the default "dark" preset is in place.
   const themeIsAuto = !configTheme || configTheme === "auto";
-  if (!themeIsAuto && THEME_PRESETS.includes(configTheme as ThemePreset)) {
-    setThemePreset(configTheme as ThemePreset);
+  if (!themeIsAuto && THEME_PRESETS.includes(configTheme as BuiltinPreset)) {
+    setThemePreset(configTheme);
+  } else if (!themeIsAuto) {
+    // Could be a custom theme name — set it; resolvePalette falls back to
+    // dark if the name isn't registered yet.
+    setThemePreset(configTheme);
   }
   const keybindingsConfig = config.ui?.keybindings;
   applyKeybindingsFromConfig(keybindingsConfig);

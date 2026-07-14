@@ -3,24 +3,13 @@ import { listChatCommands, listChatCommandsForConfig } from "../auto-reply/comma
 import { formatThinkingLevels, listThinkingLevelLabels } from "../auto-reply/thinking.js";
 import { discoverMarkdownCommands } from "../commands/markdown-commands.js";
 import type { MayrosConfig } from "../config/types.js";
+import { THEME_PRESETS } from "./theme/palettes.js";
 
 const VERBOSE_LEVELS = ["on", "off"];
 const REASONING_LEVELS = ["on", "off"];
 const ELEVATED_LEVELS = ["on", "off", "ask", "full"];
 const ACTIVATION_LEVELS = ["mention", "always"];
 const USAGE_FOOTER_LEVELS = ["off", "tokens", "full"];
-const THEME_PRESETS = [
-  "dark",
-  "light",
-  "high-contrast",
-  "dracula",
-  "github-dark",
-  "github-light",
-  "solarized-dark",
-  "solarized-light",
-  "atom-one-dark",
-  "ayu-dark",
-];
 const OUTPUT_STYLES = ["standard", "explanatory", "learning"];
 const PERMISSION_MODES = ["auto", "ask", "deny"];
 
