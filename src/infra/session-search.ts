@@ -205,14 +205,19 @@ export async function searchSessions(opts: SearchOptions): Promise<SearchSummary
       const dbPath = resolveSearchDbPath();
       const db = openSearchDb(dbPath);
       try {
-        const sessionsDir = opts.basePath ?? defaultBasePath();
-        // Extract the agentId from the path (~/.mayros/agents/<agentId>/sessions).
-        const agentId = opts.basePath
-          ? (opts.basePath.split("/agents/")[1]?.split("/")[0] ?? "main")
-          : "main";
-        const sessionsTranscriptsDir = join(sessionsDir, "sessions");
-        syncSearchIndex(db, sessionsTranscriptsDir, agentId);
+        // Discover session files the same way the linear scan does, then
+        // index only those files. This handles both the default layout
+        // (~/.mayros/agents/<id>/sessions/*.jsonl) and test overrides.
+        const sessionFiles = await discoverSessionFiles(opts.basePath);
+        const agentId = "main";
+        for (const sf of sessionFiles) {
+          syncSearchIndex(db, join(sf.filePath, ".."), agentId);
+        }
         const result = searchSessionsFTS(db, opts);
+        // Preserve the public contract: results sorted by timestamp descending,
+        // and sessionsSearched counts files scanned (not just files with matches).
+        result.results.sort((a, b) => b.timestamp - a.timestamp);
+        result.sessionsSearched = sessionFiles.length;
         result.durationMs = Date.now() - startTime;
         return result;
       } finally {
