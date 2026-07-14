@@ -1,7 +1,11 @@
-export type ThemePreset =
+/** Built-in theme presets shipped with the TUI. */
+export type BuiltinPreset =
   | "dark"
   | "light"
   | "high-contrast"
+  | "colorblind-dark"
+  | "colorblind-light"
+  | "monochrome"
   | "dracula"
   | "github-dark"
   | "github-light"
@@ -9,6 +13,13 @@ export type ThemePreset =
   | "solarized-light"
   | "atom-one-dark"
   | "ayu-dark";
+
+/**
+ * A theme preset name. Either a built-in or a custom theme loaded from
+ * `~/.mayros/themes/*.json`. The string is resolved through the palette
+ * registry (builtin switch → custom registry → dark fallback).
+ */
+export type ThemePreset = string;
 
 export type Palette = {
   text: string;
@@ -285,10 +296,99 @@ export const AYU_DARK_PALETTE: Palette = {
   success: "#AAD94C",
 };
 
-export const THEME_PRESETS: ThemePreset[] = [
+/**
+ * Colorblind-optimized dark palette using Okabe-Ito hues.
+ * Avoids red/green pairing for error/success — error uses vermilion
+ * (orange-red), success uses sky blue. Accent is amber.
+ */
+export const COLORBLIND_DARK_PALETTE: Palette = {
+  text: "#E8E3D5",
+  dim: "#7B7F87",
+  accent: "#E69F00",
+  accentSoft: "#F0E442",
+  border: "#3C414B",
+  userBg: "#2B2F36",
+  userText: "#F3EEE0",
+  systemText: "#9BA3B2",
+  toolPendingBg: "#1F2A2F",
+  toolSuccessBg: "#1E2D23",
+  toolErrorBg: "#2F1F1F",
+  toolTitle: "#E69F00",
+  toolOutput: "#E1DACB",
+  quote: "#56B4E9",
+  quoteBorder: "#3B4D6B",
+  code: "#F0E442",
+  codeBlock: "#1E232A",
+  codeBorder: "#343A45",
+  link: "#56B4E9",
+  filePath: "#56B4E9",
+  error: "#D55E00",
+  success: "#56B4E9",
+};
+
+/** Colorblind-optimized light palette (Okabe-Ito on light background). */
+export const COLORBLIND_LIGHT_PALETTE: Palette = {
+  text: "#2B2F36",
+  dim: "#6B7080",
+  accent: "#0072B2",
+  accentSoft: "#009E73",
+  border: "#D0D5DD",
+  userBg: "#F0F1F3",
+  userText: "#2B2F36",
+  systemText: "#6B7080",
+  toolPendingBg: "#EDF0F3",
+  toolSuccessBg: "#E6F4EA",
+  toolErrorBg: "#FCE8E6",
+  toolTitle: "#0072B2",
+  toolOutput: "#3C414B",
+  quote: "#0072B2",
+  quoteBorder: "#B8CCE0",
+  code: "#D55E00",
+  codeBlock: "#EDF0F3",
+  codeBorder: "#D0D5DD",
+  link: "#0072B2",
+  filePath: "#0072B2",
+  error: "#D55E00",
+  success: "#0072B2",
+};
+
+/**
+ * Monochrome palette — all tokens use the same foreground. Semantic
+ * differentiation is lost (no color), useful for `NO_COLOR` environments
+ * or users who prefer a minimal terminal.
+ */
+export const MONOCHROME_PALETTE: Palette = {
+  text: "#FFFFFF",
+  dim: "#AAAAAA",
+  accent: "#FFFFFF",
+  accentSoft: "#CCCCCC",
+  border: "#888888",
+  userBg: "#666666",
+  userText: "#FFFFFF",
+  systemText: "#CCCCCC",
+  toolPendingBg: "#444444",
+  toolSuccessBg: "#444444",
+  toolErrorBg: "#444444",
+  toolTitle: "#FFFFFF",
+  toolOutput: "#CCCCCC",
+  quote: "#CCCCCC",
+  quoteBorder: "#888888",
+  code: "#FFFFFF",
+  codeBlock: "#333333",
+  codeBorder: "#666666",
+  link: "#FFFFFF",
+  filePath: "#FFFFFF",
+  error: "#FFFFFF",
+  success: "#FFFFFF",
+};
+
+export const BUILTIN_THEME_PRESETS: BuiltinPreset[] = [
   "dark",
   "light",
   "high-contrast",
+  "colorblind-dark",
+  "colorblind-light",
+  "monochrome",
   "dracula",
   "github-dark",
   "github-light",
@@ -298,12 +398,41 @@ export const THEME_PRESETS: ThemePreset[] = [
   "ayu-dark",
 ];
 
+/** Backward-compatible alias for the built-in preset list. */
+export const THEME_PRESETS: BuiltinPreset[] = BUILTIN_THEME_PRESETS;
+
+// --- Custom theme registry -------------------------------------------------
+
+/** Registry of custom palettes loaded from `~/.mayros/themes/*.json`. */
+const customPaletteRegistry = new Map<string, Palette>();
+
+/** Register a custom palette under a name. */
+export function registerCustomPalette(name: string, palette: Palette): void {
+  customPaletteRegistry.set(name, palette);
+}
+
+/** Clear all custom palettes (used by the theme loader before re-scanning). */
+export function clearCustomPalettes(): void {
+  customPaletteRegistry.clear();
+}
+
+/** List all currently registered custom theme names. */
+export function listCustomThemeNames(): string[] {
+  return [...customPaletteRegistry.keys()];
+}
+
 export function resolvePalette(preset: ThemePreset): Palette {
   switch (preset) {
     case "light":
       return LIGHT_PALETTE;
     case "high-contrast":
       return HIGH_CONTRAST_PALETTE;
+    case "colorblind-dark":
+      return COLORBLIND_DARK_PALETTE;
+    case "colorblind-light":
+      return COLORBLIND_LIGHT_PALETTE;
+    case "monochrome":
+      return MONOCHROME_PALETTE;
     case "dracula":
       return DRACULA_PALETTE;
     case "github-dark":
@@ -318,7 +447,10 @@ export function resolvePalette(preset: ThemePreset): Palette {
       return ATOM_ONE_DARK_PALETTE;
     case "ayu-dark":
       return AYU_DARK_PALETTE;
-    default:
+    default: {
+      const custom = customPaletteRegistry.get(preset);
+      if (custom) return custom;
       return DARK_PALETTE;
+    }
   }
 }

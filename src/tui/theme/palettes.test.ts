@@ -27,8 +27,8 @@ const PALETTE_KEYS: (keyof Palette)[] = [
 ];
 
 describe("Theme Palettes", () => {
-  it("has 10 theme presets", () => {
-    expect(THEME_PRESETS).toHaveLength(10);
+  it("has the expected number of theme presets", () => {
+    expect(THEME_PRESETS).toHaveLength(13);
   });
 
   it("includes all expected presets", () => {
@@ -40,6 +40,9 @@ describe("Theme Palettes", () => {
     expect(THEME_PRESETS).toContain("solarized-light");
     expect(THEME_PRESETS).toContain("atom-one-dark");
     expect(THEME_PRESETS).toContain("ayu-dark");
+    expect(THEME_PRESETS).toContain("colorblind-dark");
+    expect(THEME_PRESETS).toContain("colorblind-light");
+    expect(THEME_PRESETS).toContain("monochrome");
   });
 
   for (const preset of [
