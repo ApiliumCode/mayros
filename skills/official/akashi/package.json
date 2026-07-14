@@ -1,0 +1,17 @@
+{
+  "name": "@apilium/akashi",
+  "version": "1.0.0",
+  "description": "Connect the user's Akashi second brain: query-first grounded retrieval with cited passages and signed provenance",
+  "keywords": [
+    "mayros",
+    "akashi",
+    "second-brain",
+    "mcp",
+    "grounded-retrieval",
+    "skill"
+  ],
+  "license": "MIT",
+  "author": "Apilium <hello@apilium.com>",
+  "type": "module",
+  "main": "citations.ts"
+}
