@@ -13,14 +13,22 @@ export type ClipboardImage = {
  * Attempts to capture an image from the system clipboard.
  * Returns the image as base64 + mimeType, or null if no image is on the clipboard.
  *
- * Supports macOS (pbpaste/osascript) and Linux (xclip).
+ * Supports macOS (osascript), Linux (xclip or wl-paste on Wayland), and
+ * Windows (PowerShell + System.Windows.Forms).
  */
 export function captureClipboardImage(): ClipboardImage | null {
   if (process.platform === "darwin") {
     return captureMacOS();
   }
   if (process.platform === "linux") {
+    // Wayland: prefer wl-paste when WAYLAND_DISPLAY is set.
+    if (process.env.WAYLAND_DISPLAY) {
+      return captureWayland() ?? captureLinux();
+    }
     return captureLinux();
+  }
+  if (process.platform === "win32") {
+    return captureWindows();
   }
   return null;
 }
@@ -116,6 +124,73 @@ function captureLinux(): ClipboardImage | null {
       return null;
     }
 
+    return {
+      base64: buf.toString("base64"),
+      mimeType: "image/png",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Capture clipboard image on Wayland via wl-paste. */
+function captureWayland(): ClipboardImage | null {
+  try {
+    // Check available MIME types
+    const types = execSync("wl-paste -l", {
+      encoding: "utf-8",
+      timeout: 3000,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    if (!types.includes("image/png")) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  try {
+    const buf = execSync("wl-paste -t image/png", {
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 50 * 1024 * 1024,
+    });
+    if (buf.length === 0) {
+      return null;
+    }
+    return {
+      base64: buf.toString("base64"),
+      mimeType: "image/png",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Capture clipboard image on Windows via PowerShell + System.Windows.Forms. */
+function captureWindows(): ClipboardImage | null {
+  // PowerShell script: check if clipboard has an image, get it as PNG bytes,
+  // and write base64 to stdout.
+  const script = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "Add-Type -AssemblyName System.Drawing",
+    "$img = [System.Windows.Forms.Clipboard]::GetImage()",
+    "if ($null -eq $img) { exit 1 }",
+    "$ms = New-Object System.IO.MemoryStream",
+    "$img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)",
+    "[Console]::OpenStandardOutput().Write($ms.ToArray(), 0, $ms.Length)",
+  ].join("; ");
+
+  try {
+    const buf = execSync(`powershell -NoProfile -Command "${script}"`, {
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 50 * 1024 * 1024,
+      windowsHide: true,
+    });
+    if (buf.length === 0) {
+      return null;
+    }
     return {
       base64: buf.toString("base64"),
       mimeType: "image/png",
