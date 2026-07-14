@@ -15,7 +15,7 @@ Pasting notes into context burns tokens and trust. Akashi serves only the passag
 | Average per query | 22,530 tokens | 1,262 tokens | **94.4%** |
 | 8-query conversation | 811,085 tokens | 44,759 tokens | **94.5%** |
 
-Not a promise. A measurement you can reproduce: full table on the [Akashi page](https://apilium.com/en/products/akashi).
+Not a promise. A measurement you can reproduce: full table on the [Akashi page](https://apilium.com/en/products/akashi). Said differently: about 18x more of your knowledge per token spent.
 
 ## Connect
 
