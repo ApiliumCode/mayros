@@ -1,4 +1,4 @@
-import { Box, Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
+import { Box, Container, Image, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { formatToolDetail, resolveToolDisplay } from "../../agents/tool-display.js";
 import { renderDiff, parseDiffStats, formatDiffStatsLine } from "../diff-renderer.js";
 import { linkifyFilePaths } from "../linkify-paths.js";
@@ -11,6 +11,8 @@ type ToolResultContent = {
   mimeType?: string;
   bytes?: number;
   omitted?: boolean;
+  /** Base64-encoded image data, retained for inline rendering. */
+  data?: string;
 };
 
 type ToolResult = {
@@ -61,6 +63,7 @@ export class ToolExecutionComponent extends Container {
   private header: Text;
   private argsLine: Text;
   private output: Markdown;
+  private imageContainer: Container;
   private toolName: string;
   private args: unknown;
   private result?: ToolResult;
@@ -78,11 +81,13 @@ export class ToolExecutionComponent extends Container {
     this.output = new Markdown("", 0, 0, markdownTheme, {
       color: (line) => theme.toolOutput(line),
     });
+    this.imageContainer = new Container();
     this.addChild(new Spacer(1));
     this.addChild(this.box);
     this.box.addChild(this.header);
     this.box.addChild(this.argsLine);
     this.box.addChild(this.output);
+    this.box.addChild(this.imageContainer);
     this.refresh();
   }
 
@@ -145,7 +150,27 @@ export class ToolExecutionComponent extends Container {
     // Hidden: only the header line, no output body.
     if (this.sectionState === "hidden") {
       this.output.setText("");
+      this.imageContainer.clear();
       return;
+    }
+
+    // Render inline images from image content blocks that carry base64 data.
+    // The Image component handles terminal capability detection internally
+    // (Kitty/iTerm2) and falls back to a text placeholder when unsupported.
+    this.imageContainer.clear();
+    if (this.result?.content && !this.isPartial) {
+      for (const entry of this.result.content) {
+        if (entry.type === "image" && entry.data) {
+          const mime = entry.mimeType ?? "image/png";
+          try {
+            const img = new Image(entry.data, mime, { fallbackColor: theme.dim });
+            this.imageContainer.addChild(img);
+          } catch {
+            // If Image construction fails, the text placeholder from
+            // extractText already covers this block.
+          }
+        }
+      }
     }
 
     const isExpanded = this.sectionState === "expanded";
