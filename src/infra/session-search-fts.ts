@@ -18,8 +18,12 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { requireNodeSqlite } from "../memory/sqlite.js";
 import { buildFtsQuery } from "../memory/hybrid.js";
-import type { SearchOptions, SearchResult, SearchSummary } from "./session-search.js";
-import { extractTextContent } from "./session-search.js";
+import {
+  extractTextContent,
+  type SearchOptions,
+  type SearchResult,
+  type SearchSummary,
+} from "./session-search-types.js";
 
 // ---------------------------------------------------------------------------
 // Schema

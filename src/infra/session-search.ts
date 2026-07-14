@@ -10,42 +10,15 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
+import {
+  extractTextContent,
+  type SearchOptions,
+  type SearchResult,
+  type SearchSummary,
+} from "./session-search-types.js";
 
-export type SearchOptions = {
-  /** Search query (case-insensitive substring match). */
-  query: string;
-  /** Filter by message role. */
-  role?: "user" | "assistant";
-  /** Only search messages after this timestamp (ms). */
-  since?: number;
-  /** Only search messages before this timestamp (ms). */
-  before?: number;
-  /** Max results to return (default: 20). */
-  limit?: number;
-  /** Specific session IDs to search (default: all). */
-  sessionIds?: string[];
-  /** Base directory override for sessions (default: ~/.mayros/agents). */
-  basePath?: string;
-};
-
-export type SearchResult = {
-  sessionId: string;
-  messageId: string;
-  role: "user" | "assistant";
-  content: string;
-  /** Snippet of content around the match. */
-  snippet: string;
-  timestamp: number;
-  /** 0-based line index in the JSONL file. */
-  lineIndex: number;
-};
-
-export type SearchSummary = {
-  results: SearchResult[];
-  totalMatches: number;
-  sessionsSearched: number;
-  durationMs: number;
-};
+// Re-export for backward compatibility (callers import from here).
+export { extractTextContent, type SearchOptions, type SearchResult, type SearchSummary };
 
 /** Default sessions base path. */
 function defaultBasePath(): string {
@@ -105,23 +78,6 @@ export function extractSnippet(text: string, query: string, contextChars = 80): 
   if (start > 0) snippet = "\u2026" + snippet;
   if (end < text.length) snippet = snippet + "\u2026";
   return snippet;
-}
-
-/**
- * Extract text content from a message content field.
- * Handles both string and array-of-blocks formats.
- */
-export function extractTextContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter(
-        (block: Record<string, unknown>) => block.type === "text" && typeof block.text === "string",
-      )
-      .map((block: Record<string, unknown>) => block.text as string)
-      .join("\n");
-  }
-  return "";
 }
 
 /**
