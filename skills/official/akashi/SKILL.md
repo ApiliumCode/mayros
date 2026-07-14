@@ -58,6 +58,9 @@ decisions, conventions, people, notes, plans), query the vault:
 - `aingle_vault_map`: orientation. Hubs, semantic clusters, indices.
 - `aingle_note_context {note}`: the verified neighborhood of one note.
 - `aingle_sources`: what is indexed, with content hashes.
+- To trace how two notes or topics connect: call `aingle_note_context` on each
+  and intersect their neighborhoods, or walk `aingle_backlinks` from one side;
+  report the connecting chain with citations for every hop.
 
 Prefer several small `ground` calls over one broad one. Never dump whole
 notes into context when passages answer the question.
