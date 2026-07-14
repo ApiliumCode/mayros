@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-osameru-governance",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "Mayros governance control plane — policy enforcement, HMAC audit trail, trust tiers",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-llm-task",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "Mayros JSON-only LLM task plugin",
   "type": "module",

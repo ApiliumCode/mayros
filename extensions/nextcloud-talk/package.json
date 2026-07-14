@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-nextcloud-talk",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Mayros Nextcloud Talk channel plugin",
   "license": "MIT",
   "type": "module",

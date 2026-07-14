@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-eruberu",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "Mayros intelligent model routing plugin — Q-Learning adaptive provider/model selection",
   "type": "module",

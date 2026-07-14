@@ -1,6 +1,6 @@
 {
   "name": "@apilium/mayros-memory-semantic",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "description": "Mayros semantic memory plugin via AIngle Cortex sidecar (RDF triples, identity graph, Ineru STM/LTM)",
   "type": "module",
