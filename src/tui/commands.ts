@@ -136,10 +136,6 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
         })),
     },
     {
-      name: "vim",
-      description: "Vim mode (unavailable)",
-    },
-    {
       name: "permission",
       description: "Set permission mode",
       getArgumentCompletions: (prefix) =>
@@ -248,7 +244,6 @@ export function helpText(options: SlashCommandOptions = {}): string {
     "/diff [file]",
     "/context",
     "/style <standard|explanatory|learning>",
-    "/vim",
     "/permission <auto|ask|deny>",
     "/fast",
     "/compact",

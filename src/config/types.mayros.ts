@@ -68,8 +68,13 @@ export type MayrosConfig = {
   ui?: {
     /** Accent color for Mayros UI chrome (hex). */
     seamColor?: string;
-    /** TUI color theme preset, or "auto" to detect from the terminal. */
-    theme?: "auto" | "dark" | "light" | "high-contrast";
+    /**
+     * TUI color theme: "auto" (detect from terminal), a built-in preset
+     * (dark, light, high-contrast, colorblind-dark, colorblind-light,
+     * monochrome, dracula, github-dark, etc.), or a custom theme name
+     * loaded from ~/.mayros/themes/*.json.
+     */
+    theme?: string;
     /** Deprecated: vim mode is not available. Kept for config backward compat. */
     vim?: boolean;
     /** Custom keybindings for TUI actions. */
