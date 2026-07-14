@@ -4,6 +4,85 @@ Product: https://apilium.com/us/products/mayros
 Download: https://mayros.apilium.com
 Docs: https://apilium.com/us/doc/mayros
 
+## 0.4.0 (2026-07-14)
+
+Major release: FTS5 session search, theme system v2, complete TUI redesign, skill curator lifecycle, and migration to the official agent stack.
+
+### Changes
+
+- **FTS5 session search** — dedicated SQLite full-text index with BM25 ranking, multi-word queries, role/timestamp/session filters, and snippet generation. Falls back to linear substring scan when `node:sqlite` is unavailable.
+- **Theme system v2** — 13 built-in themes including colorblind-optimized (Okabe-Ito) and monochrome palettes. Custom themes from `~/.mayros/themes/*.json`. Auto-detection of terminal dark/light preference via DSR color-scheme query.
+- **Inline image rendering** — tool results with image content blocks now display inline in terminals that support the Kitty graphics or iTerm2 inline image protocols, with text fallback for unsupported terminals.
+- **Cross-platform clipboard** — `/copy` and image paste now work on Windows (PowerShell), Wayland (wl-paste), and WSL (clip.exe) via a unified fallback chain.
+- **Per-section detail visibility** — tools (Ctrl+O) and thinking (Ctrl+T) each cycle independently through hidden → collapsed → expanded states.
+- **Incremental streaming markdown** — assistant messages split at the last stable block boundary, turning per-delta render cost from O(n²) into O(n).
+- **Skill curator lifecycle** — automatic activity tracking and lifecycle transitions (active → stale after 30 days, archived after 90 days). Only agent-created skills are auto-archived; pinned skills are never touched.
+- **Extended keyboard protocols** — Kitty keyboard protocol and xterm modifyOtherKeys enabled in capable terminals for reliable modifier-key combinations.
+- **Prompt cache drift detection** — system-prompt digest tracked across turns; a `cache:system-drift` event is emitted when the digest changes unexpectedly.
+- **Accessible TUI command parity** — `/abort`, `/new`, `/compact`, `/status`, `/model`, `/session`, and `/help` now work in accessible (screen-reader) mode via a shared command core.
+- **Agent stack migrated** to the official `@earendil-works/*@0.80.6` scope with zod deduplication and 21 refreshed runtime dependencies.
+- **Terminal UI modularized** — `tui.ts` split from 1087 to 591 LOC, `tui-command-handlers.ts` split from 1402 to 351 LOC across focused modules.
+
+### Fixes
+
+- Ctrl+C now aborts the active run (tri-state: abort → clear input → exit on double-press).
+- Accessibility TUI readline temporal-dead-zone crash fixed.
+- CLI and TUI palettes unified (same accent color across all surfaces).
+- Diff renderer respects active theme colors (correct under light/high-contrast themes).
+- 20 `as any` casts in production code replaced with proper types.
+- Lockfile change policy enforced in CI (deps-scoped commits required for lockfile changes).
+
+### Internal
+
+- Oxlint type-aware rules formalized (`.oxlintrc.json`).
+- Security trust model and dependency supply-chain policy documented in `SECURITY.md`.
+- Dead code removed: vim handler (779 LOC), input-history store.
+- Silent `catch {}` blocks migrated to subsystem logger.
+
+### Breaking changes
+
+- **Vim mode removed.** The bridge connecting vim motions to the editor buffer was never wired and the rendering dependency does not expose the cursor API needed to fix it cleanly. The `/vim` command now reports the feature is unavailable. Emacs/readline-style keybindings (Ctrl+A/E/W/U/K) remain active.
+- **Agent dependency scope changed** from `@mariozechner/*@0.54.0` to `@earendil-works/*@0.80.6`. Extension authors importing these internals must update imports.
+- **CLI palette accent changed** from orange (`#FF5A2D`) to gold (`#F6C453`) to match the TUI identity.
+
+---
+
+## 0.3.2 (2026-03-30)
+
+Installer UX improvements, security patches, and CI repair.
+
+- macOS installer: Terminal-based setup with visible progress, branded DMG
+- All installers: skip onboard for portal wizard, gateway.auth.mode=none, gateway install step
+- Agent onboarding: user names their agent (default: Atlas)
+- Resolve all 21 Dependabot security vulnerabilities
+- Fix CI workflow and PR Review action
+- Cap CI test workers to 2 to prevent runner timeout
+
+---
+
+## 0.3.1 (2026-02-21)
+
+Desktop installers, Mamoru security layer, and Mayrito rebrand.
+
+- Desktop installers for Windows (.exe), macOS (.dmg), and Linux (.AppImage/.deb) that bundle Node.js + Cortex
+- Mamoru (守る) security layer: sandbox probing, egress gate, secrets vault, API keys, local model support
+- GPU detection and guided Ollama/vLLM model installation
+- 50+ model catalog segmented by activity with VRAM-aware filtering
+
+---
+
+## 0.3.0 (2026-02-16)
+
+Kaneru — AI venture management system.
+
+- Ventures, missions, squads, Q-learning routing, fuel control, and decision audit
+- 24 MCP tools for venture management
+- Web portal with ventures tab, mission kanban, chain of command tree
+- Setup Wizard for guided venture creation
+- Semantic DAG integration with Ed25519 signatures
+
+---
+
 ## 0.2.1 (2026-03-14)
 
 Memory health tools — conflict detection and digest summaries for proactive memory maintenance.

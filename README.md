@@ -154,13 +154,17 @@ mayros -p "refactor auth flow" # headless mode (non-interactive)
 
 **Features:**
 
-- 🎨 3 themes (dark, light, high-contrast) — `/theme`
+- 🎨 13 built-in themes (dark, light, high-contrast, colorblind, monochrome, + more) + custom themes — `/theme`
 - 📝 3 output styles (standard, explanatory, learning) — `/style`
-- 📋 `Ctrl+V` image paste from clipboard
-- 📊 `/diff` inline diff viewer · `/context` token usage chart
+- 🌗 Auto-detection of terminal dark/light preference
+- 📋 `Ctrl+V` image paste · inline image rendering in tool results (Kitty/iTerm2)
+- 📊 `/diff` inline diff viewer (theme-aware) · `/context` token usage chart
 - 🗺️ `/plan` semantic plan mode (Cortex-backed)
-- 📎 `/copy` to clipboard · `/export [file]` to disk
+- 📎 `/copy` to clipboard (cross-platform) · `/export [file]` to disk
 - 🔀 `/model` switch models · `/think` set thinking level · `/fast` toggle fast mode
+- 🔍 `mayros search` — FTS5 full-text search across sessions with BM25 ranking
+- 🎛️ Per-section detail visibility (Ctrl+O tools, Ctrl+T thinking: hidden/collapsed/expanded)
+- ⌨️ Extended keyboard protocols (Kitty/modifyOtherKeys) in capable terminals
 
 **Slash commands (30+):**
 
