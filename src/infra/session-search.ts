@@ -184,8 +184,56 @@ export async function searchSessionFile(
 
 /**
  * Search across all sessions for matching messages.
+ *
+ * Uses the FTS5 backend (SQLite full-text search with BM25 ranking) when the
+ * Node runtime includes `node:sqlite`. Falls back to the linear substring scan
+ * when the built-in SQLite module is unavailable, so search always works.
  */
 export async function searchSessions(opts: SearchOptions): Promise<SearchSummary> {
+  // Try FTS5 backend first — it is dramatically faster and supports multi-word
+  // queries with ranking.
+  try {
+    const {
+      isFtsSearchAvailable,
+      openSearchDb,
+      resolveSearchDbPath,
+      syncSearchIndex,
+      searchSessionsFTS,
+    } = await import("./session-search-fts.js");
+    if (isFtsSearchAvailable()) {
+      const startTime = Date.now();
+      const dbPath = resolveSearchDbPath();
+      const db = openSearchDb(dbPath);
+      try {
+        // Discover session files the same way the linear scan does, then
+        // index only those files. This handles both the default layout
+        // (~/.mayros/agents/<id>/sessions/*.jsonl) and test overrides.
+        const sessionFiles = await discoverSessionFiles(opts.basePath);
+        const agentId = "main";
+        for (const sf of sessionFiles) {
+          syncSearchIndex(db, join(sf.filePath, ".."), agentId);
+        }
+        const result = searchSessionsFTS(db, opts);
+        // Preserve the public contract: results sorted by timestamp descending,
+        // and sessionsSearched counts files scanned (not just files with matches).
+        result.results.sort((a, b) => b.timestamp - a.timestamp);
+        result.sessionsSearched = sessionFiles.length;
+        result.durationMs = Date.now() - startTime;
+        return result;
+      } finally {
+        db.close();
+      }
+    }
+  } catch {
+    // Fall through to the linear scan.
+  }
+
+  // Fallback: linear substring scan (original implementation).
+  return searchSessionsLinear(opts);
+}
+
+/** Linear substring scan — the original search implementation. */
+async function searchSessionsLinear(opts: SearchOptions): Promise<SearchSummary> {
   const startTime = Date.now();
   const limit = opts.limit ?? 20;
 
